@@ -1,0 +1,222 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>TBR Service Center — ระบบบริหารอู่</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Saira+Condensed:ital,wght@0,700;0,800;0,900;1,900&family=Noto+Sans+Thai:wght@400;500;600;700&family=JetBrains+Mono:wght@500;700&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="css/base.css" />
+  <link rel="stylesheet" href="css/components.css" />
+  <link rel="stylesheet" href="css/print.css" />
+</head>
+<body>
+  <div class="topbar"></div>
+  <nav>
+    <div class="wrap nav-in">
+      <div class="logo">TBR<span>.</span><small>Service Center</small></div>
+      <div class="nav-tabs" id="NT"></div>
+      <div class="nav-right" id="NR"></div>
+    </div>
+  </nav>
+  <main class="page">
+    <div class="wrap">
+      <div id="root">
+        <div class="loading"><div><div class="spin"></div>กำลังโหลดระบบ…</div></div>
+      </div>
+    </div>
+  </main>
+  <div id="pz"></div>
+  <div class="ov" id="dOv"></div>
+  <div class="ov" id="mOv"></div>
+  <div class="toast" id="tst">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M20 6 9 17l-5-5"/>
+    </svg>
+    <span id="tm"></span>
+  </div>
+
+  <!-- Supabase Client Library (MUST NOT BE ASYNC) -->
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+
+  <!-- Inline Supabase Config -->
+  <script>
+    console.log('[Config] Supabase config starting...');
+    
+    try {
+      const SUPABASE_URL = 'https://tgtuxvmuapiltmkulvlk.supabase.co';
+      const SUPABASE_KEY = 'sb_publishable_8mmv4aAB8mPRvYe459ZwGQ_KVVJROax';
+      
+      let supabase = null;
+      let supabaseReady = false;
+      
+      async function initializeSupabase() {
+        try {
+          if (!SUPABASE_URL || SUPABASE_URL === 'YOUR_SUPABASE_URL') {
+            console.warn('[Supabase] Credentials not configured');
+            return false;
+          }
+          supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+          supabaseReady = true;
+          console.log('[Supabase] ✅ Initialized');
+          return true;
+        } catch (err) {
+          console.error('[Supabase] Initialize error:', err.message);
+          return false;
+        }
+      }
+      
+      async function getCurrentUser() {
+        if (!supabaseReady) return null;
+        try {
+          const { data: { user }, error } = await supabase.auth.getUser();
+          if (error) throw error;
+          return user;
+        } catch (err) {
+          console.error('[Supabase] getCurrentUser error:', err.message);
+          return null;
+        }
+      }
+      
+      async function getUserProfile(userId) {
+        if (!supabaseReady) return null;
+        try {
+          // First get the user data WITHOUT roles join (avoids recursion)
+          const { data: userData, error: userError } = await supabase
+            .from('users')
+            .select('id, email, name, created_at')
+            .eq('id', userId)
+            .single();
+          
+          if (userError) throw userError;
+          if (!userData) return null;
+          
+          // Then separately get the role if needed
+          const { data: roleData } = await supabase
+            .from('roles')
+            .select('role')
+            .eq('user_id', userId)
+            .maybeSingle();
+          
+          if (roleData) {
+            userData.role = roleData.role;
+          }
+          
+          return userData;
+        } catch (err) {
+          console.error('[Supabase] getUserProfile error:', err.message);
+          return null;
+        }
+      }
+      
+      async function signUp(email, password, name) {
+        if (!supabaseReady) return null;
+        try {
+          const { data, error } = await supabase.auth.signUp({
+            email,
+            password,
+            options: { data: { name } }
+          });
+          if (error) throw error;
+          return data;
+        } catch (err) {
+          console.error('[Supabase] signUp error:', err.message);
+          return null;
+        }
+      }
+      
+      async function signIn(email, password) {
+        if (!supabaseReady) return null;
+        try {
+          const { data, error } = await supabase.auth.signInWithPassword({
+            email,
+            password
+          });
+          if (error) throw error;
+          return data;
+        } catch (err) {
+          console.error('[Supabase] signIn error:', err.message);
+          return null;
+        }
+      }
+      
+      async function signOut() {
+        if (!supabaseReady) return false;
+        try {
+          const { error } = await supabase.auth.signOut();
+          if (error) throw error;
+          return true;
+        } catch (err) {
+          console.error('[Supabase] signOut error:', err.message);
+          return false;
+        }
+      }
+      
+      function onAuthStateChange(callback) {
+        if (!supabaseReady) return null;
+        return supabase.auth.onAuthStateChange((event, session) => {
+          callback(event, session);
+        });
+      }
+      
+      // Export to window
+      window.initializeSupabase = initializeSupabase;
+      window.getCurrentUser = getCurrentUser;
+      window.getUserProfile = getUserProfile;
+      window.signUp = signUp;
+      window.signIn = signIn;
+      window.signOut = signOut;
+      window.onAuthStateChange = onAuthStateChange;
+      
+      // Helper for supabaseService to get client
+      window.getSupabase = () => supabase;
+      
+      Object.defineProperty(window, 'supabaseReady', {
+        get: () => supabaseReady,
+        set: (val) => { supabaseReady = val; }
+      });
+      
+      console.log('[Config] ✅ Supabase functions ready');
+    } catch(err) {
+      console.error('[Config] ERROR:', err.message);
+    }
+  </script>
+
+  <!-- Firebase SDK (fallback/backward compatibility) -->
+  <script src="https://www.gstatic.com/firebasejs/11.0.1/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/11.0.1/firebase-firestore-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/11.0.1/firebase-auth-compat.js"></script>
+
+  <!-- Other modules -->
+  <script src="js/supabaseService.js"></script>
+  <script src="js/auth.js"></script>
+  
+  <!-- Then Firebase (fallback) -->
+  <script src="js/firebaseService.js"></script>
+  <script src="js/db.js"></script>
+  <script src="js/utils.js"></script>
+  <script src="js/state.js"></script>
+  <script src="js/nav.js"></script>
+  <script src="js/dashboard.js"></script>
+  <script src="js/customers.js"></script>
+  <script src="js/jobs.js"></script>
+  <script src="js/stock.js"></script>
+  <script src="js/billing.js"></script>
+  <script src="js/report.js"></script>
+  <script src="js/settings.js"></script>
+  <script src="js/docs.js"></script>
+  <script>
+    (async () => {
+      // Check authentication first
+      const authOk = await checkAuth();
+      if (!authOk) return;
+      
+      // Load data from Supabase or localStorage
+      await loadData();
+      renderNav();
+      renderPanel();
+    })();
+  </script>
+</body>
+</html>

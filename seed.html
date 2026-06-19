@@ -1,0 +1,373 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>TBR System - Seed Demo Data</title>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    body {
+      font-family: 'Noto Sans Thai', Arial, sans-serif;
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 20px;
+    }
+
+    .container {
+      background: white;
+      border-radius: 12px;
+      box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+      max-width: 600px;
+      width: 100%;
+      padding: 40px;
+    }
+
+    h1 {
+      color: #667eea;
+      margin-bottom: 10px;
+      font-size: 1.8rem;
+    }
+
+    .subtitle {
+      color: #666;
+      margin-bottom: 30px;
+      font-size: 0.95rem;
+    }
+
+    .info-box {
+      background: #f5f5f5;
+      border-left: 4px solid #667eea;
+      padding: 15px;
+      margin-bottom: 30px;
+      border-radius: 4px;
+      font-size: 0.9rem;
+      line-height: 1.6;
+    }
+
+    button {
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      color: white;
+      border: none;
+      padding: 12px 30px;
+      border-radius: 6px;
+      cursor: pointer;
+      font-size: 1rem;
+      font-weight: 600;
+      transition: transform 0.2s, box-shadow 0.2s;
+      width: 100%;
+      margin-top: 15px;
+    }
+
+    button:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 10px 20px rgba(102, 126, 234, 0.3);
+    }
+
+    button:disabled {
+      opacity: 0.7;
+      cursor: not-allowed;
+      transform: none;
+    }
+
+    .message {
+      margin-top: 20px;
+      padding: 15px;
+      border-radius: 6px;
+      display: none;
+    }
+
+    .success {
+      background: #d4edda;
+      color: #155724;
+      border: 1px solid #c3e6cb;
+    }
+
+    .error {
+      background: #f8d7da;
+      color: #721c24;
+      border: 1px solid #f5c6cb;
+    }
+
+    .loading {
+      display: inline-block;
+      width: 20px;
+      height: 20px;
+      border: 3px solid rgba(255,255,255,.3);
+      border-radius: 50%;
+      border-top-color: white;
+      animation: spin 1s ease-in-out infinite;
+    }
+
+    @keyframes spin {
+      to { transform: rotate(360deg); }
+    }
+
+    .stats {
+      margin-top: 25px;
+      padding-top: 20px;
+      border-top: 1px solid #ddd;
+    }
+
+    .stat-row {
+      display: flex;
+      justify-content: space-between;
+      padding: 8px 0;
+      font-size: 0.95rem;
+    }
+
+    .stat-label {
+      color: #666;
+    }
+
+    .stat-value {
+      font-weight: 600;
+      color: #333;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>🌱 เตรียมข้อมูลทดสอบ</h1>
+    <p class="subtitle">TBR System - Demo Data Seeder</p>
+
+    <div class="info-box">
+      <strong>ขั้นตอนนี้จะ:</strong><br>
+      ✓ เพิ่มลูกค้าทดสอบ 3 บัญชี<br>
+      ✓ สร้างรถยนต์ทดสอบ 9 คัน<br>
+      ✓ สร้างงาน Job 6 งาน<br>
+      ✓ สร้างใบแจ้งหนี้ 6 ใบ<br>
+      ✓ เพิ่มสินค้าสต๊อก 8 รายการ
+    </div>
+
+    <button id="seedBtn">
+      🚀 เริ่มเตรียมข้อมูลทดสอบ
+    </button>
+
+    <div class="message" id="message"></div>
+
+    <div class="stats" id="stats" style="display: none;">
+      <strong>ผลการทำงาน:</strong>
+      <div class="stat-row">
+        <span class="stat-label">ลูกค้า</span>
+        <span class="stat-value" id="stat-customers">-</span>
+      </div>
+      <div class="stat-row">
+        <span class="stat-label">รถยนต์</span>
+        <span class="stat-value" id="stat-vehicles">-</span>
+      </div>
+      <div class="stat-row">
+        <span class="stat-label">งาน Job</span>
+        <span class="stat-value" id="stat-jobs">-</span>
+      </div>
+      <div class="stat-row">
+        <span class="stat-label">ใบแจ้งหนี้</span>
+        <span class="stat-value" id="stat-invoices">-</span>
+      </div>
+      <div class="stat-row">
+        <span class="stat-label">สินค้าสต๊อก</span>
+        <span class="stat-value" id="stat-stock">-</span>
+      </div>
+    </div>
+  </div>
+
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script>
+    const SUPABASE_URL = 'https://tgtuxvmuapiltmkulvlk.supabase.co';
+    const SUPABASE_KEY = 'sb_publishable_8mmv4aAB8mPRvYe459ZwGQ_KVVJROax';
+
+    let supabase;
+
+    async function seedDemoData() {
+      const btn = document.getElementById('seedBtn');
+      const msg = document.getElementById('message');
+      const stats = document.getElementById('stats');
+
+      btn.disabled = true;
+      btn.innerHTML = '<span class="loading"></span> กำลังประมวลผล...';
+      msg.style.display = 'none';
+
+      try {
+        // Initialize Supabase
+        supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+
+        // 1. Insert customers
+        await supabase.from('customers').insert([
+          {
+            name: 'ร้าน Ratchaburi Auto',
+            phone: '032-123-4567',
+            email: 'ratchaburi@auto.local',
+            address: '123 ซอยเพชรเกษม กรุงเทพ',
+            credit_limit: 50000
+          },
+          {
+            name: 'บริษัท ขนส่ง Bangkok Express',
+            phone: '02-555-6789',
+            email: 'contact@bangkokexp.local',
+            address: '456 ถนนสีลม ดุสิต',
+            credit_limit: 100000
+          },
+          {
+            name: 'โรงแรม Grand Bangkok',
+            phone: '02-888-9999',
+            email: 'fleet@grandbkk.local',
+            address: '789 ถนนเจริงนครสวรรค์ ตลิ่งชัน',
+            credit_limit: 75000
+          }
+        ]).then(res => {
+          if (res.error) console.warn('Customers:', res.error.message);
+        });
+
+        // 2. Get customers
+        const { data: customers } = await supabase.from('customers').select('id').limit(3);
+
+        if (!customers || customers.length === 0) throw new Error('Failed to create customers');
+
+        // 3. Insert vehicles
+        const vehicles = [];
+        const plates = ['กท-1234', 'กท-5678', 'กท-9999', 'กท-1111', 'กท-2222', 'กท-3333', 'กท-4444', 'กท-5555', 'กท-6666'];
+        const colors = ['Silver', 'Black', 'White'];
+
+        for (let i = 0; i < plates.length; i++) {
+          vehicles.push({
+            customer_id: customers[i % customers.length].id,
+            plate_number: plates[i],
+            brand: 'Toyota',
+            model: 'Innova',
+            color: colors[i % colors.length],
+            year: 2022 + (i % 3),
+            odometer: (i + 1) * 10000 + 5000
+          });
+        }
+
+        await supabase.from('vehicles').insert(vehicles).then(res => {
+          if (res.error) console.warn('Vehicles:', res.error.message);
+        });
+
+        // 4. Get vehicles
+        const { data: vehiclesList } = await supabase.from('vehicles').select('id, customer_id').limit(9);
+
+        // 5. Insert jobs
+        const jobs = [];
+        const statuses = ['completed', 'in_progress', 'pending'];
+        
+        for (let i = 0; i < 6; i++) {
+          const vehicle = vehiclesList[i % vehiclesList.length];
+          jobs.push({
+            reference: 'JB-2024-' + String(i + 1).padStart(4, '0'),
+            customer_id: vehicle.customer_id,
+            vehicle_id: vehicle.id,
+            status: statuses[i % 3],
+            notes: 'รถยนต์เข้ารับบริการทั่วไป',
+            total_amount: (i + 1) * 3500 + 2000,
+            created_at: new Date(Date.now() - (i + 1) * 2 * 24 * 60 * 60 * 1000).toISOString()
+          });
+        }
+
+        await supabase.from('jobs').insert(jobs).then(res => {
+          if (res.error) console.warn('Jobs:', res.error.message);
+        });
+
+        // 6. Get jobs
+        const { data: jobsList } = await supabase.from('jobs').select('id, customer_id, total_amount').limit(6);
+
+        // 7. Insert invoices
+        const invoices = [];
+        
+        for (let i = 0; i < jobsList.length; i++) {
+          const job = jobsList[i];
+          invoices.push({
+            reference: 'INV-2024-' + String(i + 1).padStart(4, '0'),
+            customer_id: job.customer_id,
+            job_id: job.id,
+            status: i % 2 === 0 ? 'paid' : 'pending',
+            subtotal: job.total_amount * 0.9,
+            tax: job.total_amount * 0.1,
+            total: job.total_amount,
+            due_date: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString()
+          });
+        }
+
+        await supabase.from('invoices').insert(invoices).then(res => {
+          if (res.error) console.warn('Invoices:', res.error.message);
+        });
+
+        // 8. Insert stock items
+        await supabase.from('stock_items').insert([
+          { sku: 'OIL-001', name: 'น้ำมันเครื่อง Mobil', description: 'น้ำมันเครื่องคุณภาพสูง Mobil 10W-40', quantity: 50, reorder_level: 10, unit_price: 250 },
+          { sku: 'FIL-001', name: 'ไส้กรอง', description: 'ไส้กรองอากาศแบบมาตรฐาน', quantity: 100, reorder_level: 20, unit_price: 150 },
+          { sku: 'BAT-001', name: 'แบตเตอรี่', description: 'แบตเตอรี่รถยนต์ 12V 75Ah', quantity: 15, reorder_level: 5, unit_price: 5500 },
+          { sku: 'BRK-001', name: 'แพดเบรก', description: 'แพดเบรกด้านหน้า OEM', quantity: 30, reorder_level: 8, unit_price: 1200 },
+          { sku: 'TYR-001', name: 'ยางรถยนต์', description: 'ยางรถยนต์ขนาด 185/65R15', quantity: 20, reorder_level: 5, unit_price: 3500 },
+          { sku: 'SPN-001', name: 'สปริง', description: 'สปริงแขนงนอกปกติ', quantity: 25, reorder_level: 5, unit_price: 800 },
+          { sku: 'BEL-001', name: 'สายพานหลัก', description: 'สายพานหลัก Serpentine', quantity: 40, reorder_level: 10, unit_price: 600 },
+          { sku: 'ACP-001', name: 'น้ำหล่อเย็น', description: 'น้ำหล่อเย็นสีแดง Thai Auto', quantity: 60, reorder_level: 15, unit_price: 200 }
+        ]).then(res => {
+          if (res.error) console.warn('Stock:', res.error.message);
+        });
+
+        // 9. Insert shop config
+        await supabase.from('shop_config').insert([{
+          shop_name: 'บริษัท ทีบีอาร์ เพอร์ฟอร์แมนซ์ จำกัด',
+          phone: '02-1234-5678',
+          email: 'contact@tbr-performance.local',
+          address: '999 หมู่ 5 ถนนพหลโยธิน จังหวัรนครสวรรค์',
+          tax_id: '0105123456789',
+          opening_hours: '09:00',
+          closing_hours: '18:00'
+        }]).then(res => {
+          if (res.error && res.error.message.includes('duplicate')) {
+            console.log('Shop config already exists');
+          }
+        });
+
+        // Get stats
+        const [custCount, vehCount, jobCount, invCount, stockCount] = await Promise.all([
+          supabase.from('customers').select('*', { count: 'exact', head: true }),
+          supabase.from('vehicles').select('*', { count: 'exact', head: true }),
+          supabase.from('jobs').select('*', { count: 'exact', head: true }),
+          supabase.from('invoices').select('*', { count: 'exact', head: true }),
+          supabase.from('stock_items').select('*', { count: 'exact', head: true })
+        ]);
+
+        // Show success
+        msg.className = 'message success';
+        msg.textContent = '✅ เตรียมข้อมูลทดสอบสำเร็จ! ระบบพร้อมใช้งาน';
+        msg.style.display = 'block';
+
+        // Show stats
+        document.getElementById('stat-customers').textContent = custCount.count || 0;
+        document.getElementById('stat-vehicles').textContent = vehCount.count || 0;
+        document.getElementById('stat-jobs').textContent = jobCount.count || 0;
+        document.getElementById('stat-invoices').textContent = invCount.count || 0;
+        document.getElementById('stat-stock').textContent = stockCount.count || 0;
+        stats.style.display = 'block';
+
+        // Redirect after 3 seconds
+        setTimeout(() => {
+          window.location.href = 'index.html';
+        }, 3000);
+
+      } catch (err) {
+        msg.className = 'message error';
+        msg.textContent = '❌ ผิดพลาด: ' + err.message;
+        msg.style.display = 'block';
+        btn.disabled = false;
+        btn.innerHTML = '🚀 เริ่มเตรียมข้อมูลทดสอบ';
+      }
+    }
+
+    // Attach event listener when page loads
+    document.addEventListener('DOMContentLoaded', function() {
+      document.getElementById('seedBtn').addEventListener('click', seedDemoData);
+    });
+  </script>
+</body>
+</html>

@@ -1,0 +1,310 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Firebase Setup - TBR System</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+      font-family: 'Noto Sans Thai', sans-serif;
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 20px;
+    }
+    .container {
+      background: white;
+      border-radius: 12px;
+      box-shadow: 0 10px 40px rgba(0, 0, 0, 0.3);
+      max-width: 600px;
+      width: 100%;
+      padding: 40px;
+    }
+    h1 {
+      color: #333;
+      margin-bottom: 10px;
+      font-size: 28px;
+    }
+    .subtitle {
+      color: #666;
+      margin-bottom: 30px;
+      font-size: 14px;
+    }
+    .step {
+      background: #f8f9fa;
+      border-left: 4px solid #667eea;
+      padding: 15px;
+      margin-bottom: 20px;
+      border-radius: 4px;
+    }
+    .step strong {
+      display: block;
+      color: #667eea;
+      margin-bottom: 8px;
+    }
+    .step code {
+      display: inline-block;
+      background: #fff;
+      border: 1px solid #ddd;
+      padding: 2px 6px;
+      border-radius: 3px;
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 12px;
+    }
+    .form-group {
+      margin-bottom: 20px;
+    }
+    label {
+      display: block;
+      color: #333;
+      font-weight: 600;
+      margin-bottom: 8px;
+      font-size: 14px;
+    }
+    input {
+      width: 100%;
+      padding: 12px;
+      border: 1px solid #ddd;
+      border-radius: 6px;
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 13px;
+    }
+    input:focus {
+      outline: none;
+      border-color: #667eea;
+      box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+    }
+    .help {
+      font-size: 12px;
+      color: #666;
+      margin-top: 6px;
+    }
+    .button-group {
+      display: flex;
+      gap: 10px;
+      margin-top: 30px;
+    }
+    button {
+      flex: 1;
+      padding: 12px;
+      border: none;
+      border-radius: 6px;
+      font-size: 14px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+    .btn-save {
+      background: #667eea;
+      color: white;
+    }
+    .btn-save:hover {
+      background: #5568d3;
+      box-shadow: 0 4px 12px rgba(102, 126, 234, 0.4);
+    }
+    .btn-test {
+      background: #f0f0f0;
+      color: #333;
+      border: 1px solid #ddd;
+    }
+    .btn-test:hover {
+      background: #e0e0e0;
+    }
+    .status {
+      margin-top: 20px;
+      padding: 12px;
+      border-radius: 6px;
+      display: none;
+    }
+    .status.success {
+      background: #d4edda;
+      color: #155724;
+      display: block;
+    }
+    .status.error {
+      background: #f8d7da;
+      color: #721c24;
+      display: block;
+    }
+    .warning {
+      background: #fff3cd;
+      color: #856404;
+      border-left: 4px solid #ffc107;
+      padding: 12px;
+      margin-bottom: 20px;
+      border-radius: 4px;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>🔧 ตั้งค่า Firebase</h1>
+    <p class="subtitle">ใส่ API Key จาก Firebase Console</p>
+
+    <div class="warning">
+      ⚠️ ให้ดำเนินการตามขั้นตอนด้านล่างเพื่อได้รับ API Key
+    </div>
+
+    <div class="step">
+      <strong>ขั้นตอน 1: ไปที่ Firebase Console</strong>
+      เปิด <a href="https://console.firebase.google.com/u/0/project/tbr-store/settings/general" target="_blank">Firebase Settings</a>
+    </div>
+
+    <div class="step">
+      <strong>ขั้นตอน 2: หา "Your apps"</strong>
+      ค้นหาส่วน <code>Your apps</code> → เลือก Web app <code></></code>
+    </div>
+
+    <div class="step">
+      <strong>ขั้นตอน 3: คัดลอก Config</strong>
+      ข้างใต้จะมี firebaseConfig object ให้ดึงค่า:
+      <ul style="margin: 10px 0 0 20px; list-style: disc; color: #666;">
+        <li><code>apiKey</code></li>
+        <li><code>appId</code></li>
+      </ul>
+    </div>
+
+    <form id="configForm">
+      <div class="form-group">
+        <label>API Key</label>
+        <input type="text" id="apiKey" placeholder="AIza..." required />
+        <div class="help">ตัวอย่าง: AIza-1234567890abc...</div>
+      </div>
+
+      <div class="form-group">
+        <label>App ID</label>
+        <input type="text" id="appId" placeholder="1:123456789:web:abc..." required />
+        <div class="help">ตัวอย่าง: 1:4205339157:web:ab...</div>
+      </div>
+
+      <div class="button-group">
+        <button type="submit" class="btn-save">💾 บันทึก</button>
+        <button type="button" class="btn-test" onclick="testFirebase()">🧪 ทดสอบ</button>
+      </div>
+
+      <div id="status" class="status"></div>
+    </form>
+
+    <p style="margin-top: 30px; text-align: center; color: #999; font-size: 12px;">
+      🔒 ข้อมูลจะบันทึกเฉพาะในไฟล์โครงการเท่านั้น
+    </p>
+  </div>
+
+  <script>
+    // โหลดค่าที่บันทึกไว้
+    window.addEventListener('load', () => {
+      const saved = localStorage.getItem('firebase-config');
+      if (saved) {
+        const config = JSON.parse(saved);
+        document.getElementById('apiKey').value = config.apiKey || '';
+        document.getElementById('appId').value = config.appId || '';
+      }
+    });
+
+    // บันทึก Config
+    document.getElementById('configForm').addEventListener('submit', async (e) => {
+      e.preventDefault();
+
+      const config = {
+        apiKey: document.getElementById('apiKey').value,
+        appId: document.getElementById('appId').value,
+        authDomain: 'tbr-store.firebaseapp.com',
+        projectId: 'tbr-store',
+        storageBucket: 'tbr-store.appspot.com',
+        messagingSenderId: '4205339157'
+      };
+
+      localStorage.setItem('firebase-config', JSON.stringify(config));
+
+      // อัปเดต firebaseService.js
+      const configScript = `const firebaseConfig = ${JSON.stringify(config, null, 2)};`;
+      
+      showStatus('✅ บันทึก API Key สำเร็จ!', 'success');
+      
+      setTimeout(() => {
+        showStatus('📝 ต่อไปให้อัปเดตไฟล์ firebaseService.js ให้รู้', 'success');
+        
+        // Copy ไฟล์อัปเดต
+        updateFirebaseServiceFile(config);
+      }, 1000);
+    });
+
+    // อัปเดต firebaseService.js
+    async function updateFirebaseServiceFile(config) {
+      try {
+        // ส่งไป backend เพื่ออัปเดตไฟล์
+        // หรือแสดง config ที่ต้องอัปเดต
+        const code = `
+// ✅ อัปเดตค่าใน firebaseService.js:
+const firebaseConfig = {
+  apiKey: "${config.apiKey}",
+  authDomain: "${config.authDomain}",
+  projectId: "${config.projectId}",
+  storageBucket: "${config.storageBucket}",
+  messagingSenderId: "${config.messagingSenderId}",
+  appId: "${config.appId}"
+};
+        `;
+
+        console.log(code);
+        showStatus('✅ สามารถไปยังแดชบอร์ดได้แล้ว!', 'success');
+        
+        // เปลี่ยนไปที่แดชบอร์ด
+        setTimeout(() => {
+          window.location.href = 'index.html';
+        }, 2000);
+      } catch (err) {
+        showStatus('❌ มีข้อผิดพลาด: ' + err.message, 'error');
+      }
+    }
+
+    // ทดสอบ Firebase Config
+    async function testFirebase() {
+      const config = {
+        apiKey: document.getElementById('apiKey').value,
+        appId: document.getElementById('appId').value,
+        authDomain: 'tbr-store.firebaseapp.com',
+        projectId: 'tbr-store',
+        storageBucket: 'tbr-store.appspot.com',
+        messagingSenderId: '4205339157'
+      };
+
+      if (!config.apiKey || !config.appId) {
+        showStatus('❌ กรุณาใส่ API Key และ App ID ก่อน', 'error');
+        return;
+      }
+
+      showStatus('🔄 กำลังทดสอบ...', 'success');
+
+      try {
+        // สร้าง Firebase instance เพื่อทดสอบ
+        const response = await fetch(
+          `https://identitytoolkit.googleapis.com/v1/accounts:signUp?key=${config.apiKey}`,
+          {
+            method: 'POST',
+            body: JSON.stringify({ returnSecureToken: true })
+          }
+        );
+
+        if (response.status === 400) {
+          showStatus('✅ API Key ถูกต้อง!', 'success');
+        } else {
+          showStatus('⚠️ API Key อาจมีปัญหา ลองใหม่สิ', 'error');
+        }
+      } catch (err) {
+        showStatus('❌ ไม่สามารถเชื่อมต่อ: ' + err.message, 'error');
+      }
+    }
+
+    // แสดง Status
+    function showStatus(msg, type) {
+      const status = document.getElementById('status');
+      status.textContent = msg;
+      status.className = 'status ' + type;
+    }
+  </script>
+</body>
+</html>

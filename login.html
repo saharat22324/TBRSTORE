@@ -1,0 +1,492 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>TBR System — Login</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Saira+Condensed:ital,wght@0,700;0,800;0,900;1,900&family=Noto+Sans+Thai:wght@400;500;600;700&family=JetBrains+Mono:wght@500;700&display=swap" rel="stylesheet" />
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    body {
+      font-family: 'Noto Sans Thai', sans-serif;
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 20px;
+    }
+
+    .login-container {
+      background: white;
+      border-radius: 12px;
+      box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+      max-width: 400px;
+      width: 100%;
+      padding: 40px;
+    }
+
+    .logo-section {
+      text-align: center;
+      margin-bottom: 40px;
+    }
+
+    .logo {
+      font-size: 2.5rem;
+      font-weight: 900;
+      font-family: 'Saira Condensed', sans-serif;
+      color: #667eea;
+      letter-spacing: -2px;
+      margin-bottom: 10px;
+    }
+
+    .logo span {
+      color: #764ba2;
+    }
+
+    .logo-subtitle {
+      font-size: 0.9rem;
+      color: #999;
+      margin-top: 5px;
+    }
+
+    .form-group {
+      margin-bottom: 20px;
+    }
+
+    label {
+      display: block;
+      font-weight: 600;
+      margin-bottom: 8px;
+      color: #333;
+      font-size: 0.95rem;
+    }
+
+    input[type="email"],
+    input[type="password"],
+    select {
+      width: 100%;
+      padding: 12px;
+      border: 1px solid #ddd;
+      border-radius: 8px;
+      font-size: 0.95rem;
+      font-family: 'Noto Sans Thai', sans-serif;
+      transition: border-color 0.3s;
+    }
+
+    input[type="email"]:focus,
+    input[type="password"]:focus,
+    select:focus {
+      outline: none;
+      border-color: #667eea;
+      box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+    }
+
+    .form-actions {
+      margin-top: 30px;
+    }
+
+    button {
+      width: 100%;
+      padding: 12px;
+      border: none;
+      border-radius: 8px;
+      font-size: 0.95rem;
+      font-weight: 600;
+      font-family: 'Noto Sans Thai', sans-serif;
+      cursor: pointer;
+      transition: all 0.3s;
+      margin-bottom: 10px;
+    }
+
+    .btn-login {
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      color: white;
+    }
+
+    .btn-login:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 10px 20px rgba(102, 126, 234, 0.3);
+    }
+
+    .btn-register {
+      background: white;
+      color: #667eea;
+      border: 2px solid #667eea;
+    }
+
+    .btn-register:hover {
+      background: #f8f9ff;
+    }
+
+    .demo-section {
+      margin-top: 25px;
+      padding-top: 20px;
+      border-top: 1px solid #eee;
+      text-align: center;
+    }
+
+    .demo-title {
+      font-size: 0.9rem;
+      color: #999;
+      margin-bottom: 10px;
+    }
+
+    .demo-accounts {
+      display: grid;
+      grid-template-columns: 1fr;
+      gap: 8px;
+      margin-bottom: 15px;
+    }
+
+    .demo-account {
+      background: #f5f5f5;
+      padding: 10px;
+      border-radius: 6px;
+      font-size: 0.85rem;
+      color: #555;
+    }
+
+    .demo-account strong {
+      color: #333;
+    }
+
+    .error-message {
+      display: none;
+      background: #fee;
+      border: 1px solid #fcc;
+      color: #c33;
+      padding: 12px;
+      border-radius: 6px;
+      margin-bottom: 20px;
+      font-size: 0.9rem;
+    }
+
+    .success-message {
+      display: none;
+      background: #efe;
+      border: 1px solid #cfc;
+      color: #3c3;
+      padding: 12px;
+      border-radius: 6px;
+      margin-bottom: 20px;
+      font-size: 0.9rem;
+    }
+
+    .loading {
+      display: none;
+      text-align: center;
+      color: #667eea;
+      font-size: 0.9rem;
+    }
+
+    .spinner {
+      display: inline-block;
+      width: 16px;
+      height: 16px;
+      border: 2px solid #f3f3f3;
+      border-top: 2px solid #667eea;
+      border-radius: 50%;
+      animation: spin 1s linear infinite;
+      margin-right: 8px;
+      vertical-align: middle;
+    }
+
+    @keyframes spin {
+      0% { transform: rotate(0deg); }
+      100% { transform: rotate(360deg); }
+    }
+  </style>
+</head>
+<body>
+  <div class="login-container">
+    <div class="logo-section">
+      <div class="logo">TBR<span>.</span></div>
+      <div class="logo-subtitle">Service Center — ระบบบริหารอู่</div>
+    </div>
+
+    <div id="errorMsg" class="error-message"></div>
+    <div id="successMsg" class="success-message"></div>
+
+    <!-- LOGIN FORM -->
+    <div id="loginForm">
+      <div class="form-group">
+        <label>อีเมล</label>
+        <input type="email" id="loginEmail" placeholder="user@example.com" />
+      </div>
+      <div class="form-group">
+        <label>รหัสผ่าน</label>
+        <input type="password" id="loginPassword" placeholder="••••••••" />
+      </div>
+      <div class="form-actions">
+        <button class="btn-login" id="loginBtn">เข้าสู่ระบบ</button>
+        <button class="btn-register" id="showRegisterBtn">สร้างบัญชีใหม่</button>
+      </div>
+    </div>
+
+    <!-- REGISTER FORM -->
+    <div id="registerForm" style="display: none;">
+      <div class="form-group">
+        <label>ชื่อ-นามสกุล</label>
+        <input type="text" id="registerName" placeholder="ชื่อของคุณ" />
+      </div>
+      <div class="form-group">
+        <label>อีเมล</label>
+        <input type="email" id="registerEmail" placeholder="user@example.com" />
+      </div>
+      <div class="form-group">
+        <label>รหัสผ่าน</label>
+        <input type="password" id="registerPassword" placeholder="••••••••" />
+      </div>
+      <div class="form-group">
+        <label>ยืนยันรหัสผ่าน</label>
+        <input type="password" id="registerConfirm" placeholder="••••••••" />
+      </div>
+      <div class="form-group">
+        <label>ตำแหน่ง</label>
+        <select id="registerRole">
+          <option value="">— เลือกตำแหน่ง —</option>
+          <option value="front_desk">Front Desk (ลูกค้า)</option>
+          <option value="technician">Technician (ช่าง)</option>
+          <option value="admin">Admin (ผู้จัดการ)</option>
+        </select>
+      </div>
+      <div class="form-actions">
+        <button class="btn-login" id="registerBtn">สร้างบัญชี</button>
+        <button class="btn-register" id="showLoginBtn">กลับไปเข้าสู่ระบบ</button>
+      </div>
+    </div>
+
+    <div class="loading" id="loading">
+      <div class="spinner"></div>
+      <span>กำลังประมวลผล...</span>
+    </div>
+
+    <!-- DEMO ACCOUNTS -->
+    <div class="demo-section">
+      <div class="demo-title">👤 บัญชีทดสอบ</div>
+      <div class="demo-accounts">
+        <div class="demo-account">
+          <strong>Admin:</strong><br>
+          admin@tbr.local / admin123
+        </div>
+        <div class="demo-account">
+          <strong>Technician:</strong><br>
+          tech@tbr.local / tech123
+        </div>
+        <div class="demo-account">
+          <strong>Front Desk:</strong><br>
+          desk@tbr.local / desk123
+        </div>
+      </div>
+      <button class="btn-register" id="demoBtn" style="font-size: 0.85rem; padding: 8px;">ใช้บัญชีทดสอบ (Admin)</button>
+    </div>
+  </div>
+
+  <!-- Supabase JS Client -->
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  
+  <!-- Inline Supabase Config -->
+  <script>
+    console.log('[Config] START: Supabase config block');
+    
+    try {
+      console.log('[Config] Step 1: Check window');
+      const SUPABASE_URL = 'https://tgtuxvmuapiltmkulvlk.supabase.co';
+      const SUPABASE_KEY = 'sb_publishable_8mmv4aAB8mPRvYe459ZwGQ_KVVJROax';
+      console.log('[Config] Step 2: Define function initializeSupabase');
+      
+      let supabase = null;
+      let supabaseReady = false;
+      
+      async function initializeSupabase() {
+        try {
+          if (!SUPABASE_URL || SUPABASE_URL === 'YOUR_SUPABASE_URL') {
+            console.warn('[Supabase] Credentials not configured');
+            return false;
+          }
+          supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+          supabaseReady = true;
+          console.log('[Supabase] ✅ Initialized');
+          return true;
+        } catch (err) {
+          console.error('[Supabase] Initialize error:', err.message);
+          return false;
+        }
+      }
+      
+      async function getCurrentUser() {
+        if (!supabaseReady) return null;
+        try {
+          const { data: { user }, error } = await supabase.auth.getUser();
+          if (error) throw error;
+          return user;
+        } catch (err) {
+          console.error('[Supabase] getCurrentUser error:', err.message);
+          return null;
+        }
+      }
+      
+      async function getUserProfile(userId) {
+        if (!supabaseReady) return null;
+        try {
+          // First get the user data WITHOUT roles join (avoids recursion)
+          const { data: userData, error: userError } = await supabase
+            .from('users')
+            .select('id, email, name, created_at')
+            .eq('id', userId)
+            .single();
+          
+          if (userError) throw userError;
+          if (!userData) return null;
+          
+          // Then separately get the role if needed
+          const { data: roleData } = await supabase
+            .from('roles')
+            .select('role')
+            .eq('user_id', userId)
+            .maybeSingle();
+          
+          if (roleData) {
+            userData.role = roleData.role;
+          }
+          
+          return userData;
+        } catch (err) {
+          console.error('[Supabase] getUserProfile error:', err.message);
+          return null;
+        }
+      }
+      
+      async function signUp(email, password, name) {
+        if (!supabaseReady) return null;
+        try {
+          const { data, error } = await supabase.auth.signUp({
+            email,
+            password,
+            options: { data: { name } }
+          });
+          if (error) throw error;
+          return data;
+        } catch (err) {
+          console.error('[Supabase] signUp error:', err.message);
+          return null;
+        }
+      }
+      
+      async function signIn(email, password) {
+        if (!supabaseReady) return null;
+        try {
+          const { data, error } = await supabase.auth.signInWithPassword({
+            email,
+            password
+          });
+          if (error) throw error;
+          return data;
+        } catch (err) {
+          console.error('[Supabase] signIn error:', err.message);
+          return null;
+        }
+      }
+      
+      async function signOut() {
+        if (!supabaseReady) return false;
+        try {
+          const { error } = await supabase.auth.signOut();
+          if (error) throw error;
+          return true;
+        } catch (err) {
+          console.error('[Supabase] signOut error:', err.message);
+          return false;
+        }
+      }
+      
+      function onAuthStateChange(callback) {
+        if (!supabaseReady) return null;
+        return supabase.auth.onAuthStateChange((event, session) => {
+          callback(event, session);
+        });
+      }
+      
+      console.log('[Config] Step 3: Before exports');
+      console.log('[Config] initializeSupabase type:', typeof initializeSupabase);
+      
+      // Export to window
+      window.initializeSupabase = initializeSupabase;
+      window.getCurrentUser = getCurrentUser;
+      window.getUserProfile = getUserProfile;
+      window.signUp = signUp;
+      window.signIn = signIn;
+      window.signOut = signOut;
+      window.onAuthStateChange = onAuthStateChange;
+      
+      // Export helper for supabaseService.js
+      window.getSupabase = () => supabase;
+      
+      Object.defineProperty(window, 'supabaseReady', {
+        get: () => supabaseReady,
+        set: (val) => { supabaseReady = val; }
+      });
+      
+      console.log('[Config] Step 4: After exports');
+      console.log('[Config] window.initializeSupabase type:', typeof window.initializeSupabase);
+      console.log('[Config] ✅ Supabase functions ready in window');
+    } catch(configError) {
+      console.error('[Config] ERROR in config block:', configError.message);
+      console.error('[Config] Error:', configError);
+    }
+  </script>
+  
+  <!-- Auth Logic -->
+  <script src="js/auth.js"></script>
+  
+  <!-- Wait for Supabase library then initialize auth -->
+  <script>
+    (function initWhenReady() {
+      console.log('[Init] Waiting for Supabase library and config to load...');
+      
+      const maxAttempts = 150; // 15 seconds (150 * 100ms)
+      let attempts = 0;
+      
+      const initCheck = setInterval(() => {
+        attempts++;
+        
+        // Check if both Supabase library and our functions are available
+        const hasSupabaseLib = typeof window.supabase !== 'undefined' && typeof window.supabase.createClient === 'function';
+        const hasInitFunc = typeof window.initializeSupabase === 'function';
+        const hasInitAuthFunc = typeof window.initAuthPage === 'function';
+        
+        if (attempts % 20 === 0) {
+          console.log(`[Init] Attempt ${attempts}/${maxAttempts}: supabase=${hasSupabaseLib}, initSupabase=${hasInitFunc}, initAuthPage=${hasInitAuthFunc}`);
+        }
+        
+        // Only call initAuthPage when both CDN library AND our functions are ready
+        if (hasSupabaseLib && hasInitFunc && hasInitAuthFunc) {
+          clearInterval(initCheck);
+          console.log('[Init] ✅ All systems ready! Calling initAuthPage...');
+          window.initAuthPage().catch(err => {
+            console.error('[Init] Error during initAuthPage:', err);
+            alert('ระบบไม่พร้อม: ' + err.message);
+          });
+        } else if (attempts >= maxAttempts) {
+          clearInterval(initCheck);
+          console.error('[Init] ❌ Timeout - system not ready');
+          console.error('[Init] Status:', {
+            supabaseLib: hasSupabaseLib,
+            initializeSupabase: hasInitFunc,
+            initAuthPage: hasInitAuthFunc
+          });
+          alert('ระบบไม่พร้อม - กรุณารีโหลดหน้านี้');
+        }
+      }, 100);
+    })();
+  </script>
+</body>
+</html>

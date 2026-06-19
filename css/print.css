@@ -1,0 +1,323 @@
+/* ============================================================
+   PRINT.CSS — Document styles (ใบเสร็จ / QT / PO)
+               + @media print rules
+   TBR Service Center System
+   ============================================================ */
+
+/* ── Print zone (hidden in browser, shown on print) ── */
+#pz { display: none; }
+
+/* ══════════════════════════════════════
+   DOCUMENT WRAPPER
+══════════════════════════════════════ */
+.doc {
+  background: #fff;
+  color: #1a1a1a;
+  font-family: "Noto Sans Thai", sans-serif;
+  font-size: 12px;
+}
+
+/* ── Document header (dark bg) ── */
+.doc-hd {
+  background: #15171b;
+  padding: 15px 20px;
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+}
+
+/* Logo area */
+.doc-logo  { display: flex; align-items: center; gap: 11px; }
+
+.doc-lb {
+  width: 54px;
+  height: 54px;
+  background: #fff;
+  border-radius: 8px;
+  display: grid;
+  place-items: center;
+  flex-shrink: 0;
+}
+
+.doc-tbr {
+  font-family: "Saira Condensed", sans-serif;
+  font-style: italic;
+  font-weight: 900;
+  font-size: 1.4rem;
+  color: #15171b;
+  line-height: 1;
+}
+.doc-tbr span  { color: #E4121F; }
+
+.doc-bull {
+  font-size: .48rem;
+  color: #15171b;
+  font-weight: 700;
+  letter-spacing: 1px;
+  text-align: center;
+  display: block;
+}
+
+/* Shop info */
+.doc-si  { color: #fff; }
+
+.doc-sn {
+  font-family: "Saira Condensed", sans-serif;
+  font-style: italic;
+  font-weight: 900;
+  font-size: 1.05rem;
+  letter-spacing: .5px;
+}
+.doc-sn span { color: #EEA61C; }
+
+.doc-ss {
+  font-size: .65rem;
+  color: #9aa0aa;
+  margin-top: 2px;
+  line-height: 1.5;
+}
+
+/* Document type label (top-right) */
+.doc-ta { text-align: right; color: #fff; }
+
+.doc-tt {
+  font-family: "Saira Condensed", sans-serif;
+  font-weight: 900;
+  text-transform: uppercase;
+  font-size: 1.15rem;
+  letter-spacing: 1px;
+  color: #EEA61C;
+}
+
+.doc-te {
+  font-size: .62rem;
+  color: #9aa0aa;
+  margin-top: 2px;
+}
+
+/* ── Color stripe below header ── */
+.doc-stripe {
+  height: 4px;
+  background: repeating-linear-gradient(
+    90deg,
+    #EEA61C 0 16px,
+    #15171b 16px 22px
+  );
+}
+
+/* ── Document body ── */
+.doc-bd { padding: 15px 20px; }
+
+/* Reference row */
+.doc-ref {
+  display: flex;
+  justify-content: flex-end;
+  gap: 18px;
+  margin-bottom: 10px;
+  font-size: .7rem;
+  font-family: "JetBrains Mono", monospace;
+  color: #666;
+}
+.doc-ref b { color: #1a1a1a; }
+
+/* Customer / vehicle info boxes */
+.doc-2col {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 14px;
+  margin-bottom: 12px;
+}
+
+.doc-box {
+  background: #f7f7f7;
+  border: 1px solid #e5e5e5;
+  border-radius: 7px;
+  padding: 9px 12px;
+  min-width: 180px;
+}
+
+.doc-box .lbl {
+  font-size: .6rem;
+  color: #888;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  font-family: "JetBrains Mono", monospace;
+  margin-bottom: 4px;
+}
+
+.doc-box .nm {
+  font-weight: 700;
+  font-size: .9rem;
+  color: #1a1a1a;
+  margin-bottom: 1px;
+}
+
+.doc-box .sb {
+  font-size: .72rem;
+  color: #555;
+  line-height: 1.5;
+}
+
+/* ── Document items table ── */
+.dt {
+  width: 100%;
+  border-collapse: collapse;
+  margin-bottom: 11px;
+}
+
+.dt thead tr { background: #15171b; }
+
+.dt th {
+  font-size: .62rem;
+  color: #fff;
+  text-transform: uppercase;
+  padding: 7px 9px;
+  text-align: left;
+  font-family: "JetBrains Mono", monospace;
+  letter-spacing: .5px;
+}
+.dt th.r { text-align: right; }
+
+.dt tbody tr:nth-child(even) { background: #f9f9f9; }
+
+.dt td {
+  font-size: .8rem;
+  padding: 7px 9px;
+  border-bottom: 1px solid #eee;
+  vertical-align: top;
+  color: #1a1a1a;
+}
+.dt td.r { text-align: right; font-family: "JetBrains Mono", monospace; }
+.dt td.c { text-align: center; }
+
+/* ── Document summary totals ── */
+.doc-sum-box {
+  min-width: 220px;
+  border: 1px solid #e5e5e5;
+  border-radius: 7px;
+  overflow: hidden;
+}
+
+.dsr {
+  display: flex;
+  justify-content: space-between;
+  padding: 6px 11px;
+  font-size: .8rem;
+  border-bottom: 1px solid #eee;
+}
+.dsr:last-child { border-bottom: none; }
+
+/* Grand total row */
+.dsr.tot {
+  background: #15171b;
+  color: #fff;
+  border-bottom: none;
+}
+
+.dsr.tot .lv {
+  font-family: "Saira Condensed", sans-serif;
+  font-weight: 900;
+  font-size: 1.12rem;
+  color: #EEA61C;
+}
+
+/* Amount in words */
+.doc-words {
+  text-align: center;
+  font-size: .75rem;
+  color: #555;
+  padding: 6px;
+  border: 1px dashed #ddd;
+  border-radius: 5px;
+  margin-bottom: 11px;
+}
+
+/* ── Signature rows ── */
+.doc-sigs {
+  display: grid;
+  grid-template-columns: 1fr 1fr 1fr;
+  gap: 14px;
+  margin-top: 14px;
+}
+
+.doc-sig .line {
+  border-top: 1px solid #ccc;
+  padding-top: 5px;
+  font-size: .68rem;
+  color: #888;
+  margin-top: 32px;
+  text-align: center;
+}
+
+.doc-sig .dt2 {
+  font-size: .65rem;
+  color: #aaa;
+  margin-top: 2px;
+  text-align: center;
+}
+
+/* ── Document footer ── */
+.doc-foot {
+  text-align: center;
+  font-size: .68rem;
+  color: #888;
+  padding-top: 8px;
+  border-top: 1px dashed #ddd;
+  line-height: 1.6;
+  margin-top: 10px;
+}
+
+/* ── Document action buttons (screen only) ── */
+.doc-acts {
+  display: flex;
+  gap: 9px;
+  padding: 11px 16px;
+  background: #f5f5f5;
+  border-top: 1px solid #e0e0e0;
+}
+
+.doc-acts button {
+  flex: 1;
+  padding: 10px;
+  border-radius: 9px;
+  font-weight: 700;
+  font-size: .86rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  transition: background .14s, filter .14s;
+  border: none;
+  cursor: pointer;
+  font-family: "Noto Sans Thai", sans-serif;
+}
+.doc-acts svg { width: 14px; height: 14px; }
+
+.btn-prt  { background: #15171b; color: #fff;  } .btn-prt:hover  { background: #000;     }
+.btn-cdoc { background: #e5e5e5; color: #333;  } .btn-cdoc:hover { background: #ccc;     }
+.btn-cvt  { background: #C9850D; color: #fff;  } .btn-cvt:hover  { background: #a86a0a;  }
+
+/* ══════════════════════════════════════
+   @MEDIA PRINT
+══════════════════════════════════════ */
+@media print {
+  /* Hide everything except print zone */
+  body * { visibility: hidden !important; }
+
+  #pz,
+  #pz * {
+    visibility: visible !important;
+  }
+
+  #pz {
+    position: fixed;
+    left: 0;
+    top: 0;
+    width: 100%;
+    background: #fff;
+    display: block !important;
+  }
+
+  /* Never print action buttons */
+  .doc-acts { display: none !important; }
+}
