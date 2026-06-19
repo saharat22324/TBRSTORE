@@ -9,8 +9,8 @@ if (typeof window !== 'undefined') {
 }
 
 // 🔐 Supabase credentials
-const SUPABASE_URL = 'https://tgtuxvmuapiltmkulvlk.supabase.co';
-const SUPABASE_KEY = 'sb_publishable_8mmv4aAB8mPRvYe459ZwGQ_KVVJROax';
+const SUPABASE_URL = 'https://hhaduosajnvamyxrqzwd.supabase.co';
+const SUPABASE_KEY = 'sb_publishable_5ZJiyBVtCcwzi8p9qrSCOA_GnnMNj-9';
 
 // State
 let supabase = null;
