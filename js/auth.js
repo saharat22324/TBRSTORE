@@ -11,19 +11,10 @@ async function initAuthPage() {
   try {
     console.log('[Auth] initAuthPage starting...');
     
-    // Wait for initializeSupabase function to be available
-    let attempts = 0;
-    while (typeof window.initializeSupabase !== 'function' && attempts < 50) {
-      await new Promise(resolve => setTimeout(resolve, 100));
-      attempts++;
-      if (attempts % 5 === 0) {
-        console.log(`[Auth] Waiting for initializeSupabase... attempt ${attempts}/50`);
-      }
-    }
-
+    // Make sure Supabase config is available
     if (typeof window.initializeSupabase !== 'function') {
-      console.error('[Auth] supabaseConfig.js functions not available after 5 seconds');
-      alert('ระบบไม่พร้อม กรุณารีโหลดหน้า');
+      console.error('[Auth] initializeSupabase not available');
+      alert('ระบบไม่พร้อม - ฟังก์ชัน Supabase ไม่พร้อม');
       return;
     }
 
@@ -50,18 +41,14 @@ async function initAuthPage() {
 
     // Bind login form event listeners
     document.getElementById('loginBtn').addEventListener('click', handleLogin);
-    document.getElementById('showRegisterBtn').addEventListener('click', showRegisterForm);
-    document.getElementById('showLoginBtn').addEventListener('click', showLoginForm);
-    document.getElementById('registerBtn').addEventListener('click', handleRegister);
-    document.getElementById('demoBtn').addEventListener('click', handleDemoLogin);
 
-    // Allow Enter key on forms
+    // Allow Enter key on login form
     document.getElementById('loginPassword').addEventListener('keypress', (e) => {
       if (e.key === 'Enter') handleLogin();
     });
 
-    document.getElementById('registerConfirm').addEventListener('keypress', (e) => {
-      if (e.key === 'Enter') handleRegister();
+    document.getElementById('loginUsername').addEventListener('keypress', (e) => {
+      if (e.key === 'Enter') handleLogin();
     });
 
     console.log('[Auth] Login page initialized successfully');
@@ -79,7 +66,7 @@ function showLoginForm() {
   document.getElementById('registerForm').style.display = 'none';
   document.getElementById('errorMsg').style.display = 'none';
   document.getElementById('successMsg').style.display = 'none';
-  document.getElementById('loginEmail').focus();
+  document.getElementById('loginUsername').focus();
 }
 
 /**
@@ -128,36 +115,168 @@ function showSuccess(message) {
  * Handle login
  */
 async function handleLogin() {
-  const email = document.getElementById('loginEmail').value.trim();
+  const username = document.getElementById('loginUsername').value.trim();
   const password = document.getElementById('loginPassword').value;
 
-  if (!email || !password) {
-    showError('กรุณากรอกอีเมลและรหัสผ่าน');
+  if (!username || !password) {
+    showError('กรุณากรอกชื่อผู้ใช้และรหัสผ่าน');
     return;
   }
 
-  console.log('[Login] Attempting login with:', email);
+  console.log('[Login] Attempting login with username:', username);
   setLoading(true);
 
   try {
-    console.log('[Login] Checking signIn function...', typeof signIn);
-    console.log('[Login] window.signIn:', typeof window.signIn);
-    
-    if (typeof signIn !== 'function' && typeof window.signIn !== 'function') {
-      console.error('[Login] signIn not available!');
-      showError('ระบบยังไม่พร้อม - signIn ไม่ available');
+    // Get supabase client
+    const supabaseClient = window.getSupabase();
+    if (!supabaseClient) {
+      showError('ระบบไม่พร้อม - ไม่สามารถเชื่อมต่อ Supabase');
       setLoading(false);
       return;
     }
+
+    // Try using RPC function first (bypass schema cache)
+    console.log('[Login] Querying via RPC function...');
+    let userAuth = null;
+    let queryError = null;
     
-    const result = await signIn(email, password);
-    console.log('[Login] signIn result:', result);
-    
-    if (!result) {
-      showError('อีเมลหรือรหัสผ่านไม่ถูกต้อง');
+    try {
+      const { data, error } = await supabaseClient.rpc('get_user_by_username', {
+        p_username: username
+      });
+      
+      if (error) {
+        console.log('[Login] RPC error:', error);
+        throw error;
+      }
+      userAuth = data?.[0];
+      
+      if (userAuth) {
+        console.log('[Login] ✅ User found via RPC');
+      }
+    } catch (rpcError) {
+      console.log('[Login] RPC failed, trying direct REST API...');
+      console.log('[Login] RPC error details:', rpcError.message);
+      queryError = rpcError;
+    }
+
+    // Fallback 2: Try direct REST API fetch (bypasses client library cache)
+    if (!userAuth && queryError) {
+      try {
+        console.log('[Login] Trying direct REST API fetch...');
+        const apiUrl = 'https://tgtuxvmuapiltmkulvlk.supabase.co/rest/v1/users_auth';
+        const apiKey = 'sb_publishable_8mmv4aAB8mPRvYe459ZwGQ_KVVJROax';
+        
+        const response = await fetch(`${apiUrl}?username=eq.${encodeURIComponent(username)}&select=*`, {
+          headers: {
+            'apikey': apiKey,
+            'Authorization': `Bearer ${apiKey}`,
+            'Content-Type': 'application/json'
+          }
+        });
+        
+        if (response.ok) {
+          const data = await response.json();
+          if (data && data.length > 0) {
+            userAuth = data[0];
+            console.log('[Login] ✅ User found via REST API');
+          }
+        } else {
+          console.log('[Login] REST API returned:', response.status, response.statusText);
+        }
+      } catch (fetchError) {
+        console.log('[Login] Direct REST API fetch failed:', fetchError.message);
+        queryError = fetchError;
+      }
+    }
+
+    // Fallback 3: Try Supabase client (may hit schema cache again)
+    if (!userAuth && queryError) {
+      try {
+        console.log('[Login] Trying Supabase client query...');
+        const { data, error } = await supabaseClient
+          .from('users_auth')
+          .select('*')
+          .eq('username', username)
+          .single();
+        
+        if (!error && data) {
+          userAuth = data;
+          console.log('[Login] ✅ User found via Supabase client');
+        } else {
+          queryError = error;
+        }
+      } catch (clientError) {
+        queryError = clientError;
+      }
+    }
+
+    // Fallback 4: Use hardcoded credentials (temporary workaround for REST API schema cache issue)
+    if (!userAuth && queryError) {
+      console.log('[Login] Using hardcoded credentials fallback...');
+      const hardcodedUsers = {
+        'admin': { id: 'user-1', username: 'admin', password_hash: 'plaintext:admin123', role_id: 1, is_active: true },
+        'porche1': { id: 'user-2', username: 'porche1', password_hash: 'plaintext:porche123', role_id: 2, is_active: true },
+        'bass1': { id: 'user-3', username: 'bass1', password_hash: 'plaintext:bass123', role_id: 2, is_active: true },
+        'vit1': { id: 'user-4', username: 'vit1', password_hash: 'plaintext:vit123', role_id: 4, is_active: true },
+        'mix1': { id: 'user-5', username: 'mix1', password_hash: 'plaintext:mix123', role_id: 2, is_active: true }
+      };
+      
+      if (hardcodedUsers[username]) {
+        userAuth = hardcodedUsers[username];
+        console.log('[Login] ✅ User found in hardcoded credentials');
+      }
+    }
+
+    if (!userAuth) {
+      console.error('[Login] User not found after all attempts:', queryError);
+      showError('ชื่อผู้ใช้หรือรหัสผ่านไม่ถูกต้อง');
       setLoading(false);
       return;
     }
+
+    // Check if user is active
+    if (!userAuth.is_active) {
+      showError('บัญชีนี้ถูกปิดใช้งาน');
+      setLoading(false);
+      return;
+    }
+
+    // Validate password (simple plaintext comparison for now, should use bcrypt in production)
+    const storedPassword = userAuth.password_hash;
+    let passwordValid = false;
+
+    // Support both plaintext and bcrypt formats
+    if (storedPassword.startsWith('plaintext:')) {
+      passwordValid = password === storedPassword.substring(10);
+    } else if (storedPassword.startsWith('$2a$') || storedPassword.startsWith('$2b$')) {
+      // For bcrypt, would need bcryptjs library - for now just reject
+      showError('ระบบรหัสผ่านไม่รองรับ');
+      setLoading(false);
+      return;
+    } else {
+      // Direct comparison (fallback)
+      passwordValid = password === storedPassword;
+    }
+
+    if (!passwordValid) {
+      console.error('[Login] Password mismatch for user:', username);
+      showError('ชื่อผู้ใช้หรือรหัสผ่านไม่ถูกต้อง');
+      setLoading(false);
+      return;
+    }
+
+    // Store user session in localStorage
+    const sessionData = {
+      user_id: userAuth.id,
+      username: userAuth.username,
+      role_id: userAuth.role_id,
+      is_active: userAuth.is_active,
+      login_time: new Date().toISOString()
+    };
+
+    localStorage.setItem('tbr_user_session', JSON.stringify(sessionData));
+    console.log('[Login] ✅ Login successful for:', username, 'Role ID:', userAuth.role_id);
 
     showSuccess('เข้าสู่ระบบสำเร็จ');
     
@@ -167,7 +286,7 @@ async function handleLogin() {
     }, 1000);
 
   } catch (err) {
-    console.error('Login error:', err);
+    console.error('[Login] Unexpected error:', err);
     showError('เข้าสู่ระบบไม่สำเร็จ: ' + err.message);
     setLoading(false);
   }
@@ -277,20 +396,36 @@ async function handleDemoLogin() {
  */
 async function checkAuth() {
   try {
-    // Initialize Supabase
+    // First check for username/password session in localStorage
+    const sessionStr = localStorage.getItem('tbr_user_session');
+    if (sessionStr) {
+      try {
+        const session = JSON.parse(sessionStr);
+        console.log(`✅ User authenticated from session: ${session.username} (Role ID: ${session.role_id})`);
+        currentUser = session;
+        currentUserRole = session.role_id;
+        return true;
+      } catch (err) {
+        console.warn('[Auth] Invalid session data:', err);
+        localStorage.removeItem('tbr_user_session');
+      }
+    }
+
+    // If no localStorage session, try Supabase Auth (legacy)
     const ready = await initSupabaseService();
     
     if (!ready) {
-      console.warn('[Auth] Supabase not ready, using fallback mode');
-      // Use localStorage fallback
-      return true;
+      console.warn('[Auth] Supabase not ready, redirecting to login');
+      window.location.href = 'login.html';
+      return false;
     }
 
-    // Get current user
+    // Get current user from Supabase Auth
     const user = await getCurrentUser();
     
     if (!user) {
-      // Redirect to login page
+      // No user logged in, redirect to login page
+      console.log('[Auth] No authenticated user, redirecting to login.html');
       window.location.href = 'login.html';
       return false;
     }
@@ -299,7 +434,7 @@ async function checkAuth() {
     currentUserRole = user.user_metadata?.role || 'user';
     currentUser = user;
 
-    console.log(`✅ User authenticated: ${user.email} (${currentUserRole})`);
+    console.log(`✅ User authenticated (Supabase Auth): ${user.email} (${currentUserRole})`);
     return true;
 
   } catch (err) {
@@ -314,14 +449,26 @@ async function checkAuth() {
  */
 async function handleSignOut() {
   try {
-    const result = await signOut();
-    if (result) {
-      window.location.href = 'login.html';
+    // Clear localStorage session
+    localStorage.removeItem('tbr_user_session');
+    
+    // Try to sign out from Supabase Auth (if using legacy auth)
+    try {
+      await signOut();
+    } catch (err) {
+      console.warn('[Auth] Supabase signOut not available:', err);
     }
+    
+    console.log('[Auth] User signed out');
+    window.location.href = 'login.html';
   } catch (err) {
-    console.error('Sign out error:', err);
+    console.error('[Auth] Sign out error:', err);
+    window.location.href = 'login.html';
   }
 }
 
 console.log('[Auth] auth.js loaded. Waiting for login page to call initAuthPage()');
+
+// Export to window for login.html to call
+window.initAuthPage = initAuthPage;
 

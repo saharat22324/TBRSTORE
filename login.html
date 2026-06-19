@@ -218,8 +218,8 @@
     <!-- LOGIN FORM -->
     <div id="loginForm">
       <div class="form-group">
-        <label>อีเมล</label>
-        <input type="email" id="loginEmail" placeholder="user@example.com" />
+        <label>ชื่อผู้ใช้</label>
+        <input type="text" id="loginUsername" placeholder="admin" />
       </div>
       <div class="form-group">
         <label>รหัสผ่าน</label>
@@ -227,7 +227,6 @@
       </div>
       <div class="form-actions">
         <button class="btn-login" id="loginBtn">เข้าสู่ระบบ</button>
-        <button class="btn-register" id="showRegisterBtn">สร้างบัญชีใหม่</button>
       </div>
     </div>
 
@@ -271,22 +270,29 @@
 
     <!-- DEMO ACCOUNTS -->
     <div class="demo-section">
-      <div class="demo-title">👤 บัญชีทดสอบ</div>
+      <div class="demo-title">👤 บัญชีทีมงาน</div>
       <div class="demo-accounts">
         <div class="demo-account">
           <strong>Admin:</strong><br>
-          admin@tbr.local / admin123
+          admin / admin123
         </div>
         <div class="demo-account">
-          <strong>Technician:</strong><br>
-          tech@tbr.local / tech123
+          <strong>หัวหน้าช่าง:</strong><br>
+          porche1 / porche123
         </div>
         <div class="demo-account">
-          <strong>Front Desk:</strong><br>
-          desk@tbr.local / desk123
+          <strong>ช่าง 1:</strong><br>
+          bass1 / bass123
+        </div>
+        <div class="demo-account">
+          <strong>ช่าง 2:</strong><br>
+          vit1 / vit123
+        </div>
+        <div class="demo-account">
+          <strong>ช่าง 3:</strong><br>
+          mix1 / mix123
         </div>
       </div>
-      <button class="btn-register" id="demoBtn" style="font-size: 0.85rem; padding: 8px;">ใช้บัญชีทดสอบ (Admin)</button>
     </div>
   </div>
 
@@ -449,44 +455,32 @@
   
   <!-- Wait for Supabase library then initialize auth -->
   <script>
-    (function initWhenReady() {
-      console.log('[Init] Waiting for Supabase library and config to load...');
+    document.addEventListener('DOMContentLoaded', async () => {
+      console.log('[Init] DOMContentLoaded fired - waiting for auth to be ready...');
       
-      const maxAttempts = 150; // 15 seconds (150 * 100ms)
+      // Wait for initAuthPage to be available (from js/auth.js)
       let attempts = 0;
+      const maxAttempts = 100;
       
-      const initCheck = setInterval(() => {
+      while (typeof window.initAuthPage !== 'function' && attempts < maxAttempts) {
+        await new Promise(r => setTimeout(r, 50));
         attempts++;
-        
-        // Check if both Supabase library and our functions are available
-        const hasSupabaseLib = typeof window.supabase !== 'undefined' && typeof window.supabase.createClient === 'function';
-        const hasInitFunc = typeof window.initializeSupabase === 'function';
-        const hasInitAuthFunc = typeof window.initAuthPage === 'function';
-        
-        if (attempts % 20 === 0) {
-          console.log(`[Init] Attempt ${attempts}/${maxAttempts}: supabase=${hasSupabaseLib}, initSupabase=${hasInitFunc}, initAuthPage=${hasInitAuthFunc}`);
-        }
-        
-        // Only call initAuthPage when both CDN library AND our functions are ready
-        if (hasSupabaseLib && hasInitFunc && hasInitAuthFunc) {
-          clearInterval(initCheck);
-          console.log('[Init] ✅ All systems ready! Calling initAuthPage...');
-          window.initAuthPage().catch(err => {
-            console.error('[Init] Error during initAuthPage:', err);
-            alert('ระบบไม่พร้อม: ' + err.message);
-          });
-        } else if (attempts >= maxAttempts) {
-          clearInterval(initCheck);
-          console.error('[Init] ❌ Timeout - system not ready');
-          console.error('[Init] Status:', {
-            supabaseLib: hasSupabaseLib,
-            initializeSupabase: hasInitFunc,
-            initAuthPage: hasInitAuthFunc
-          });
-          alert('ระบบไม่พร้อม - กรุณารีโหลดหน้านี้');
-        }
-      }, 100);
-    })();
+      }
+      
+      if (typeof window.initAuthPage !== 'function') {
+        console.error('[Init] ❌ initAuthPage not found after waiting');
+        alert('ระบบไม่พร้อม - กรุณารีโหลดหน้านี้');
+        return;
+      }
+      
+      console.log('[Init] ✅ initAuthPage found! Initializing...');
+      try {
+        await window.initAuthPage();
+      } catch (err) {
+        console.error('[Init] Error calling initAuthPage:', err);
+        alert('ระบบไม่พร้อม: ' + err.message);
+      }
+    });
   </script>
 </body>
 </html>
