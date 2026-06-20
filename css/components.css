@@ -13,6 +13,12 @@
   background: var(--p1);
   border: 1px solid var(--ln);
   border-radius: var(--R);
+  transition: all .2s ease;
+}
+
+.card:hover {
+  border-color: var(--ln2);
+  box-shadow: 0 2px 8px rgba(0,0,0,.2);
 }
 
 .card-h {
@@ -55,6 +61,13 @@
   border: 1px solid var(--ln);
   border-radius: var(--R);
   padding: 14px 16px;
+  transition: all .2s ease;
+}
+
+.stat:hover {
+  border-color: var(--ln2);
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(0,0,0,.3);
 }
 
 .stat .sk {
@@ -166,13 +179,14 @@
   padding: 9px 11px;
   font-size: .9rem;
   outline: none;
-  transition: border-color .14s;
+  transition: border-color .14s, box-shadow .14s;
 }
 
 .fld input:focus,
 .fld select:focus,
 .fld textarea:focus {
   border-color: var(--gold);
+  box-shadow: 0 0 0 3px rgba(238, 166, 28, .15);
 }
 
 .fld textarea  { resize: vertical; min-height: 54px; }
@@ -226,7 +240,13 @@
 }
 
 .tbl tr:last-child td { border-bottom: none; }
-.tbl tr:hover td      { background: var(--p2); cursor: pointer; }
+.tbl tr {
+  transition: background-color .15s ease;
+}
+.tbl tr:hover td {
+  background: var(--p2);
+  cursor: pointer;
+}
 
 .tbl .r   { text-align: right; }
 .tbl .c   { text-align: center; }
