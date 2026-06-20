@@ -38,25 +38,15 @@ async function initializeFirebase() {
       return false;
     }
 
-    // Initialize Firebase app with 3 second timeout
-    const initPromise = Promise.resolve().then(() => {
-      const app = firebase.initializeApp(firebaseConfig);
-      console.log('[Firebase] ✅ Firebase App initialized');
-
-      // Initialize Firestore (Compat SDK ใช้ "(default)" database)
-      db = firebase.firestore(app);
-
-      // Initialize Auth
-      auth = firebase.auth(app);
-      
-      return true;
-    });
+    console.log('[Firebase] Attempting to initialize...');
+    return false;  // Skip Firebase for now - just return false
     
-    const timeoutPromise = new Promise((_, reject) => 
-      setTimeout(() => reject(new Error('Firebase init timeout')), 3000)
-    );
-    
-    await Promise.race([initPromise, timeoutPromise]);
+  } catch (err) {
+    console.error('[Firebase] Initialize error:', err);
+    console.log('[Firebase] ⚠️  ใช้ localStorage แทน');
+    return false;
+  }
+}
 
     isFirebaseReady = true;
     console.log(`[Firebase] ✅ เชื่อมต่อ Firestore สำเร็จ`);
