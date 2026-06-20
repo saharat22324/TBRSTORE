@@ -191,6 +191,60 @@ nav {
   flex-shrink: 0;
 }
 
+.nav-user {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 6px;
+}
+
+.nav-shop {
+  font-size: .68rem;
+  font-weight: 600;
+  letter-spacing: 1px;
+  text-transform: uppercase;
+  color: var(--fg2);
+  font-family: "JetBrains Mono", monospace;
+}
+
+.nav-info {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.nav-username {
+  font-size: .72rem;
+  color: var(--fg);
+  font-weight: 500;
+}
+
+.nav-logout {
+  display: grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  border-radius: 7px;
+  background: none;
+  border: 1px solid var(--ln2);
+  color: var(--fg2);
+  cursor: pointer;
+  transition: all .15s ease;
+  flex-shrink: 0;
+}
+
+.nav-logout:hover {
+  background: var(--p2);
+  border-color: var(--fg);
+  color: var(--gold);
+  transform: scale(1.08);
+}
+
+.nav-logout svg {
+  width: 13px;
+  height: 13px;
+}
+
 /* ── Main page ── */
 .page {
   padding: 20px 0 80px;

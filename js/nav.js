@@ -29,7 +29,24 @@ function renderNav() {
     </button>`;
   }).join('');
 
-  document.getElementById('NR').textContent = S.shop.name || 'TBR';
+  /* Render nav-right: shop name + user info + logout button */
+  const currentUser = getCurrentUserRole();
+  const username = currentUser ? currentUser.username : 'Guest';
+  
+  document.getElementById('NR').innerHTML = `
+    <div class="nav-user">
+      <div class="nav-shop">${S.shop.name || 'TBR'}</div>
+      <div class="nav-info">
+        <span class="nav-username">${username}</span>
+        <button class="nav-logout" id="logoutBtn" title="ออกจากระบบ">
+          ${svgI('<path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4M16 3l4 4m-4 0l4-4M16 17l-4 4m4 0l-4-4M9 12h12')}
+        </button>
+      </div>
+    </div>
+  `;
+
+  /* Bind logout button */
+  document.getElementById('logoutBtn').addEventListener('click', handleSignOut);
 
   /* Bind tab clicks */
   document.querySelectorAll('.nt').forEach(btn => {
