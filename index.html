@@ -314,16 +314,58 @@ console.log('[state.js] ✅ Loaded inline');
   </script>
   <script src="js/nav.js" disabled></script>
   
-  <!-- NAV.JS - MINIMAL TEST -->
+  <!-- NAV.JS - INLINE -->
   <script>
-console.log('[nav.js] Starting to load...');
+console.log('[nav.js] Starting load...');
 try {
-const TABS = [{id:'test'}];
-function renderNav() { console.log('renderNav called'); }
-function renderPanel() { console.log('renderPanel called'); }
-console.log('[nav.js] ✅ Loaded inline');
+
+// Declare TABS globally
+window.TABS = [
+  { id:'dash',      label:'ภาพรวม' },
+  { id:'customers', label:'ลูกค้า / รถ' },
+  { id:'jobs',      label:'Job Card' },
+  { id:'stock',     label:'สต๊อก' },
+  { id:'billing',   label:'ออกบิล' },
+  { id:'report',    label:'รายงาน' },
+  { id:'settings',  label:'ตั้งค่า' },
+];
+
+// Define renderNav
+window.renderNav = function() {
+  console.log('renderNav called with currentTab:', currentTab);
+  if (!S || !S.shop) return;
+  
+  document.getElementById('NR').innerHTML = `
+    <div class="nav-user">
+      <div class="nav-shop">${S.shop.name || 'TBR'}</div>
+      <div class="nav-info">
+        <span class="nav-username">User</span>
+      </div>
+    </div>
+  `;
+};
+
+// Define renderPanel
+window.renderPanel = function() {
+  console.log('renderPanel called with currentTab:', currentTab);
+  const root = document.getElementById('root');
+  
+  switch (currentTab) {
+    case 'dash':      root.innerHTML = dashboardHTML();  bindDashboard();  break;
+    case 'customers': root.innerHTML = customersHTML();  bindCustomers();  break;
+    case 'jobs':      root.innerHTML = jobsHTML();       bindJobs();       break;
+    case 'stock':     root.innerHTML = stockHTML();      bindStock();      break;
+    case 'billing':   root.innerHTML = billingHTML();    bindBilling();    break;
+    case 'report':    root.innerHTML = reportHTML();     bindReport();     break;
+    case 'settings':  root.innerHTML = settingsHTML();   bindSettings();   break;
+    default:          root.innerHTML = dashboardHTML();  bindDashboard();
+  }
+};
+
+console.log('[nav.js] ✅ Loaded successfully');
+
 } catch (e) {
-console.error('[nav.js] ERROR:', e.message);
+  console.error('[nav.js] FAILED:', e.message, e.stack);
 }
   </script>
   <script src="js/dashboard.js"></script>
