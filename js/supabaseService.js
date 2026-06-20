@@ -19,23 +19,29 @@ const PERMISSIONS = {
     canViewProfit: true,
     canEditPrices: true,
     canManageTeam: true,
-    canViewReports: true
+    canViewReports: true,
+    canAddCustomer: true,
+    canDeleteData: true
   },
   2: { // Technician
     name: 'Technician',
     canViewCost: false,
-    canViewProfit: false,
+    canViewProfit: true,           // ✅ เห็นกำไรได้
     canEditPrices: false,
     canManageTeam: false,
-    canViewReports: false
+    canViewReports: false,
+    canAddCustomer: true,          // ✅ เพิ่มลูกค้าได้
+    canDeleteData: false
   },
   4: { // Supervisor
     name: 'Supervisor',
     canViewCost: false,
-    canViewProfit: true, // Can view profit but not individual costs
+    canViewProfit: true,
     canEditPrices: false,
     canManageTeam: false,
-    canViewReports: true
+    canViewReports: true,
+    canAddCustomer: true,          // ✅ เพิ่มลูกค้าได้
+    canDeleteData: false
   }
 };
 

@@ -141,7 +141,7 @@ function openCustModal(id) {
         <div class="fld"><label>หมายเหตุ</label><textarea id="cNote" rows="2">${esc(m?.note||'')}</textarea></div>
       </div>
       <div class="modal-f">
-        ${m ? `<button class="btn btn-ghost" id="delCust" style="color:var(--bad);border-color:rgba(239,83,80,.3)">ลบลูกค้า</button>` : ''}
+        ${m && hasPermission('canDeleteData') ? `<button class="btn btn-ghost" id="delCust" style="color:var(--bad);border-color:rgba(239,83,80,.3)">ลบลูกค้า</button>` : ''}
         <button class="btn btn-ghost" id="mCl2">ยกเลิก</button>
         <button class="btn btn-gold"  id="mOk">${svgI('<path d="M20 6 9 17l-5-5"/>')} ${m ? 'บันทึก' : 'เพิ่มลูกค้า'}</button>
       </div>
@@ -245,7 +245,7 @@ function openVehModal(vid, prefCustId) {
         <div class="fld"><label>เลขตัวถัง / VIN</label><input id="vVin" value="${esc(v?.vin||'')}"></div>
       </div>
       <div class="modal-f">
-        ${v ? `<button class="btn btn-ghost" id="delVeh" style="color:var(--bad);border-color:rgba(239,83,80,.3)">ลบรถ</button>` : ''}
+        ${v && hasPermission('canDeleteData') ? `<button class="btn btn-ghost" id="delVeh" style="color:var(--bad);border-color:rgba(239,83,80,.3)">ลบรถ</button>` : ''}
         <button class="btn btn-ghost" id="mCl2">ยกเลิก</button>
         <button class="btn btn-gold" id="mOk">${svgI('<path d="M20 6 9 17l-5-5"/>')} ${v ? 'บันทึก' : 'เพิ่มรถ'}</button>
       </div>

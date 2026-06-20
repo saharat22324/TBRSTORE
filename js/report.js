@@ -99,16 +99,16 @@ function reportHTML() {
             <td style="font-size:.8rem;color:var(--fg2)">${esc(i.plate || '—')}</td>
             <td class="r money fc-gold">${THB(i.grand)}</td>
             ${hasPermission('canViewCost') ? `<td class="r" style="font-size:.82rem;color:var(--bad)">${THB(i.totalCost||0)}</td>` : ''}
-            ${hasPermission('canViewProfit') ? `<td class="r" style="font-weight:700;color:${gp>=0?'var(--grn)':'var(--bad)'}">${THB(gp)}</td>` : ''}
+            <td class="r" style="font-weight:700;color:${gp>=0?'var(--grn)':'var(--bad)'}">${THB(gp)}</td>
             <td class="c">
               <div class="flex gap6" style="justify-content:center">
                 <button class="btn-icon" data-vi="${i.no}" title="ดูใบเสร็จ">
                   ${svgI('<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>',13)}
                 </button>
-                <button class="btn-icon" data-dinv="${i.no}" title="ลบบิล (คืนสต๊อก)"
+                ${hasPermission('canDeleteData') ? `<button class="btn-icon" data-dinv="${i.no}" title="ลบบิล (คืนสต๊อก)"
                   style="color:var(--bad);border-color:rgba(239,83,80,.3)">
                   ${svgI('<path d="M3 6h18M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/>',13)}
-                </button>
+                </button>` : ''}
               </div>
             </td>
           </tr>`;
@@ -138,18 +138,16 @@ function reportHTML() {
         <div class="sv" style="font-size:1.4rem">${THB(mRev)}</div>
         <div class="sd">${mInvs.length} บิล · วันนี้ ${THB(todayRev)}</div>
       </div>
-      ${hasPermission('canViewProfit') ? `
       <div class="stat gold">
         <div class="sk">${svgI('<path d="M18 20V10M12 20V4M6 20v-6"/>')} กำไรขั้นต้น</div>
         <div class="sv" style="font-size:1.4rem;color:${mGross>=0?'var(--grn)':'var(--bad)'}">${THB(mGross)}</div>
-        <div class="sd">COGS ${THB(mCost)}</div>
-      </div>` : ''}
-      ${hasPermission('canViewProfit') && [...Object.keys(PERMISSIONS[getCurrentUserRole()]).some(k => k === 'Admin')] || getCurrentUserRole() === 1 ? `
+        <div class="sd">${hasPermission('canViewCost') ? `COGS ${THB(mCost)}` : '••••••'}</div>
+      </div>
       <div class="stat ${mNet>=0?'grn':'bad'}">
         <div class="sk">${svgI('<circle cx="12" cy="12" r="9"/><path d="M12 8v4l3 2"/>')} กำไรสุทธิ</div>
         <div class="sv" style="font-size:1.4rem">${THB(mNet)}</div>
-        <div class="sd">หัก ค่าใช้จ่าย ${THB(mExp)}</div>
-      </div>` : ''}
+        <div class="sd">${hasPermission('canViewCost') ? `หัก ค่าใช้จ่าย ${THB(mExp)}` : '••••••'}</div>
+      </div>
       <div class="stat teal">
         <div class="sk">${svgI('<path d="M21 8 12 3 3 8v8l9 5 9-5V8z"/>')} มูลค่าคงคลัง</div>
         <div class="sv" style="font-size:1.4rem">${THB(stockVal)}</div>
@@ -199,7 +197,7 @@ function reportHTML() {
               <th>เลขที่</th><th>วันที่</th><th>ลูกค้า</th><th>ทะเบียน</th>
               <th class="r">ยอดรวม</th>
               ${hasPermission('canViewCost') ? '<th class="r">COGS</th>' : ''}
-              ${hasPermission('canViewProfit') ? '<th class="r">กำไร</th>' : ''}
+              <th class="r">กำไร</th>
               <th class="c"></th>
             </tr>
           </thead>
