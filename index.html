@@ -37,6 +37,19 @@
     <span id="tm"></span>
   </div>
 
+  <script>
+    // Fallback: if renderNav doesn't exist after script loads, create a placeholder
+    window.addEventListener('DOMContentLoaded', () => {
+      if (typeof renderNav === 'undefined') {
+        console.error('[CRITICAL] renderNav is not defined - scripts failed to load!');
+        console.log('[DEBUG] Checking which functions are defined...');
+        console.log('svgI:', typeof svgI);
+        console.log('renderPanel:', typeof renderPanel);
+        console.log('S:', typeof S);
+      }
+    });
+  </script>
+
   <!-- Supabase Client Library (MUST NOT BE ASYNC) -->
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 
