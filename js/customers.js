@@ -7,6 +7,12 @@
 ══════════════════════════════════════ */
 function customersHTML() {
   const custs = S.customers;
+  const vehs  = S.vehicles;
+  
+  /* ── Stats ── */
+  const totalJobs = S.jobs.filter(j => j.custId).length;
+  const activeJobs = S.jobs.filter(j => j.custId && j.status < 5).length;
+  const totalMileage = vehs.reduce((s, v) => s + (v.mileage || 0), 0);
 
   const custRows = custs.length
     ? custs.map(c => {
@@ -52,11 +58,12 @@ function customersHTML() {
     : `<tr><td colspan="5" class="tbl-empty">ยังไม่มีรถ</td></tr>`;
 
   return `
+    <!-- ── Header ── -->
     <div class="fjb mb16">
       <div>
         <h1 class="cond" style="font-size:1.5rem;font-weight:800;text-transform:uppercase">ลูกค้า &amp; รถ</h1>
         <div style="font-size:.82rem;color:var(--fg2);margin-top:2px">
-          ${custs.length} ลูกค้า · ${S.vehicles.length} คัน
+          ${custs.length} ลูกค้า · ${vehs.length} คัน
         </div>
       </div>
       <div class="flex gap8">
@@ -70,6 +77,31 @@ function customersHTML() {
       </div>
     </div>
 
+    <!-- ── Stats cards ── -->
+    <div class="g4 mb16">
+      <div class="stat red" style="min-height:92px">
+        <div class="sk">${svgI('<circle cx="12" cy="8" r="4"/><path d="M4 21a8 8 0 0 1 16 0"/>')} ลูกค้าทั้งหมด</div>
+        <div class="sv" style="font-size:1.45rem">${custs.length}</div>
+        <div class="sd">${vehs.length} คัน ที่บันทึก</div>
+      </div>
+      <div class="stat gold" style="min-height:92px">
+        <div class="sk">${svgI('<path d="M5 11l1.5-4.5A2 2 0 0 1 8.4 5h7.2a2 2 0 0 1 1.9 1.5L19 11"/><path d="M3 11h18v5a1 1 0 0 1-1 1h-1a1 1 0 0 1-1-1v-1H6v1a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1v-5Z"/><circle cx="7" cy="14" r="1"/><circle cx="17" cy="14" r="1"/>')} งานทั้งหมด</div>
+        <div class="sv" style="font-size:1.45rem">${totalJobs}</div>
+        <div class="sd">${activeJobs} งานที่เปิดอยู่</div>
+      </div>
+      <div class="stat teal" style="min-height:92px">
+        <div class="sk">${svgI('<path d="M12 3c-6.627 0-12 5.373-12 12s5.373 12 12 12 12-5.373 12-12-5.373-12-12-12zm0 22c-5.523 0-10-4.477-10-10s4.477-10 10-10 10 4.477 10 10-4.477 10-10 10zm3.5-11c.828 0 1.5-.672 1.5-1.5s-.672-1.5-1.5-1.5-1.5.672-1.5 1.5.672 1.5 1.5 1.5zm-7 0c.828 0 1.5-.672 1.5-1.5s-.672-1.5-1.5-1.5-1.5.672-1.5 1.5.672 1.5 1.5 1.5zm3.5 6.5c2.33 0 4.31-1.46 5.16-3.5h-10.32c.85 2.04 2.83 3.5 5.16 3.5z"/>')} ไมล์รวม</div>
+        <div class="sv" style="font-size:1.45rem">${numFmt(Math.round(totalMileage))}</div>
+        <div class="sd">ข้อมูลจากรถทั้งหมด</div>
+      </div>
+      <div class="stat warn" style="min-height:92px">
+        <div class="sk">${svgI('<path d="M12 9v2m0 4v2m-8.39-6.11l1.414 1.414M17.97 2.03l1.414 1.414M2.03 17.97l1.414 1.414M17.97 17.97l1.414 1.414m-13.64-8.84l-1.414 1.414M19.97 2.03l-1.414 1.414M2.03 2.03l-1.414 1.414M19.97 19.97l-1.414 1.414"/>')} โดยเฉลี่ยต่อรถ</div>
+        <div class="sv" style="font-size:1.45rem">${vehs.length > 0 ? numFmt(Math.round(totalMileage / vehs.length)) : '—'}</div>
+        <div class="sd">${vehs.length || 0} คันบันทึกไมล์</div>
+      </div>
+    </div>
+
+    <!-- ── Data tables ── -->
     <div class="g2">
       <!-- Customer list -->
       <div class="card">

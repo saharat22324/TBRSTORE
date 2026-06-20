@@ -11,6 +11,16 @@ function jobsHTML() {
   const filtered = _jobFilter === -1
     ? [...S.jobs].reverse()
     : S.jobs.filter(j => j.status === _jobFilter).reverse();
+  
+  /* ── Stats ── */
+  const totalJobs = S.jobs.length;
+  const openJobs = S.jobs.filter(j => j.status < 5).length;
+  const closeJobs = S.jobs.filter(j => j.status === 5).length;
+  const totalRev = S.jobs.reduce((s, j) => {
+    const inv = S.invoices.find(i => i.jobId === j.id);
+    return s + (inv ? inv.grand : 0);
+  }, 0);
+  const avgRev = totalJobs > 0 ? totalRev / totalJobs : 0;
 
   const filterBtns = `
     <button class="btn btn-sm ${_jobFilter===-1?'btn-red':'btn-ghost'}" data-jf="-1">
@@ -42,11 +52,12 @@ function jobsHTML() {
     : `<tr><td colspan="8" class="tbl-empty">ไม่มีงาน</td></tr>`;
 
   return `
+    <!-- ── Header ── -->
     <div class="fjb mb16">
       <div>
         <h1 class="cond" style="font-size:1.5rem;font-weight:800;text-transform:uppercase">Job Card</h1>
         <div style="font-size:.82rem;color:var(--fg2);margin-top:2px">
-          ${S.jobs.length} งานทั้งหมด · ${S.jobs.filter(j=>j.status<5).length} งานที่เปิดอยู่
+          ${totalJobs} งานทั้งหมด · ${openJobs} งานที่เปิดอยู่ · ${closeJobs} งานเสร็จ
         </div>
       </div>
       <button class="btn btn-gold" id="addJobBtn">
@@ -54,6 +65,31 @@ function jobsHTML() {
       </button>
     </div>
 
+    <!-- ── Stats cards ── -->
+    <div class="g4 mb16">
+      <div class="stat red" style="min-height:92px">
+        <div class="sk">${svgI('<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/>')} งานทั้งหมด</div>
+        <div class="sv" style="font-size:1.45rem">${totalJobs}</div>
+        <div class="sd">${openJobs} งานเปิด • ${closeJobs} เสร็จ</div>
+      </div>
+      <div class="stat gold" style="min-height:92px">
+        <div class="sk">${svgI('<path d="M12 1v22M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/>')} ยอดรวมจากงาน</div>
+        <div class="sv" style="font-size:1.45rem">${THB(totalRev)}</div>
+        <div class="sd">เฉลี่ย ${THB(avgRev)}/งาน</div>
+      </div>
+      <div class="stat teal" style="min-height:92px">
+        <div class="sk">${svgI('<circle cx="12" cy="8" r="4"/><path d="M4 21a8 8 0 0 1 16 0"/>')} งานเปิดอยู่</div>
+        <div class="sv" style="font-size:1.45rem">${openJobs}</div>
+        <div class="sd">${((openJobs/totalJobs)*100).toFixed(0)}% ของทั้งหมด</div>
+      </div>
+      <div class="stat warn" style="min-height:92px">
+        <div class="sk">${svgI('<path d="M9 12l2 2 4-4m-6.5 10a9.5 9.5 0 1119 0 9.5 9.5 0 01-19 0z"/>')} งานเสร็จแล้ว</div>
+        <div class="sv" style="font-size:1.45rem">${closeJobs}</div>
+        <div class="sd">${((closeJobs/totalJobs)*100).toFixed(0)}% สำเร็จ</div>
+      </div>
+    </div>
+
+    <!-- ── Filter and table ── -->
     <div class="flex gap8 mb16" style="flex-wrap:wrap">${filterBtns}</div>
 
     <div class="tbl-wrap">

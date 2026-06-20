@@ -12,6 +12,13 @@
 ══════════════════════════════════════ */
 function billingHTML() {
   const { sub, vat, grand } = bCalc();
+  
+  /* ── Stats ── */
+  const totalInv = S.invoices.length;
+  const totalRev = S.invoices.reduce((s, i) => s + i.grand, 0);
+  const avgBill  = totalInv > 0 ? totalRev / totalInv : 0;
+  const todayInv = S.invoices.filter(i => new Date(i.ts).toDateString() === new Date().toDateString());
+  const todayRev = todayInv.reduce((s, i) => s + i.grand, 0);
 
   const stOpts  = S.stockItems.map(i =>
     `<option value="stock:${i.id}">[สต๊อก] ${esc(i.name)} [${i.unit}] — ${THB(i.sell)}</option>`
@@ -39,6 +46,30 @@ function billingHTML() {
     : `<div style="padding:14px;font-size:.82rem;color:var(--fg3)">ยังไม่มีบิล</div>`;
 
   return `
+    <!-- ── Stats cards ── -->
+    <div class="g4 mb16">
+      <div class="stat red" style="min-height:92px">
+        <div class="sk">${svgI('<path d="M3 3h18v4H3zM5 7v13a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1V7M9 12h6"/>')} บิลทั้งหมด</div>
+        <div class="sv" style="font-size:1.45rem">${totalInv}</div>
+        <div class="sd">วันนี้ ${todayInv.length} บิล</div>
+      </div>
+      <div class="stat gold" style="min-height:92px">
+        <div class="sk">${svgI('<path d="M12 1v22M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/>')} ยอดขายรวม</div>
+        <div class="sv" style="font-size:1.45rem">${THB(totalRev)}</div>
+        <div class="sd">วันนี้ ${THB(todayRev)}</div>
+      </div>
+      <div class="stat teal" style="min-height:92px">
+        <div class="sk">${svgI('<path d="M18 20V10M12 20V4M6 20v-6"/>')} ค่าเฉลี่ยต่อบิล</div>
+        <div class="sv" style="font-size:1.45rem">${THB(avgBill)}</div>
+        <div class="sd">จาก ${totalInv || 0} บิล</div>
+      </div>
+      <div class="stat warn" style="min-height:92px">
+        <div class="sk">${svgI('<path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 1 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/>')} บิลล่าสุด</div>
+        <div class="sv" style="font-size:1.45rem">${recentInv.length}</div>
+        <div class="sd">${recentInv.length > 0 ? dateStr(recentInv[0].ts) : '—'}</div>
+      </div>
+    </div>
+
     <div style="display:grid;grid-template-columns:1fr 320px;gap:16px;align-items:start">
 
       <!-- ── Left: form ── -->
