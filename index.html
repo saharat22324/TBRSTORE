@@ -197,10 +197,10 @@
     }
   </script>
 
-  <!-- Firebase SDK (fallback/backward compatibility) -->
-  <script src="https://www.gstatic.com/firebasejs/11.0.1/firebase-app-compat.js"></script>
+  <!-- Firebase SDK (fallback/backward compatibility) - DISABLED FOR LOCAL DEV -->
+  <!-- <script src="https://www.gstatic.com/firebasejs/11.0.1/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/11.0.1/firebase-firestore-compat.js"></script>
-  <script src="https://www.gstatic.com/firebasejs/11.0.1/firebase-auth-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/11.0.1/firebase-auth-compat.js"></script> -->
 
   <!-- Other modules -->
   <script src="js/mobile.js"></script>
@@ -223,14 +223,29 @@
   <script src="js/docs.js"></script>
   <script>
     (async () => {
-      // Check authentication first
-      const authOk = await checkAuth();
-      if (!authOk) return;
-      
-      // Load data from Supabase or localStorage
-      await loadData();
-      renderNav();
-      renderPanel();
+      try {
+        // Check authentication first
+        const authOk = await checkAuth();
+        if (!authOk) return;
+        
+        // Load data from Supabase or localStorage
+        await loadData();
+        
+        // Ensure functions are defined
+        if (typeof renderNav === 'undefined') {
+          console.error('[ERROR] renderNav is not defined, waiting...');
+          await new Promise(r => setTimeout(r, 1000));
+        }
+        
+        if (typeof renderNav !== 'undefined') {
+          renderNav();
+          renderPanel();
+        } else {
+          console.error('[ERROR] renderNav still not defined after waiting');
+        }
+      } catch (err) {
+        console.error('[Init Error]', err);
+      }
     })();
   </script>
 </body>

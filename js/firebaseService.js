@@ -21,7 +21,7 @@ let db, auth;
 let isFirebaseReady = false;
 
 /**
- * Initialize Firebase connection (Compat SDK v11)
+ * Initialize Firebase connection (Compat SDK v11) - WITH TIMEOUT
  */
 async function initializeFirebase() {
   try {
@@ -38,15 +38,25 @@ async function initializeFirebase() {
       return false;
     }
 
-    // Initialize Firebase app
-    const app = firebase.initializeApp(firebaseConfig);
-    console.log('[Firebase] ✅ Firebase App initialized');
+    // Initialize Firebase app with 3 second timeout
+    const initPromise = Promise.resolve().then(() => {
+      const app = firebase.initializeApp(firebaseConfig);
+      console.log('[Firebase] ✅ Firebase App initialized');
 
-    // Initialize Firestore (Compat SDK ใช้ "(default)" database)
-    db = firebase.firestore(app);
+      // Initialize Firestore (Compat SDK ใช้ "(default)" database)
+      db = firebase.firestore(app);
 
-    // Initialize Auth
-    auth = firebase.auth(app);
+      // Initialize Auth
+      auth = firebase.auth(app);
+      
+      return true;
+    });
+    
+    const timeoutPromise = new Promise((_, reject) => 
+      setTimeout(() => reject(new Error('Firebase init timeout')), 3000)
+    );
+    
+    await Promise.race([initPromise, timeoutPromise]);
 
     isFirebaseReady = true;
     console.log(`[Firebase] ✅ เชื่อมต่อ Firestore สำเร็จ`);
