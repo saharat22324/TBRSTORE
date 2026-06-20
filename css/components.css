@@ -272,6 +272,12 @@
   border-radius: 5px;
   text-transform: uppercase;
   white-space: nowrap;
+  transition: all .15s ease;
+  cursor: default;
+}
+
+.badge:hover {
+  transform: translateY(-1px);
 }
 
 .b-ok     { background: rgba(46,204,113,.15);  color: var(--grn);    border: 1px solid rgba(46,204,113,.3);   }
@@ -355,19 +361,26 @@
   padding: 16px;
   backdrop-filter: blur(4px);
   overflow-y: auto;
+  animation: fadeIn .2s ease;
 }
 .ov.open { display: grid; }
+
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
 
 .modal {
   background: var(--p1);
   border: 1px solid var(--ln);
   border-radius: 16px;
   overflow: hidden;
-  animation: pop .18s ease;
+  animation: pop .18s cubic-bezier(.34,.1,.68,.55);
   max-height: 94vh;
   overflow-y: auto;
   display: flex;
   flex-direction: column;
+  box-shadow: 0 20px 60px rgba(0,0,0,.5);
 }
 
 .modal.sm { width: min(440px, 100%); }
@@ -375,8 +388,8 @@
 .modal.lg { width: min(900px, 100%); }
 
 @keyframes pop {
-  from { transform: scale(.95); opacity: 0; }
-  to   { transform: scale(1);   opacity: 1; }
+  from { transform: scale(.92) translateY(-20px); opacity: 0; }
+  to   { transform: scale(1) translateY(0);       opacity: 1; }
 }
 
 .modal-h {
@@ -425,11 +438,15 @@
   display: grid;
   place-items: center;
   color: var(--fg2);
-  transition: background .14s, color .14s;
+  transition: all .14s ease;
   border: none;
   cursor: pointer;
 }
-.closex:hover { background: var(--ln); color: var(--fg); }
+.closex:hover {
+  background: var(--ln);
+  color: var(--fg);
+  transform: rotate(90deg);
+}
 .closex svg   { width: 15px; height: 15px; }
 
 /* ══════════════════════════════════════
