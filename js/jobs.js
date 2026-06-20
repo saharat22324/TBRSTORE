@@ -471,7 +471,8 @@ function openReqModal(jid) {
     });
 
     const tot         = rItems.reduce((s, it) => s + it.qty * it.cost, 0);
-    ${hasPermission('canViewCost') ? `si('rTotal', THB(tot));` : `si('rTotal', '—');`}
+    const totDisplay  = hasPermission('canViewCost') ? THB(tot) : '—';
+    si('rTotal', totDisplay);
 
     const saveBtn     = sel('rSave');
     saveBtn.disabled  = !rItems.length || hasShort;

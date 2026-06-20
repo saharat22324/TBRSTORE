@@ -666,3 +666,13 @@ async function getServices() {
     return [];
   }
 }
+
+// ═══════════════════════════════════════════════════════════════
+// EXPORT FUNCTIONS FOR GLOBAL USE (in other JS files)
+// ═══════════════════════════════════════════════════════════════
+if (typeof window !== 'undefined') {
+  window.hasPermission = hasPermission;
+  window.getCurrentUserRole = getCurrentUserRole;
+  window.getUserPermissions = getUserPermissions;
+  window.PERMISSIONS = PERMISSIONS;
+}
