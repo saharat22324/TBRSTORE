@@ -319,14 +319,22 @@ console.log('[state.js] ✅ Loaded inline');
 console.log('[nav.js] Starting load...');
 try {
 
+const ICON_DASH = '<rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/>';
+const ICON_CUSTOMERS = '<circle cx="12" cy="8" r="4"/><path d="M4 21a8 8 0 0 1 16 0"/>';
+const ICON_JOBS = '<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6M9 13h6M9 17h3"/>';
+const ICON_STOCK = '<path d="M21 8 12 3 3 8v8l9 5 9-5V8z"/><path d="m3 8 9 5 9-5"/>';
+const ICON_BILLING = '<path d="M3 3h18v4H3zM5 7v13a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1V7M9 12h6"/>';
+const ICON_REPORT = '<line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/>';
+const ICON_SETTINGS = '<circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l-.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/>';
+
 window.TABS = [
-  { id:'dash',      label:'ภาพรวม' },
-  { id:'customers', label:'ลูกค้า / รถ' },
-  { id:'jobs',      label:'Job Card' },
-  { id:'stock',     label:'สต๊อก' },
-  { id:'billing',   label:'ออกบิล' },
-  { id:'report',    label:'รายงาน' },
-  { id:'settings',  label:'ตั้งค่า' },
+  { id:'dash',      label:'ภาพรวม',          icon:ICON_DASH },
+  { id:'customers', label:'ลูกค้า / รถ',      icon:ICON_CUSTOMERS },
+  { id:'jobs',      label:'Job Card',         icon:ICON_JOBS },
+  { id:'stock',     label:'สต๊อก',            icon:ICON_STOCK },
+  { id:'billing',   label:'ออกบิล',           icon:ICON_BILLING },
+  { id:'report',    label:'รายงาน',           icon:ICON_REPORT },
+  { id:'settings',  label:'ตั้งค่า',          icon:ICON_SETTINGS },
 ];
 
 window.renderNav = function() {
@@ -339,7 +347,7 @@ window.renderNav = function() {
     let pip = '';
     if (t.id === 'stock' && lowStock) pip = `<span class="pip">${lowStock}</span>`;
     if (t.id === 'jobs'  && openJobs) pip = `<span class="pip">${openJobs}</span>`;
-    return `<button class="nt ${currentTab === t.id ? 'on' : ''}" data-tab="${t.id}"><span>${t.label}</span>${pip}</button>`;
+    return `<button class="nt ${currentTab === t.id ? 'on' : ''}" data-tab="${t.id}">${svgI(t.icon)}<span>${t.label}</span>${pip}</button>`;
   }).join('');
 
   let username = 'User';
@@ -351,11 +359,14 @@ window.renderNav = function() {
     }
   } catch (e) {}
   
+  const logoutIcon = '<path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4M16 3l4 4m-4 0l4-4M16 17l-4 4m4 0l-4-4M9 12h12"/>';
+  
   document.getElementById('NR').innerHTML = `
     <div class="nav-user">
       <div class="nav-shop">${S.shop.name || 'TBR'}</div>
       <div class="nav-info">
         <span class="nav-username">${username}</span>
+        <button class="nav-logout" id="logoutBtn" title="ออกจากระบบ">${svgI(logoutIcon)}logout</button>
       </div>
     </div>
   `;
@@ -367,6 +378,11 @@ window.renderNav = function() {
       renderPanel();
     });
   });
+
+  const logoutBtn = document.getElementById('logoutBtn');
+  if (logoutBtn && typeof handleSignOut === 'function') {
+    logoutBtn.addEventListener('click', handleSignOut);
+  }
 };
 
 window.renderPanel = function() {
