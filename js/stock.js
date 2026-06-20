@@ -147,6 +147,10 @@ function bindStock() {
   document.querySelectorAll('[data-dsi]').forEach(b =>
     b.addEventListener('click', async (e) => {
       e.stopPropagation();
+      if (!hasPermission('canEditPrices')) {
+        showToast('คุณไม่มีสิทธิ์ลบรายการ', 'err');
+        return;
+      }
       const m = S.stockItems.find(i => i.id === b.dataset.dsi);
       if (!confirm(`ลบ "${m?.name}" ออกจากคลัง?`)) return;
       S.stockItems = S.stockItems.filter(i => i.id !== b.dataset.dsi);
