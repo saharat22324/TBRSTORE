@@ -30,8 +30,16 @@ function renderNav() {
   }).join('');
 
   /* Render nav-right: shop name + user info + logout button */
-  const currentUser = getCurrentUserRole();
-  const username = currentUser ? currentUser.username : 'Guest';
+  let username = 'User';
+  try {
+    const session = localStorage.getItem('tbr_user_session');
+    if (session) {
+      const userData = JSON.parse(session);
+      username = userData.username || 'User';
+    }
+  } catch (e) {
+    console.warn('Could not parse user session:', e);
+  }
   
   document.getElementById('NR').innerHTML = `
     <div class="nav-user">
