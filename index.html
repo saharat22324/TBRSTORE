@@ -316,6 +316,7 @@ console.log('[state.js] ✅ Loaded inline');
   
   <!-- NAV.JS - INLINED TO TEST -->
   <script>
+try {
 /* ============================================================
    NAV.JS — Navigation tabs + panel router
    ============================================================ */
@@ -398,6 +399,9 @@ function renderPanel() {
 }
 
 console.log('[nav.js] ✅ Loaded inline');
+} catch (navErr) {
+  console.error('[nav.js] FAILED TO LOAD:', navErr.message, navErr.stack);
+}
   </script>
   <script src="js/dashboard.js"></script>
   <script src="js/customers.js"></script>
