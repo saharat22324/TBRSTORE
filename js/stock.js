@@ -1,7 +1,10 @@
 /* ============================================================
    STOCK.JS — คลังสินค้า (Stock Items / ของเหลว TBR)
               ราคาขายกำหนดเอง ไม่ใช้ +37%
+              + Stock Ledger (บันทึกรับ/ขายรายวัน)
    ============================================================ */
+
+let stockFilterCat = null; // Category filter state
 
 /* ══════════════════════════════════════
    HTML
@@ -12,6 +15,14 @@ function stockHTML() {
   const val      = S.stockItems.reduce((s, i) => s + i.qty * i.cost, 0);
   const lowItems = S.stockItems.filter(i => i.qty <= i.reorder);
 
+  // Get unique categories for filtering
+  const categories = ['ทั้งหมด', ...new Set(S.stockItems.map(i => i.cat).filter(Boolean))].filter(Boolean);
+  
+  // Filter items by selected category
+  const items = stockFilterCat && stockFilterCat !== 'ทั้งหมด'
+    ? S.stockItems.filter(i => i.cat === stockFilterCat)
+    : S.stockItems;
+
   const alert = lowItems.length ? `
     <div class="alert al-warn mb14">
       ${svgI('<path d="M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0Z"/><path d="M12 9v4M12 17h.01"/>')}
@@ -21,7 +32,7 @@ function stockHTML() {
       </div>
     </div>` : '';
 
-  const rows = S.stockItems.map(i => {
+  const rows = items.map(i => {
     const st  = i.qty <= 0 ? 'bad' : i.qty <= i.reorder ? 'warn' : 'ok';
     const pct = Math.min(100, Math.round(i.qty / (i.reorder * 2.5) * 100));
 
@@ -81,16 +92,30 @@ function stockHTML() {
           Stock Items — ของเหลว TBR · ราคาขายกำหนดเอง
         </div>
       </div>
-      <button class="btn btn-gold btn-sm" id="addStockBtn" ${!hasPermission('canEditPrices') ? 'style="display:none"' : ''}>
-        ${svgI('<path d="M12 5v14M5 12h14"/>')} เพิ่มรายการ
-      </button>
+      <div class="flex gap8">
+        <button class="btn btn-ghost btn-sm" id="stockLedgerBtn" title="ดูบันทึกรับ/ขายรายวัน">
+          ${svgI('<path d="M4 2h16a2 2 0 0 1 2 2v16a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2z M8 10h8M8 14h5"/>')} บันทึก
+        </button>
+        <button class="btn btn-gold btn-sm" id="addStockBtn" ${!hasPermission('canEditPrices') ? 'style="display:none"' : ''}>
+          ${svgI('<path d="M12 5v14M5 12h14"/>')} เพิ่มรายการ
+        </button>
+      </div>
+    </div>
+
+    <!-- Category Filter -->
+    <div class="mb14" style="display:flex;gap:6px;flex-wrap:wrap">
+      ${categories.map(cat => `
+        <button class="tag-btn ${stockFilterCat === cat || (!stockFilterCat && cat === 'ทั้งหมด') ? 'active' : ''}"
+                data-filter="${cat}">
+          ${cat}
+        </button>`).join('')}
     </div>
 
     <!-- Stats -->
     <div class="g4 mb16">
       <div class="stat">
         <div class="sk">${svgI('<path d="M21 8 12 3 3 8v8l9 5 9-5V8z"/>')} รายการทั้งหมด</div>
-        <div class="sv">${S.stockItems.length}<small style="font-size:.82rem;color:var(--fg2);font-weight:600"> SKU</small></div>
+        <div class="sv">${items.length}<small style="font-size:.82rem;color:var(--fg2);font-weight:600"> SKU</small></div>
       </div>
       <div class="stat warn">
         <div class="sk">${svgI('<path d="M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0Z"/><path d="M12 9v4M12 17h.01"/>')} ใกล้หมด</div>
@@ -135,6 +160,16 @@ function stockHTML() {
 ══════════════════════════════════════ */
 function bindStock() {
   sel('addStockBtn')?.addEventListener('click', () => openStockItemModal(null));
+  
+  sel('stockLedgerBtn')?.addEventListener('click', () => openStockLedger());
+
+  // Category filter buttons
+  document.querySelectorAll('.tag-btn').forEach(b =>
+    b.addEventListener('click', () => {
+      stockFilterCat = b.dataset.filter === 'ทั้งหมด' ? null : b.dataset.filter;
+      renderPanel();
+    })
+  );
 
   document.querySelectorAll('[data-sadj]').forEach(b =>
     b.addEventListener('click', () => openStockAdj(b.dataset.sadj, b.dataset.st))
@@ -164,7 +199,26 @@ function bindStock() {
 
 /* ══════════════════════════════════════
    STOCK ADJUSTMENT MODAL (รับเข้า / ตั้งยอด)
+   + Log to Stock Ledger
 ══════════════════════════════════════ */
+function addToLedger(itemId, type, qty, note) {
+  const item = S.stockItems.find(i => i.id === itemId);
+  if (!item) return;
+  
+  S.stockLedger.push({
+    date: new Date().toISOString().split('T')[0],
+    time: new Date().toLocaleTimeString('th-TH'),
+    itemId,
+    name: item.name,
+    cat: item.cat,
+    type,  // 'in', 'out', 'count'
+    qty,
+    unit: item.unit,
+    note: note || '',
+    user: window.currentUser?.username || 'unknown'
+  });
+}
+
 function openStockAdj(id, type) {
   const m  = S.stockItems.find(i => i.id === id);
   const ov = sel('mOv');
@@ -188,8 +242,8 @@ function openStockAdj(id, type) {
                  style="font-size:1.15rem">
         </div>
         <div class="fld">
-          <label>หมายเหตุ</label>
-          <input id="aNote" placeholder="เลขบิล / ชื่อซัพพลายเออร์…">
+          <label>หมายเหตุ${type === 'in' ? ' (เลขบิล / ซัพพลายเออร์)' : ' (สาเหตุการปรับ)'}</label>
+          <input id="aNote" placeholder="${type === 'in' ? 'เลขบิล / ชื่อซัพพลายเออร์…' : 'เช่น ขายให้ลูกค้า, ใช้ในการซ่อม…'}">
         </div>
       </div>
       <div class="modal-f">
@@ -202,14 +256,21 @@ function openStockAdj(id, type) {
 
   ov.querySelector('#mOk').addEventListener('click', async () => {
     const q = parseFloat(sv('aQty')) || 0;
+    const note = sv('aNote').trim();
 
     if (type === 'in') {
       m.qty  = fmt(m.qty + q);
       m.recv = fmt((m.recv || 0) + q);
+      addToLedger(m.id, 'in', q, note);
     } else {
       const diff = q - m.qty;
-      if (diff > 0)  m.recv = fmt((m.recv || 0) + diff);
-      else           m.used = fmt((m.used || 0) + Math.abs(diff));
+      if (diff > 0) {
+        m.recv = fmt((m.recv || 0) + diff);
+        addToLedger(m.id, 'out', diff, note);
+      } else if (diff < 0) {
+        m.used = fmt((m.used || 0) + Math.abs(diff));
+        addToLedger(m.id, 'out', Math.abs(diff), note);
+      }
       m.qty = fmt(q);
     }
 
@@ -335,4 +396,80 @@ function openStockItemModal(id) {
   });
 
   bindModalClose(ov, '#mCl', '#mCl2');
+}
+
+/* ══════════════════════════════════════
+   STOCK LEDGER (บันทึกรับ/ขายรายวัน)
+══════════════════════════════════════ */
+function openStockLedger() {
+  // Group by date
+  const byDate = {};
+  S.stockLedger.forEach(entry => {
+    if (!byDate[entry.date]) byDate[entry.date] = [];
+    byDate[entry.date].push(entry);
+  });
+
+  // Sort dates descending
+  const dates = Object.keys(byDate).sort().reverse();
+  
+  const rows = dates.map(date => {
+    const entries = byDate[date];
+    const inTotal = entries.filter(e => e.type === 'in').reduce((s, e) => s + e.qty, 0);
+    const outTotal = entries.filter(e => e.type === 'out').reduce((s, e) => s + e.qty, 0);
+    
+    return `
+      <div class="ledger-day" style="margin-bottom:24px;border:1px solid var(--bd2);border-radius:8px;padding:12px">
+        <div class="fjb mb12" style="padding-bottom:12px;border-bottom:1px solid var(--bd2)">
+          <div>
+            <div style="font-weight:700;font-size:1.05rem">${formatDate(date)}</div>
+            <div style="font-size:.8rem;color:var(--fg2)">${entries.length} รายการบันทึก</div>
+          </div>
+          <div style="text-align:right">
+            <div style="color:var(--grn);font-weight:700">รับเข้า: ${numFmt(inTotal)} ชิ้น</div>
+            <div style="color:var(--gold);font-weight:700">ขายออก: ${numFmt(outTotal)} ชิ้น</div>
+          </div>
+        </div>
+        
+        ${entries.map(e => `
+          <div style="padding:8px;border-bottom:1px solid var(--bd3);display:grid;grid-template-columns:80px 1fr 80px 100px;gap:12px;font-size:.85rem">
+            <div style="font-size:.75rem;color:var(--fg2)">${e.time}</div>
+            <div>
+              <div style="font-weight:600">${esc(e.name)}</div>
+              <div style="font-size:.75rem;color:var(--fg2)">
+                ${esc(e.cat)} • ${e.note ? `${esc(e.note)}` : '—'}
+              </div>
+            </div>
+            <div style="text-align:center;font-weight:600;color:${e.type==='in'?'var(--grn)':'var(--gold)'};font-size:.95rem">
+              ${e.type==='in' ? '+' : '−'}${numFmt(e.qty)} ${e.unit}
+            </div>
+            <div style="text-align:right;font-size:.75rem;color:var(--fg2)">
+              ${esc(e.user || 'ระบบ')}
+            </div>
+          </div>
+        `).join('')}
+      </div>`;
+  }).join('');
+
+  const ov = sel('mOv');
+  ov.innerHTML = `
+    <div class="modal lg">
+      <div class="modal-h">
+        <h3>บันทึกรับสินค้า/ขายออก รายวัน</h3>
+        <button class="closex" id="mCl">${svgI('<path d="M18 6 6 18M6 6l12 12"/>')}</button>
+      </div>
+      <div class="modal-b" style="max-height:70vh;overflow-y:auto">
+        ${rows.length ? rows : '<div style="text-align:center;padding:24px;color:var(--fg2)">ยังไม่มีบันทึก</div>'}
+      </div>
+    </div>`;
+  
+  openOv('mOv');
+  bindModalClose(ov, '#mCl');
+}
+
+/* ══════════════════════════════════════
+   HELPERS
+══════════════════════════════════════ */
+function formatDate(dateStr) {
+  const d = new Date(dateStr);
+  return d.toLocaleDateString('th-TH', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
 }

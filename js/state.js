@@ -46,6 +46,11 @@ function seedData() {
     requisitions: [],
 
     /* ──────────────────────────────────
+       Stock Ledger — บันทึกรับ/ขายออกรายวัน
+       ────────────────────────────────── */
+    stockLedger: [],
+
+    /* ──────────────────────────────────
        สต๊อกสินค้า (Stock Items)
        ของเหลว TBR — ราคาขายกำหนดเอง
        ────────────────────────────────── */
@@ -100,6 +105,7 @@ function seedData() {
 function migrateData() {
   if (!S.vehicles)       S.vehicles       = [];
   if (!S.requisitions)   S.requisitions   = [];
+  if (!S.stockLedger)    S.stockLedger    = [];
   if (!S.stockItems)     S.stockItems     = seedData().stockItems;
   if (!S.services)       S.services       = seedData().services;
   if (!S.expenses)       S.expenses       = [];
