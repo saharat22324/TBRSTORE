@@ -59,13 +59,13 @@ function stockHTML() {
               data-sadj="${i.id}" data-st="count" title="ตั้งยอดจริง">
               ตั้งยอด
             </button>
-            <button class="btn-icon" data-esi="${i.id}" title="แก้ไขรายการ">
+            ${hasPermission('canEditPrices') ? `<button class="btn-icon" data-esi="${i.id}" title="แก้ไขรายการ">
               ${svgI('<path d="M12 20h9M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z"/>',13)}
             </button>
             <button class="btn-icon" data-dsi="${i.id}" title="ลบรายการ"
               style="color:var(--bad);border-color:rgba(239,83,80,.3)">
               ${svgI('<path d="M3 6h18M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/>',13)}
-            </button>
+            </button>` : ''}
           </div>
         </td>
       </tr>`;
@@ -81,7 +81,7 @@ function stockHTML() {
           Stock Items — ของเหลว TBR · ราคาขายกำหนดเอง
         </div>
       </div>
-      <button class="btn btn-gold btn-sm" id="addStockBtn">
+      <button class="btn btn-gold btn-sm" id="addStockBtn" ${!hasPermission('canEditPrices') ? 'style="display:none"' : ''}>
         ${svgI('<path d="M12 5v14M5 12h14"/>')} เพิ่มรายการ
       </button>
     </div>
