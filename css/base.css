@@ -220,10 +220,10 @@ nav {
 }
 
 .nav-logout {
-  display: grid;
-  place-items: center;
-  width: 28px;
-  height: 28px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px;
   border-radius: 7px;
   background: none;
   border: 1px solid var(--ln2);
@@ -231,6 +231,8 @@ nav {
   cursor: pointer;
   transition: all .15s ease;
   flex-shrink: 0;
+  font-size: .75rem;
+  font-weight: 600;
 }
 
 .nav-logout:hover {
@@ -243,6 +245,7 @@ nav {
 .nav-logout svg {
   width: 13px;
   height: 13px;
+  flex-shrink: 0;
 }
 
 /* ── Main page ── */
