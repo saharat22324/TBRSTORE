@@ -98,11 +98,8 @@ function reportHTML() {
             <td style="font-weight:600">${esc(i.cust || '—')}</td>
             <td style="font-size:.8rem;color:var(--fg2)">${esc(i.plate || '—')}</td>
             <td class="r money fc-gold">${THB(i.grand)}</td>
-            <td class="r" style="font-size:.82rem;color:var(--bad)">${THB(i.totalCost||0)}</td>
-            <td class="r" style="font-weight:700;
-                color:${gp>=0?'var(--grn)':'var(--bad)'}">
-              ${THB(gp)}
-            </td>
+            ${hasPermission('canViewCost') ? `<td class="r" style="font-size:.82rem;color:var(--bad)">${THB(i.totalCost||0)}</td>` : ''}
+            ${hasPermission('canViewProfit') ? `<td class="r" style="font-weight:700;color:${gp>=0?'var(--grn)':'var(--bad)'}">${THB(gp)}</td>` : ''}
             <td class="c">
               <div class="flex gap6" style="justify-content:center">
                 <button class="btn-icon" data-vi="${i.no}" title="ดูใบเสร็จ">
@@ -141,16 +138,18 @@ function reportHTML() {
         <div class="sv" style="font-size:1.4rem">${THB(mRev)}</div>
         <div class="sd">${mInvs.length} บิล · วันนี้ ${THB(todayRev)}</div>
       </div>
+      ${hasPermission('canViewProfit') ? `
       <div class="stat gold">
         <div class="sk">${svgI('<path d="M18 20V10M12 20V4M6 20v-6"/>')} กำไรขั้นต้น</div>
         <div class="sv" style="font-size:1.4rem;color:${mGross>=0?'var(--grn)':'var(--bad)'}">${THB(mGross)}</div>
         <div class="sd">COGS ${THB(mCost)}</div>
-      </div>
+      </div>` : ''}
+      ${hasPermission('canViewProfit') && [...Object.keys(PERMISSIONS[getCurrentUserRole()]).some(k => k === 'Admin')] || getCurrentUserRole() === 1 ? `
       <div class="stat ${mNet>=0?'grn':'bad'}">
         <div class="sk">${svgI('<circle cx="12" cy="12" r="9"/><path d="M12 8v4l3 2"/>')} กำไรสุทธิ</div>
         <div class="sv" style="font-size:1.4rem">${THB(mNet)}</div>
         <div class="sd">หัก ค่าใช้จ่าย ${THB(mExp)}</div>
-      </div>
+      </div>` : ''}
       <div class="stat teal">
         <div class="sk">${svgI('<path d="M21 8 12 3 3 8v8l9 5 9-5V8z"/>')} มูลค่าคงคลัง</div>
         <div class="sv" style="font-size:1.4rem">${THB(stockVal)}</div>
@@ -169,6 +168,7 @@ function reportHTML() {
         </div>
       </div>
 
+      ${hasPermission('canManageTeam') ? `
       <!-- Expenses -->
       <div class="card">
         <div class="card-h">
@@ -183,7 +183,7 @@ function reportHTML() {
             รวม ${THB(expTotal)}
           </div>
         </div>
-      </div>
+      </div>` : ''}
     </div>
 
     <!-- ── Invoice table ── -->
@@ -197,7 +197,9 @@ function reportHTML() {
           <thead>
             <tr>
               <th>เลขที่</th><th>วันที่</th><th>ลูกค้า</th><th>ทะเบียน</th>
-              <th class="r">ยอดรวม</th><th class="r">COGS</th><th class="r">กำไร</th>
+              <th class="r">ยอดรวม</th>
+              ${hasPermission('canViewCost') ? '<th class="r">COGS</th>' : ''}
+              ${hasPermission('canViewProfit') ? '<th class="r">กำไร</th>' : ''}
               <th class="c"></th>
             </tr>
           </thead>

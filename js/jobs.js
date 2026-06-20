@@ -209,9 +209,9 @@ function openJobDetail(jid) {
         <div class="card-h" style="padding:9px 14px">
           <span class="mono" style="font-size:.72rem;color:var(--teal)">${r.no}</span>
           <span style="font-size:.8rem;margin-left:8px">${dateStr(r.ts)}</span>
-          <span style="margin-left:auto;font-size:.8rem;color:var(--fg2)">
+          ${hasPermission('canViewCost') ? `<span style="margin-left:auto;font-size:.8rem;color:var(--fg2)">
             ต้นทุน ${THB(r.items.reduce((s,it)=>s+it.qty*(it.cost||0),0))}
-          </span>
+          </span>` : ''}
         </div>
         <div style="padding:0 14px 10px">
           <table class="tbl" style="font-size:.82rem">
@@ -220,7 +220,7 @@ function openJobDetail(jid) {
                 <tr>
                   <td>${esc(it.name)}</td>
                   <td class="r" style="color:var(--fg2)">${numFmt(it.qty)} ${esc(it.unit)}</td>
-                  <td class="r fc-gold">${THB(it.cost * it.qty)}</td>
+                  ${hasPermission('canViewCost') ? `<td class="r fc-gold">${THB(it.cost * it.qty)}</td>` : ''}
                 </tr>`).join('')}
             </tbody>
           </table>
@@ -235,15 +235,15 @@ function openJobDetail(jid) {
     ? `<div style="font-size:.86rem">
         ออกใบเสร็จ <b style="color:var(--teal)">${inv.no}</b><br>
         ยอดรวม <b class="fc-gold">${THB(inv.grand)}</b><br>
-        ต้นทุน ${THB(totalCost)} ·
-        กำไร <span style="color:${inv.grand-totalCost>=0?'var(--grn)':'var(--bad)'}">
+        ${hasPermission('canViewCost') ? `ต้นทุน ${THB(totalCost)} ·` : ''}
+        ${hasPermission('canViewProfit') ? `กำไร <span style="color:${inv.grand-totalCost>=0?'var(--grn)':'var(--bad)'}">
           ${THB(inv.grand - totalCost)}
-        </span>
+        </span>` : ''}
       </div>
       <button class="btn btn-ghost btn-sm mt8" id="viewInvBtn">ดูใบเสร็จ</button>`
-    : `<div style="font-size:.86rem;color:var(--fg2);margin-bottom:10px">
+    : `${hasPermission('canViewCost') ? `<div style="font-size:.86rem;color:var(--fg2);margin-bottom:10px">
         ต้นทุนใบเบิก ${THB(totalCost)}
-      </div>
+      </div>` : ''}
       <button class="btn btn-gold btn-sm" id="billJobBtn">ออกบิลจากงานนี้</button>`;
 
   ov.innerHTML = `
@@ -445,9 +445,9 @@ function openReqModal(jid) {
                           outline:none;text-align:right">
             <span style="font-size:.76rem;color:var(--fg2)">${it.unit}</span>
           </div>
-          <div style="font-size:.82rem;text-align:right;color:var(--fg2)">
+          ${hasPermission('canViewCost') ? `<div style="font-size:.82rem;text-align:right;color:var(--fg2)">
             ${THB(it.cost * it.qty)}
-          </div>
+          </div>` : ''}
           <button class="btn-icon" data-rdl="${it.k}">
             ${svgI('<path d="M18 6 6 18M6 6l12 12"/>',13)}
           </button>
@@ -471,7 +471,7 @@ function openReqModal(jid) {
     });
 
     const tot         = rItems.reduce((s, it) => s + it.qty * it.cost, 0);
-    si('rTotal', THB(tot));
+    ${hasPermission('canViewCost') ? `si('rTotal', THB(tot));` : `si('rTotal', '—');`}
 
     const saveBtn     = sel('rSave');
     saveBtn.disabled  = !rItems.length || hasShort;

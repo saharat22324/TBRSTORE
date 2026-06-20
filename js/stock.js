@@ -44,9 +44,9 @@ function stockHTML() {
         </td>
         <td class="r" style="font-size:.8rem;color:var(--fg2)">${numFmt(i.recv||0)}</td>
         <td class="r" style="font-size:.8rem;color:var(--fg2)">${numFmt(i.used||0)}</td>
-        <td class="r" style="font-size:.84rem">${THB(i.cost)}</td>
+        ${hasPermission('canViewCost') ? `<td class="r" style="font-size:.84rem">${THB(i.cost)}</td>` : ''}
         <td class="r"><b style="color:var(--gold)">${THB(i.sell)}</b></td>
-        <td class="r" style="font-size:.82rem">${THB(i.qty * i.cost)}</td>
+        ${hasPermission('canViewCost') ? `<td class="r" style="font-size:.82rem">${THB(i.qty * i.cost)}</td>` : ''}
         <td class="c">
           <div class="flex gap6" style="justify-content:center">
             <button class="btn btn-xs"
@@ -119,9 +119,9 @@ function stockHTML() {
             <th class="r">คงเหลือ</th>
             <th class="r">รับเข้า</th>
             <th class="r">ใช้ไป</th>
-            <th class="r">ราคาทุน</th>
+            ${hasPermission('canViewCost') ? '<th class="r">ราคาทุน</th>' : ''}
             <th class="r">ราคาขาย</th>
-            <th class="r">มูลค่า</th>
+            ${hasPermission('canViewCost') ? '<th class="r">มูลค่า</th>' : ''}
             <th class="c">จัดการ</th>
           </tr>
         </thead>
@@ -252,10 +252,11 @@ function openStockItemModal(id) {
             <label>หน่วย</label>
             <input id="siUnit" value="${esc(m?.unit||'ลิตร')}">
           </div>
+          ${hasPermission('canViewCost') ? `
           <div class="fld">
             <label>ราคาทุน (฿)</label>
             <input id="siCost" type="number" min="0" value="${m?.cost||0}">
-          </div>
+          </div>` : ''}
           <div class="fld">
             <label>ราคาขาย (฿)</label>
             <input id="siSell" type="number" min="0" value="${m?.sell||0}">
@@ -298,7 +299,7 @@ function openStockItemModal(id) {
       cat:     sv('siCat') || 'ทั่วไป',
       name,
       unit:    sv('siUnit') || 'ชิ้น',
-      cost:    parseFloat(sv('siCost')) || 0,
+      cost:    hasPermission('canEditPrices') ? (parseFloat(sv('siCost')) || 0) : (m?.cost || 0),
       sell:    parseFloat(sv('siSell')) || 0,
       qty:     parseFloat(sv('siQty')) || 0,
       reorder: parseFloat(sv('siRo'))  || 10,

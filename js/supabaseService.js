@@ -8,6 +8,72 @@
 let currentUser = null;
 let currentUserRole = null;
 
+/**
+ * ROLE-BASED ACCESS CONTROL (RBAC)
+ * Role IDs: 1=Admin, 2=Technician, 4=Supervisor
+ */
+const PERMISSIONS = {
+  1: { // Admin
+    name: 'Admin',
+    canViewCost: true,
+    canViewProfit: true,
+    canEditPrices: true,
+    canManageTeam: true,
+    canViewReports: true
+  },
+  2: { // Technician
+    name: 'Technician',
+    canViewCost: false,
+    canViewProfit: false,
+    canEditPrices: false,
+    canManageTeam: false,
+    canViewReports: false
+  },
+  4: { // Supervisor
+    name: 'Supervisor',
+    canViewCost: false,
+    canViewProfit: true, // Can view profit but not individual costs
+    canEditPrices: false,
+    canManageTeam: false,
+    canViewReports: true
+  }
+};
+
+/**
+ * Get current user's role ID and permissions
+ */
+function getCurrentUserRole() {
+  const session = localStorage.getItem('tbr_user_session');
+  if (!session) return null;
+  try {
+    const data = JSON.parse(session);
+    return data.role_id || null;
+  } catch (e) {
+    return null;
+  }
+}
+
+/**
+ * Check if current user has permission
+ */
+function hasPermission(permissionKey) {
+  const roleId = getCurrentUserRole();
+  if (!roleId) return false;
+  
+  const perms = PERMISSIONS[roleId];
+  if (!perms) return false;
+  
+  return perms[permissionKey] === true;
+}
+
+/**
+ * Get permission object for current user
+ */
+function getUserPermissions() {
+  const roleId = getCurrentUserRole();
+  return PERMISSIONS[roleId] || PERMISSIONS[2]; // Default to Technician (most restricted)
+}
+
 // Helper to get getSupabase() client from window
 const getSupabase = () => window.getSupabase?.() || null;
 

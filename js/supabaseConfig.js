@@ -37,6 +37,20 @@ async function initializeSupabase() {
 async function getCurrentUser() {
   if (!supabaseReady) return null;
   try {
+    // Check localStorage for username/password session first
+    const sessionStr = localStorage.getItem('tbr_user_session');
+    if (sessionStr) {
+      const session = JSON.parse(sessionStr);
+      console.log('[Supabase] User session from localStorage:', session.username);
+      return {
+        id: session.user_id,
+        username: session.username,
+        role_id: session.role_id,
+        is_active: session.is_active
+      };
+    }
+
+    // Fallback to Supabase Auth (legacy)
     const { data: { user }, error } = await supabase.auth.getUser();
     if (error) throw error;
     return user;

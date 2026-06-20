@@ -89,9 +89,9 @@ function dashboardHTML() {
       <div class="stat gold">
         <div class="sk">${svgI('<path d="M18 20V10M12 20V4M6 20v-6"/>')} กำไรเดือนนี้</div>
         <div class="sv" style="font-size:1.45rem;color:${mProfit>=0?'var(--grn)':'var(--bad)'}">
-          ${THB(mProfit)}
+          ${hasPermission('canViewProfit') ? THB(mProfit) : '••••••'}
         </div>
-        <div class="sd">ต้นทุน ${THB(mCost)}</div>
+        <div class="sd">${hasPermission('canViewCost') ? `ต้นทุน ${THB(mCost)}` : ''}</div>
       </div>
       <div class="stat teal">
         <div class="sk">${svgI('<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>')} งานที่เปิดอยู่</div>

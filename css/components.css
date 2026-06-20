@@ -575,3 +575,55 @@
 .js-working { color: var(--gold);   }
 .js-done    { color: var(--grn);    }
 .js-closed  { color: var(--fg2);    }
+
+/* ══════════════════════════════════════
+   MOBILE & TABLET RESPONSIVE
+══════════════════════════════════════ */
+@media (max-width: 480px) {
+  /* Modal adjustments for mobile */
+  .modal.sm,
+  .modal.md,
+  .modal.lg { width: 100% !important; max-height: 90vh; }
+  
+  .modal-h { padding: 12px 14px; }
+  .modal-h h3 { font-size: 0.95rem; }
+  .modal-b { padding: 14px; }
+  .modal-f { padding: 10px 14px; gap: 6px; }
+  
+  .closex { width: 36px; height: 36px; }
+  
+  /* Table improvements for mobile */
+  .tbl th { font-size: 0.55rem; padding: 6px 8px; }
+  .tbl td { padding: 8px 6px; font-size: 0.8rem; }
+  
+  /* Bill items responsive */
+  .bi-head,
+  .bi-row { 
+    grid-template-columns: 1fr 60px 90px 70px 28px;
+    gap: 5px;
+    font-size: 0.75rem;
+  }
+  
+  .bi-row input { padding: 6px 6px; font-size: 0.78rem; }
+  .bi-row .tot { font-size: 0.88rem; }
+  
+  /* Alert boxes */
+  .alert { padding: 10px 12px; margin-bottom: 10px; font-size: 0.85rem; }
+  
+  /* Badge spacing */
+  .badge { padding: 2px 5px; font-size: 0.55rem; }
+  
+  /* Overlay and modal */
+  .ov { padding: 12px; }
+  
+  /* Toast notifications */
+  .toast { font-size: 0.85rem; padding: 10px 12px; }
+}
+
+@media (max-width: 680px) {
+  /* Bill items for tablet */
+  .bi-head,
+  .bi-row { 
+    grid-template-columns: 1fr 70px 100px 80px 30px;
+  }
+}
