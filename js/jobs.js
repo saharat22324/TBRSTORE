@@ -202,15 +202,31 @@ function openJobModal(jid, prefVid) {
 
     if (j) {
       Object.assign(j, data);
+      // Update in Supabase if available
+      if (useSupabase && typeof updateJob === 'function') {
+        updateJob(j.id, data).catch(e => console.warn('[Jobs] updateJob Supabase error:', e));
+      }
     } else {
       const no = nextSeqNo('job').replace('job-', 'JOB-');
-      S.jobs.push({
+      const newJob = {
         id:           'J-' + Date.now(),
         no,
         createdAt:    Date.now(),
         requisitions: [],
         ...data,
-      });
+      };
+      S.jobs.push(newJob);
+      // Save to Supabase
+      if (useSupabase && typeof addJob === 'function') {
+        addJob(data.vehicleId, data.custId, data.complaint, data.assignTo, data.mileage, data.note)
+          .then(result => {
+            if (result?.id) {
+              newJob.id = result.id; // Update to Supabase UUID
+              localStorage.setItem(DB_KEY, JSON.stringify(S));
+            }
+          })
+          .catch(e => console.warn('[Jobs] addJob Supabase error:', e));
+      }
     }
 
     await saveData();

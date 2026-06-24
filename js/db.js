@@ -28,6 +28,8 @@ async function loadData() {
         if (data && (data.customers?.length > 0 || data.vehicles?.length > 0 || data.jobs?.length > 0 || data.invoices?.length > 0 || data.services?.length > 0)) {
           S = convertSupabaseToState(data);
           useSupabase = true;
+          // ALWAYS merge localStorage records not yet in Supabase (safety net)
+          mergeLocalStorageIntoS();
           console.log('[DB] ✅ โหลดจาก Supabase สำเร็จ - ข้อมูลซิงค์ระหว่างผู้ใช้');
           return;
         } else if (data) {
@@ -276,6 +278,76 @@ function clearData() {
 }
 
 /**
+ * Merge any localStorage records not present in S (loaded from Supabase).
+ * Called every time Supabase loads successfully — ensures no local-only data is lost.
+ * Matches jobs by job number (no), invoices by invoice number (no),
+ * customers by phone, vehicles by plate.
+ */
+function mergeLocalStorageIntoS() {
+  const raw = localStorage.getItem(DB_KEY);
+  if (!raw) return;
+  try {
+    const local = JSON.parse(raw);
+    let merged = 0;
+    const toSync = { jobs: [], invoices: [], customers: [], vehicles: [] };
+
+    // Jobs: match by job number
+    const sbJobNos = new Set(S.jobs.map(j => j.no).filter(Boolean));
+    for (const j of (local.jobs || [])) {
+      if (j.no && !sbJobNos.has(j.no)) {
+        S.jobs.push(j);
+        toSync.jobs.push(j);
+        merged++;
+      }
+    }
+
+    // Invoices: match by invoice number
+    const sbInvNos = new Set(S.invoices.map(i => i.no).filter(Boolean));
+    for (const inv of (local.invoices || [])) {
+      if (inv.no && !sbInvNos.has(inv.no)) {
+        S.invoices.push(inv);
+        toSync.invoices.push(inv);
+        merged++;
+      }
+    }
+
+    // Customers: match by phone (unique) or id
+    const sbPhones = new Set(S.customers.map(c => c.phone).filter(Boolean));
+    const sbCustIds = new Set(S.customers.map(c => c.id));
+    for (const c of (local.customers || [])) {
+      if (!sbCustIds.has(c.id) && !(c.phone && sbPhones.has(c.phone))) {
+        S.customers.push(c);
+        toSync.customers.push(c);
+        merged++;
+      }
+    }
+
+    // Vehicles: match by plate
+    const sbPlates = new Set(S.vehicles.map(v => v.plate).filter(Boolean));
+    for (const v of (local.vehicles || [])) {
+      if (v.plate && !sbPlates.has(v.plate)) {
+        S.vehicles.push(v);
+        toSync.vehicles.push(v);
+        merged++;
+      }
+    }
+
+    if (merged > 0) {
+      console.log(`[DB] 🔀 Merged ${merged} local records not found in Supabase`);
+      // Save merged state to localStorage
+      localStorage.setItem(DB_KEY, JSON.stringify(S));
+      // Push missing records to Supabase in background
+      const hasNew = toSync.jobs.length || toSync.invoices.length || toSync.customers.length || toSync.vehicles.length;
+      if (hasNew && window.supabaseReady) {
+        syncLocalToSupabase().catch(e => console.warn('[DB] Background sync failed:', e));
+      }
+    }
+  } catch (e) {
+    console.warn('[DB] mergeLocalStorageIntoS error:', e);
+  }
+}
+
+/**
  * ซิงค์ข้อมูลจาก localStorage ไปยัง Supabase (one-time migration)
  * ทำงานเมื่อ Supabase พร้อมแต่ยังไม่มีข้อมูล (tables empty)
  */
@@ -283,11 +355,7 @@ async function syncLocalToSupabase() {
   if (!window.supabaseReady) return;
   if (!S.customers?.length && !S.jobs?.length && !S.invoices?.length) return;
 
-  // Check if already synced (avoid re-syncing every load)
-  const alreadySynced = localStorage.getItem(DB_KEY + '-synced');
-  if (alreadySynced === 'true') return;
-
-  console.log('[DB] 🔄 One-time migration: syncing localStorage data to Supabase...');
+  console.log('[DB] 🔄 Syncing unsynced local records to Supabase...');
   const idMap = {}; // local ID → Supabase UUID
   let syncedCount = 0;
 
@@ -380,7 +448,6 @@ async function syncLocalToSupabase() {
 
     // Save updated S (with Supabase UUIDs) back to localStorage
     localStorage.setItem(DB_KEY, JSON.stringify(S));
-    localStorage.setItem(DB_KEY + '-synced', 'true');
 
     if (syncedCount > 0) {
       console.log(`[DB] ✅ Synced ${syncedCount} records to Supabase — data is now backed up`);
@@ -388,8 +455,7 @@ async function syncLocalToSupabase() {
         showToast(`ซิงค์ข้อมูล ${syncedCount} รายการไปยัง Supabase แล้ว ✅`, 'ok');
       }
     } else {
-      console.log('[DB] Sync ran but nothing was migrated (possibly all IDs already synced)');
-      localStorage.setItem(DB_KEY + '-synced', 'true');
+      console.log('[DB] Sync ran but nothing new to migrate');
     }
   } catch (err) {
     console.error('[DB] syncLocalToSupabase error:', err);
