@@ -204,6 +204,12 @@ function convertSupabaseToState(dbData) {
   }
 
   if (dbData.invoices) {
+    // Build cost lookup: Supabase stock UUID → cost_price
+    const costByUuid = {};
+    for (const si of (dbData.stockItems || [])) {
+      if (si.id) costByUuid[si.id] = si.cost_price || 0;
+    }
+
     state.invoices = dbData.invoices.map(i => ({
       id: i.id,
       no: i.invoice_number,
@@ -220,7 +226,7 @@ function convertSupabaseToState(dbData) {
         unit: '',
         qty: it.quantity,
         price: it.unit_price,
-        cost: 0,
+        cost: it.stock_item_id ? (costByUuid[it.stock_item_id] || 0) : 0,
         itemType: it.item_type,
         sid: it.stock_item_id,
       })) || [],

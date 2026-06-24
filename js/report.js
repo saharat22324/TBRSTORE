@@ -21,7 +21,9 @@ function reportHTML() {
   });
 
   const mRev    = mInvs.reduce((s, i) => s + i.grand, 0);
-  const mCost   = mInvs.reduce((s, i) => s + (i.totalCost || 0), 0);
+  // Calculate cost from invoice items (qty * cost per item) — more reliable than stored totalCost
+  const calcInvCost = inv => (inv.items || []).reduce((s, it) => s + ((it.qty || 0) * (it.cost || 0)), 0);
+  const mCost   = mInvs.reduce((s, i) => s + calcInvCost(i), 0);
   const mGross  = fmt(mRev - mCost);
 
   const mExp    = S.expenses
@@ -89,7 +91,8 @@ function reportHTML() {
   /* ── Invoice table rows ── */
   const invRows = mInvs.length
     ? [...mInvs].reverse().map(i => {
-        const gp = fmt(i.grand - (i.totalCost || 0));
+        const invCost = (i.items || []).reduce((s, it) => s + ((it.qty || 0) * (it.cost || 0)), 0);
+        const gp = fmt(i.grand - invCost);
         return `
           <tr>
             <td class="mono" style="font-size:.75rem;color:var(--teal);cursor:pointer"
@@ -98,7 +101,7 @@ function reportHTML() {
             <td style="font-weight:600">${esc(i.cust || '—')}</td>
             <td style="font-size:.8rem;color:var(--fg2)">${esc(i.plate || '—')}</td>
             <td class="r money fc-gold">${THB(i.grand)}</td>
-            ${hasPermission('canViewCost') ? `<td class="r" style="font-size:.82rem;color:var(--bad)">${THB(i.totalCost||0)}</td>` : ''}
+            ${hasPermission('canViewCost') ? `<td class="r" style="font-size:.82rem;color:var(--bad)">${THB(invCost)}</td>` : ''}
             <td class="r" style="font-weight:700;color:${gp>=0?'var(--grn)':'var(--bad)'}">${THB(gp)}</td>
             <td class="c">
               <div class="flex gap6" style="justify-content:center">
