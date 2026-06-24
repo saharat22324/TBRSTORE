@@ -13,20 +13,43 @@ let useSupabase = false;
  */
 async function loadData() {
   try {
-    // Try Supabase first
-    if (typeof supabaseReady !== 'undefined' && supabaseReady && typeof loadAllData === 'function') {
-      console.log('[DB] 🔄 Loading from Supabase...');
+    // Wait for Supabase to be ready (retry logic)
+    let retries = 0;
+    while (retries < 5 && (!window.supabaseReady || typeof loadAllData !== 'function')) {
+      await new Promise(r => setTimeout(r, 100));
+      retries++;
+    }
+
+    // Try Supabase first - REQUIRED for multi-user sync
+    if (window.supabaseReady && typeof loadAllData === 'function') {
+      console.log('[DB] 🔄 Loading from Supabase (multi-user sync enabled)...');
       try {
         const data = await loadAllData();
-        if (data) {
+        if (data && (data.customers?.length > 0 || data.vehicles?.length > 0 || data.jobs?.length > 0 || data.invoices?.length > 0 || data.services?.length > 0)) {
           S = convertSupabaseToState(data);
           useSupabase = true;
-          console.log('[DB] ✅ โหลดจาก Supabase สำเร็จ');
+          console.log('[DB] ✅ โหลดจาก Supabase สำเร็จ - ข้อมูลซิงค์ระหว่างผู้ใช้');
           return;
+        } else if (data) {
+          // Got empty data but no error - might be RLS issue
+          console.warn('[DB] Supabase returned empty data (possible RLS policy issue)');
+          S = convertSupabaseToState(data);
+          useSupabase = true;
+          console.log('[DB] ⚠️  Supabase accessible but returned empty (check RLS policies)');
+          // Fall through to try localStorage as additional source
+        } else {
+          console.warn('[DB] Supabase returned null data, trying fallback...');
         }
       } catch (err) {
-        console.warn('[DB] Supabase load failed:', err);
+        console.error('[DB] Supabase load error:', err.message);
+        if (err.message.includes('row-level security') || err.message.includes('RLS') || err.code === '42501') {
+          console.warn('[DB] ⚠️  RLS POLICY BLOCKING ACCESS - Supabase Row-Level Security policies are enabled');
+          console.warn('[DB] To fix: Disable RLS policies or modify them to allow API access');
+          useSupabase = false; // Mark as not using Supabase since RLS blocks access
+        }
       }
+    } else {
+      console.warn('[DB] Supabase not ready (retries=' + retries + '), checking window.supabaseReady:', window.supabaseReady);
     }
 
     // Fallback: Try Firebase Cloud
@@ -47,13 +70,13 @@ async function loadData() {
       }
     }
 
-    // Fallback: localStorage
+    // Fallback: localStorage (single-device only, but shared across users via same device)
     const raw = localStorage.getItem(DB_KEY);
     if (raw) {
       S = JSON.parse(raw);
       migrateData();
       useSupabase = false;
-      console.log('[DB] ✅ โหลดจาก localStorage สำเร็จ');
+      console.log('[DB] ⚠️  โหลดจาก localStorage - ข้อมูลไม่ซิงค์ระหว่างผู้ใช้ (Supabase RLS issue?)');
     } else {
       S = seedData();
       await saveData();
@@ -190,25 +213,30 @@ function convertSupabaseToState(dbData) {
 
 /**
  * บันทึกข้อมูลทั้งหมด
+ * Note: Individual operations (addCustomer, addVehicle, etc.) already save to Supabase
+ * This function serves as a backup to localStorage and triggers sync
  */
 async function saveData() {
   try {
-    // Always save to localStorage as fallback/backup
+    // Save to localStorage as fallback/backup
     localStorage.setItem(DB_KEY, JSON.stringify(S));
 
-    // Also try Supabase if available
-    if (useSupabase && supabaseReady) {
-      console.log('[DB] ✅ Supabase sync via service layer');
-    } else {
-      console.log('[DB] ✅ บันทึกสำเร็จ (localStorage)');
+    // If using Supabase, individual operations should have already saved
+    // This is a safety checkpoint
+    if (useSupabase && window.supabaseReady) {
+      console.log('[DB] ✅ Data persisted (localStorage + Supabase operations)');
+      return;
     }
+    
+    console.log('[DB] ✅ Data persisted to localStorage');
 
-    // Try Firebase backup
-    if (typeof saveToCloud !== 'undefined' && isFirebaseReady) {
+    // Try Firebase backup if available
+    if (typeof saveToCloud !== 'undefined' && typeof isFirebaseReady !== 'undefined' && isFirebaseReady) {
       try {
         await saveToCloud('tbr-data', S);
+        console.log('[DB] ✅ Firebase backup completed');
       } catch (err) {
-        console.warn('[DB] Firebase backup failed (non-critical)');
+        console.warn('[DB] Firebase backup failed (non-critical):', err.message);
       }
     }
   } catch (err) {

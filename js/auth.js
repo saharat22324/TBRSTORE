@@ -112,7 +112,7 @@ function showSuccess(message) {
 }
 
 /**
- * Handle login
+ * Handle login - ✅ ใช้ Supabase Auth จริง
  */
 async function handleLogin() {
   const username = document.getElementById('loginUsername').value.trim();
@@ -123,160 +123,47 @@ async function handleLogin() {
     return;
   }
 
-  console.log('[Login] Attempting login with username:', username);
+  console.log('[Login] Attempting Supabase Auth with:', username);
   setLoading(true);
 
   try {
-    // Get supabase client
-    const supabaseClient = window.getSupabase();
-    if (!supabaseClient) {
-      showError('ระบบไม่พร้อม - ไม่สามารถเชื่อมต่อ Supabase');
-      setLoading(false);
-      return;
-    }
-
-    // Try using RPC function first (bypass schema cache)
-    console.log('[Login] Querying via RPC function...');
-    let userAuth = null;
-    let queryError = null;
+    // แปลง username เป็น email (ใช้รูปแบบ username@tbr.local ที่สร้างใน Supabase Auth)
+    const email = username.includes('@') ? username : `${username}@tbr.local`;
     
-    try {
-      const { data, error } = await supabaseClient.rpc('get_user_by_username', {
-        p_username: username
-      });
-      
-      if (error) {
-        console.log('[Login] RPC error:', error);
-        throw error;
-      }
-      userAuth = data?.[0];
-      
-      if (userAuth) {
-        console.log('[Login] ✅ User found via RPC');
-      }
-    } catch (rpcError) {
-      console.log('[Login] RPC failed, trying direct REST API...');
-      console.log('[Login] RPC error details:', rpcError.message);
-      queryError = rpcError;
-    }
-
-    // Fallback 2: Try direct REST API fetch (bypasses client library cache)
-    if (!userAuth && queryError) {
-      try {
-        console.log('[Login] Trying direct REST API fetch...');
-        const apiUrl = 'https://tgtuxvmuapiltmkulvlk.supabase.co/rest/v1/users_auth';
-        const apiKey = 'sb_publishable_8mmv4aAB8mPRvYe459ZwGQ_KVVJROax';
-        
-        const response = await fetch(`${apiUrl}?username=eq.${encodeURIComponent(username)}&select=*`, {
-          headers: {
-            'apikey': apiKey,
-            'Authorization': `Bearer ${apiKey}`,
-            'Content-Type': 'application/json'
-          }
-        });
-        
-        if (response.ok) {
-          const data = await response.json();
-          if (data && data.length > 0) {
-            userAuth = data[0];
-            console.log('[Login] ✅ User found via REST API');
-          }
-        } else {
-          console.log('[Login] REST API returned:', response.status, response.statusText);
-        }
-      } catch (fetchError) {
-        console.log('[Login] Direct REST API fetch failed:', fetchError.message);
-        queryError = fetchError;
-      }
-    }
-
-    // Fallback 3: Try Supabase client (may hit schema cache again)
-    if (!userAuth && queryError) {
-      try {
-        console.log('[Login] Trying Supabase client query...');
-        const { data, error } = await supabaseClient
-          .from('users_auth')
-          .select('*')
-          .eq('username', username)
-          .single();
-        
-        if (!error && data) {
-          userAuth = data;
-          console.log('[Login] ✅ User found via Supabase client');
-        } else {
-          queryError = error;
-        }
-      } catch (clientError) {
-        queryError = clientError;
-      }
-    }
-
-    // Fallback 4: Use hardcoded credentials (temporary workaround for REST API schema cache issue)
-    if (!userAuth && queryError) {
-      console.log('[Login] Using hardcoded credentials fallback...');
-      const hardcodedUsers = {
-        'admin': { id: 'user-1', username: 'admin', password_hash: 'plaintext:admin123', role_id: 1, is_active: true },
-        'porche1': { id: 'user-2', username: 'porche1', password_hash: 'plaintext:porche123', role_id: 2, is_active: true },
-        'bass1': { id: 'user-3', username: 'bass1', password_hash: 'plaintext:bass123', role_id: 2, is_active: true },
-        'vit1': { id: 'user-4', username: 'vit1', password_hash: 'plaintext:vit123', role_id: 4, is_active: true },
-        'mix1': { id: 'user-5', username: 'mix1', password_hash: 'plaintext:mix123', role_id: 2, is_active: true }
-      };
-      
-      if (hardcodedUsers[username]) {
-        userAuth = hardcodedUsers[username];
-        console.log('[Login] ✅ User found in hardcoded credentials');
-      }
-    }
-
-    if (!userAuth) {
-      console.error('[Login] User not found after all attempts:', queryError);
+    // ✅ ใช้ Supabase Auth จริง (ฟังก์ชันนี้มีอยู่แล้วใน supabaseConfig.js)
+    const result = await window.signIn(email, password);
+    
+    if (!result || !result.user) {
+      console.error('[Login] Supabase Auth failed');
       showError('ชื่อผู้ใช้หรือรหัสผ่านไม่ถูกต้อง');
       setLoading(false);
       return;
     }
 
-    // Check if user is active
-    if (!userAuth.is_active) {
-      showError('บัญชีนี้ถูกปิดใช้งาน');
-      setLoading(false);
-      return;
+    console.log('[Login] ✅ Supabase Auth successful for:', email);
+    
+    // ตอนนี้มี session จริงแล้ว → auth.uid() ใช้งานได้ → RLS ผ่าน
+    // ดึง role จาก profiles ไว้ให้ UI ใช้ (แหล่งความจริงของ auth คือ session ของ supabase เอง)
+    const sb = window.getSupabase();
+    const { data: profile, error: profileError } = await sb
+      .from('profiles')
+      .select('role, full_name')
+      .eq('id', result.user.id)
+      .single();
+
+    if (profileError) {
+      console.warn('[Login] Profile fetch error:', profileError.message);
     }
 
-    // Validate password (simple plaintext comparison for now, should use bcrypt in production)
-    const storedPassword = userAuth.password_hash;
-    let passwordValid = false;
-
-    // Support both plaintext and bcrypt formats
-    if (storedPassword.startsWith('plaintext:')) {
-      passwordValid = password === storedPassword.substring(10);
-    } else if (storedPassword.startsWith('$2a$') || storedPassword.startsWith('$2b$')) {
-      // For bcrypt, would need bcryptjs library - for now just reject
-      showError('ระบบรหัสผ่านไม่รองรับ');
-      setLoading(false);
-      return;
-    } else {
-      // Direct comparison (fallback)
-      passwordValid = password === storedPassword;
-    }
-
-    if (!passwordValid) {
-      console.error('[Login] Password mismatch for user:', username);
-      showError('ชื่อผู้ใช้หรือรหัสผ่านไม่ถูกต้อง');
-      setLoading(false);
-      return;
-    }
-
-    // Store user session in localStorage
-    const sessionData = {
-      user_id: userAuth.id,
-      username: userAuth.username,
-      role_id: userAuth.role_id,
-      is_active: userAuth.is_active,
+    // เก็บข้อมูลแสดงผลใน localStorage (สำหรับ UI ใช้อ้างอิง)
+    localStorage.setItem('tbr_user_session', JSON.stringify({
+      user_id: result.user.id,
+      email: result.user.email,
+      username,
+      role: profile?.role || 'technician',
+      full_name: profile?.full_name || username,
       login_time: new Date().toISOString()
-    };
-
-    localStorage.setItem('tbr_user_session', JSON.stringify(sessionData));
-    console.log('[Login] ✅ Login successful for:', username, 'Role ID:', userAuth.role_id);
+    }));
 
     showSuccess('เข้าสู่ระบบสำเร็จ');
     
@@ -286,7 +173,7 @@ async function handleLogin() {
     }, 1000);
 
   } catch (err) {
-    console.error('[Login] Unexpected error:', err);
+    console.error('[Login] Supabase Auth error:', err.message);
     showError('เข้าสู่ระบบไม่สำเร็จ: ' + err.message);
     setLoading(false);
   }
@@ -392,52 +279,53 @@ async function handleDemoLogin() {
 }
 
 /**
- * Check authentication on main page load
+ * Check authentication on main page load - ✅ ตรวจ Supabase Auth ทีแรก
  */
 async function checkAuth() {
   try {
-    // First check for username/password session in localStorage
-    const sessionStr = localStorage.getItem('tbr_user_session');
-    if (sessionStr) {
-      try {
-        const session = JSON.parse(sessionStr);
-        console.log(`✅ User authenticated from session: ${session.username} (Role ID: ${session.role_id})`);
-        currentUser = session;
-        currentUserRole = session.role_id;
-        return true;
-      } catch (err) {
-        console.warn('[Auth] Invalid session data:', err);
-        localStorage.removeItem('tbr_user_session');
-      }
-    }
-
-    // If no localStorage session, try Supabase Auth (legacy)
+    // ALWAYS initialize Supabase first (needed for multi-user data sync)
+    console.log('[Auth] Initializing Supabase...');
     const ready = await initSupabaseService();
     
     if (!ready) {
-      console.warn('[Auth] Supabase not ready, redirecting to login');
+      console.warn('[Auth] Supabase initialization failed');
+      // ถ้า Supabase ไม่พร้อม ให้ goto login ทีเดียว
       window.location.href = 'login.html';
       return false;
     }
 
-    // Get current user from Supabase Auth
-    const user = await getCurrentUser();
+    // ✅ ตรวจ Supabase Auth session (ทีแรก)
+    const user = await window.getCurrentUser?.();
     
-    if (!user) {
-      // No user logged in, redirect to login page
-      console.log('[Auth] No authenticated user, redirecting to login.html');
-      window.location.href = 'login.html';
-      return false;
+    if (user && user.id) {
+      console.log(`✅ User authenticated (Supabase Auth): ${user.email} (${user.role})`);
+      currentUser = {
+        user_id: user.id,
+        email: user.email,
+        username: user.email.split('@')[0],
+        role: user.role || 'technician',
+        full_name: user.full_name || user.email
+      };
+      currentUserRole = user.role || 'technician';
+      
+      // เก็บแบบ UI reference เพื่อ bootstrap หลังจาก loadData
+      localStorage.setItem('tbr_user_session', JSON.stringify(currentUser));
+      
+      console.log('[Auth] ✅ checkAuth complete - user verified (Supabase Auth)');
+      return true;
     }
 
-    // Store current user (skip getUserProfile to avoid recursion issues)
-    currentUserRole = user.user_metadata?.role || 'user';
-    currentUser = user;
-
-    console.log(`✅ User authenticated (Supabase Auth): ${user.email} (${currentUserRole})`);
-    return true;
+    // ถ้าไม่มี Supabase Auth session → ไป login
+    console.log('[Auth] No authenticated user, redirecting to login.html');
+    window.location.href = 'login.html';
+    return false;
 
   } catch (err) {
+    console.error('[Auth] checkAuth error:', err.message);
+    window.location.href = 'login.html';
+    return false;
+  }
+}
     console.error('[Auth] checkAuth error:', err);
     window.location.href = 'login.html';
     return false;
@@ -445,24 +333,27 @@ async function checkAuth() {
 }
 
 /**
- * Sign out current user
+ * Sign out current user - ✅ ใช้ Supabase Auth signOut
  */
 async function handleSignOut() {
   try {
+    // ✅ Sign out จาก Supabase Auth ทีแรก
+    if (typeof window.signOut === 'function') {
+      await window.signOut();
+      console.log('[Auth] Supabase Auth signed out');
+    }
+    
     // Clear localStorage session
     localStorage.removeItem('tbr_user_session');
-    
-    // Try to sign out from Supabase Auth (if using legacy auth)
-    try {
-      await signOut();
-    } catch (err) {
-      console.warn('[Auth] Supabase signOut not available:', err);
-    }
+    currentUser = null;
+    currentUserRole = null;
     
     console.log('[Auth] User signed out');
     window.location.href = 'login.html';
   } catch (err) {
-    console.error('[Auth] Sign out error:', err);
+    console.error('[Auth] Sign out error:', err.message);
+    // Fallback: clear localStorage and redirect anyway
+    localStorage.removeItem('tbr_user_session');
     window.location.href = 'login.html';
   }
 }

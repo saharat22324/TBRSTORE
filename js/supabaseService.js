@@ -626,24 +626,73 @@ async function getNextJobNumber() {
 
 async function loadAllData() {
   try {
-    const [customers, vehicles, jobs, stockItems, invoices, services, shopConfig] = await Promise.all([
-      getCustomers(),
-      getVehicles(),
-      getJobs(),
-      getStockItems(),
-      getInvoices(),
-      getServices(),
-      getShopConfig()
+    console.log('[Service] Starting bulk data load from Supabase...');
+    
+    // Load all data in parallel
+    const results = await Promise.allSettled([
+      (async () => {
+        console.log('[Service] Loading customers...');
+        const data = await getCustomers();
+        console.log('[Service] ✅ Customers loaded:', data?.length || 0);
+        return data;
+      })(),
+      (async () => {
+        console.log('[Service] Loading vehicles...');
+        const data = await getVehicles();
+        console.log('[Service] ✅ Vehicles loaded:', data?.length || 0);
+        return data;
+      })(),
+      (async () => {
+        console.log('[Service] Loading jobs...');
+        const data = await getJobs();
+        console.log('[Service] ✅ Jobs loaded:', data?.length || 0);
+        return data;
+      })(),
+      (async () => {
+        console.log('[Service] Loading stock items...');
+        const data = await getStockItems();
+        console.log('[Service] ✅ Stock items loaded:', data?.length || 0);
+        return data;
+      })(),
+      (async () => {
+        console.log('[Service] Loading invoices...');
+        const data = await getInvoices();
+        console.log('[Service] ✅ Invoices loaded:', data?.length || 0);
+        return data;
+      })(),
+      (async () => {
+        console.log('[Service] Loading services...');
+        const data = await getServices();
+        console.log('[Service] ✅ Services loaded:', data?.length || 0);
+        return data;
+      })(),
+      (async () => {
+        console.log('[Service] Loading shop config...');
+        const data = await getShopConfig();
+        console.log('[Service] ✅ Shop config loaded');
+        return data;
+      })()
     ]);
 
+    // Extract successful results
+    const [customers, vehicles, jobs, stockItems, invoices, services, shopConfig] = results.map((r, i) => {
+      if (r.status === 'fulfilled') {
+        return r.value;
+      } else {
+        console.error(`[Service] Error loading item ${i}:`, r.reason);
+        return null;
+      }
+    });
+
+    console.log('[Service] ✅ Bulk data load complete - Customers:', customers?.length || 0);
     return {
-      customers,
-      vehicles,
-      jobs,
-      stockItems,
-      invoices,
-      services,
-      shopConfig
+      customers: customers || [],
+      vehicles: vehicles || [],
+      jobs: jobs || [],
+      stockItems: stockItems || [],
+      invoices: invoices || [],
+      services: services || [],
+      shopConfig: shopConfig || {}
     };
   } catch (err) {
     console.error('[Service] loadAllData error:', err);

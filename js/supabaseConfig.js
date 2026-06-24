@@ -8,9 +8,9 @@ if (typeof window !== 'undefined') {
   console.log('[supabaseConfig.js] File execution started');
 }
 
-// 🔐 Supabase credentials
-const SUPABASE_URL = 'https://hhaduosajnvamyxrqzwd.supabase.co';
-const SUPABASE_KEY = 'sb_publishable_5ZJiyBVtCcwzi8p9qrSCOA_GnnMNj-9';
+// 🔐 Supabase credentials (ชี้ไปโปรเจกต์ tgtuxvmuapiltmkulvlk ที่มี schema + RLS)
+const SUPABASE_URL = 'https://tgtuxvmuapiltmkulvlk.supabase.co';
+const SUPABASE_KEY = 'sb_publishable_8mmv4aAB8mPRvYe459ZwGQ_KVVJROax';
 
 // State
 let supabase = null;
@@ -37,23 +37,30 @@ async function initializeSupabase() {
 async function getCurrentUser() {
   if (!supabaseReady) return null;
   try {
-    // Check localStorage for username/password session first
-    const sessionStr = localStorage.getItem('tbr_user_session');
-    if (sessionStr) {
-      const session = JSON.parse(sessionStr);
-      console.log('[Supabase] User session from localStorage:', session.username);
-      return {
-        id: session.user_id,
-        username: session.username,
-        role_id: session.role_id,
-        is_active: session.is_active
-      };
+    // ✅ อ่าน Supabase Auth session จริง (ไม่ใช่ localStorage)
+    const { data: { user }, error } = await supabase.auth.getUser();
+    if (error || !user) {
+      console.log('[Supabase] No active auth session');
+      return null;
     }
 
-    // Fallback to Supabase Auth (legacy)
-    const { data: { user }, error } = await supabase.auth.getUser();
-    if (error) throw error;
-    return user;
+    // ดึง role จากตาราง profiles
+    const { data: profile, error: profileError } = await supabase
+      .from('profiles')
+      .select('role, full_name')
+      .eq('id', user.id)
+      .single();
+
+    if (profileError) {
+      console.warn('[Supabase] Profile fetch error (possible RLS issue):', profileError.message);
+    }
+
+    return {
+      id: user.id,
+      email: user.email,
+      role: profile?.role || 'technician',
+      full_name: profile?.full_name || user.email
+    };
   } catch (err) {
     console.error('[Supabase] getCurrentUser error:', err.message);
     return null;
@@ -126,6 +133,10 @@ function onAuthStateChange(callback) {
   });
 }
 
+function getSupabase() {
+  return supabase || null;
+}
+
 // === EXPORT TO WINDOW ===
 console.log('[supabaseConfig.js] Exporting functions...');
 window.initializeSupabase = initializeSupabase;
@@ -135,6 +146,7 @@ window.signUp = signUp;
 window.signIn = signIn;
 window.signOut = signOut;
 window.onAuthStateChange = onAuthStateChange;
+window.getSupabase = getSupabase;
 
 console.log('[supabaseConfig.js] ✅ All functions exported');
 window.supabaseConfigReady = true;

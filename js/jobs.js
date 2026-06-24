@@ -241,19 +241,29 @@ function openJobDetail(jid) {
 
   const reqCards = reqs.length
     ? reqs.map(r => `
-      <div class="card mb8">
-        <div class="card-h" style="padding:9px 14px">
-          <span class="mono" style="font-size:.72rem;color:var(--teal)">${r.no}</span>
-          <span style="font-size:.8rem;margin-left:8px">${dateStr(r.ts)}</span>
-          ${hasPermission('canViewCost') ? `<span style="margin-left:auto;font-size:.8rem;color:var(--fg2)">
-            ต้นทุน ${THB(r.items.reduce((s,it)=>s+it.qty*(it.cost||0),0))}
-          </span>` : ''}
+      <div class="card mb8" data-req-id="${r.id}">
+        <div class="card-h" style="padding:9px 14px;display:flex;align-items:center;justify-content:space-between">
+          <div style="flex:1">
+            <span class="mono" style="font-size:.72rem;color:var(--teal)">${r.no}</span>
+            <span style="font-size:.8rem;margin-left:8px">${dateStr(r.ts)}</span>
+            ${hasPermission('canViewCost') ? `<span style="margin-left:auto;font-size:.8rem;color:var(--fg2)">
+              ต้นทุน ${THB(r.items.reduce((s,it)=>s+it.qty*(it.cost||0),0))}
+            </span>` : ''}
+          </div>
+          <div style="display:flex;gap:4px;margin-left:12px">
+            <button class="btn-icon btn-edit-req" data-req-id="${r.id}" title="แก้ไขใบเบิก">
+              ${svgI('<path d="M3 17.25V21h3.75L17.81 9.94m-6.75-6.75L21 7.75M11 5L9 3l-5.25 5.25"/>',14)}
+            </button>
+            <button class="btn-icon btn-del-req" data-req-id="${r.id}" title="ลบใบเบิก">
+              ${svgI('<path d="M19 6.4L17.6 5 12 10.6 6.4 5 5 6.4l5.6 5.6L5 17.6l1.4 1.4L12 13.4l5.6 5.6 1.4-1.4-5.6-5.6L19 6.4z"/>',14)}
+            </button>
+          </div>
         </div>
         <div style="padding:0 14px 10px">
           <table class="tbl" style="font-size:.82rem">
             <tbody>
-              ${r.items.map(it => `
-                <tr>
+              ${r.items.map((it, idx) => `
+                <tr data-item-idx="${idx}">
                   <td>${esc(it.name)}</td>
                   <td class="r" style="color:var(--fg2)">${numFmt(it.qty)} ${esc(it.unit)}</td>
                   ${hasPermission('canViewCost') ? `<td class="r fc-gold">${THB(it.cost * it.qty)}</td>` : ''}
@@ -370,6 +380,45 @@ function openJobDetail(jid) {
 
   ov.querySelector('#viewInvBtn')?.addEventListener('click', () => {
     if (inv) { closeMod(); setTimeout(() => showDoc('inv', inv), 80); }
+  });
+
+  /* Edit requisition */
+  ov.querySelectorAll('.btn-edit-req').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const reqId = btn.dataset.reqId;
+      closeMod();
+      setTimeout(() => openEditReqModal(jid, reqId), 80);
+    });
+  });
+
+  /* Delete requisition */
+  ov.querySelectorAll('.btn-del-req').forEach(btn => {
+    btn.addEventListener('click', async () => {
+      const reqId = btn.dataset.reqId;
+      const req = S.requisitions.find(r => r.id === reqId);
+      if (!req) return;
+      
+      if (!confirm(`ต้องการลบใบเบิก ${req.no} และคืนสินค้ากลับสต๊อกหรือ?`)) return;
+      
+      /* Restore stock */
+      req.items.forEach(it => {
+        if (!it.sid) return;
+        const st = S.stockItems.find(x => x.id === it.sid);
+        if (st) {
+          st.qty = fmt(parseFloat(st.qty) + parseFloat(it.qty));
+          st.used = fmt((st.used || 0) - it.qty);
+        }
+      });
+      
+      /* Remove requisition */
+      S.requisitions = S.requisitions.filter(r => r.id !== reqId);
+      j.requisitions = (j.requisitions || []).filter(rid => rid !== reqId);
+      
+      await saveData();
+      renderNav();
+      openJobDetail(jid);
+      showToast(`ลบใบเบิก ${req.no} แล้ว · คืนสินค้า ${req.items.length} รายการ`);
+    });
   });
 
   bindModalClose(ov, '#mCl', '#mCl2');
@@ -585,4 +634,132 @@ function openReqModal(jid) {
   /* Close → go back to job detail */
   ov.querySelector('#mCl').addEventListener('click',  () => { closeMod(); openJobDetail(jid); });
   ov.querySelector('#mCl2').addEventListener('click', () => { closeMod(); openJobDetail(jid); });
+}
+
+/* ══════════════════════════════════════
+   EDIT REQUISITION MODAL
+══════════════════════════════════════ */
+function openEditReqModal(jid, reqId) {
+  const j   = S.jobs.find(x => x.id === jid);
+  const req = S.requisitions.find(r => r.id === reqId);
+  if (!j || !req) return;
+
+  const ov = sel('mOv');
+  let editItems = JSON.parse(JSON.stringify(req.items)); /* clone items */
+
+  const renderEditItems = () => {
+    const box = sel('editReqBox');
+    if (!editItems.length) {
+      box.innerHTML = '<div class="bi-empty">ไม่มีรายการ</div>';
+      return;
+    }
+
+    box.innerHTML = editItems.map((it, idx) => `
+      <div style="display:grid;grid-template-columns:1fr 110px 70px 36px;gap:8px;
+                  align-items:center;padding:7px 4px;border-bottom:1px dashed var(--ln)">
+        <div>
+          <div style="font-size:.86rem;font-weight:600">${esc(it.name)}</div>
+          ${it.sid ? `<div style="font-size:.67rem;color:var(--fg2);font-family:'JetBrains Mono',monospace">${it.sid}</div>` : ''}
+        </div>
+        <div style="display:flex;align-items:center;gap:4px">
+          <input type="number" min="0" step="${it.unit==='ลิตร'?'0.5':'1'}"
+                 value="${numFmt(it.qty)}" data-eidx="${idx}"
+                 style="width:64px;background:var(--ink);border:1px solid var(--ln2);
+                        color:var(--fg);border-radius:7px;padding:6px 7px;font-size:.84rem;
+                        outline:none;text-align:right">
+          <span style="font-size:.76rem;color:var(--fg2)">${it.unit}</span>
+        </div>
+        ${hasPermission('canViewCost') ? `<div style="font-size:.82rem;text-align:right;color:var(--fg2)">
+          ${THB(it.cost * it.qty)}
+        </div>` : ''}
+        <button class="btn-icon" data-eirdel="${idx}">
+          ${svgI('<path d="M18 6 6 18M6 6l12 12"/>',13)}
+        </button>
+      </div>`).join('');
+
+    /* Bind quantity inputs */
+    box.querySelectorAll('input[data-eidx]').forEach(inp => {
+      inp.addEventListener('input', () => {
+        const idx = parseInt(inp.dataset.eidx);
+        if (editItems[idx]) editItems[idx].qty = parseFloat(inp.value) || 0;
+        renderEditItems();
+      });
+    });
+
+    /* Bind delete buttons */
+    box.querySelectorAll('[data-eirdel]').forEach(b => {
+      b.addEventListener('click', () => {
+        const idx = parseInt(b.dataset.eirdel);
+        editItems.splice(idx, 1);
+        renderEditItems();
+      });
+    });
+  };
+
+  ov.innerHTML = `
+    <div class="modal">
+      <div class="modal-h">
+        <h3>แก้ไขใบเบิก — ${req.no}</h3>
+        <button class="closex" id="mCl">${svgI('<path d="M18 6 6 18M6 6l12 12"/>')}</button>
+      </div>
+      <div class="modal-b">
+        <div id="editReqBox"></div>
+      </div>
+      <div class="modal-f">
+        <button class="btn btn-ghost" id="editReqCancel">ยกเลิก</button>
+        <button class="btn btn-gold" id="editReqSave">บันทึกการแก้ไข</button>
+      </div>
+    </div>`;
+
+  openOv('mOv');
+  renderEditItems();
+
+  /* Save changes */
+  sel('editReqSave').addEventListener('click', async () => {
+    if (!editItems.length) return showToast('ต้องมีรายการอย่างน้อย 1 รายการ', 'err');
+
+    /* Calculate stock differences and restore/deduct as needed */
+    req.items.forEach((oldIt, idx) => {
+      const newIt = editItems[idx];
+      if (!oldIt.sid || !newIt) return;
+
+      const qtyDiff = parseFloat(oldIt.qty) - parseFloat(newIt.qty);
+      if (qtyDiff !== 0) {
+        const st = S.stockItems.find(x => x.id === oldIt.sid);
+        if (st) {
+          st.qty = fmt(parseFloat(st.qty) + qtyDiff);
+          st.used = fmt((st.used || 0) - qtyDiff);
+        }
+      }
+    });
+
+    /* Handle deleted items (restore their stock) */
+    if (editItems.length < req.items.length) {
+      for (let i = editItems.length; i < req.items.length; i++) {
+        const oldIt = req.items[i];
+        if (!oldIt.sid) continue;
+        const st = S.stockItems.find(x => x.id === oldIt.sid);
+        if (st) {
+          st.qty = fmt(parseFloat(st.qty) + parseFloat(oldIt.qty));
+          st.used = fmt((st.used || 0) - oldIt.qty);
+        }
+      }
+    }
+
+    /* Update requisition */
+    req.items = editItems;
+
+    await saveData();
+    closeMod();
+    renderNav();
+    openJobDetail(jid);
+    showToast(`อัปเดตใบเบิก ${req.no} แล้ว`);
+  });
+
+  sel('editReqCancel').addEventListener('click', () => {
+    closeMod();
+    openJobDetail(jid);
+  });
+
+  bindModalClose(ov, '#mCl');
 }

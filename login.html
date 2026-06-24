@@ -275,9 +275,30 @@
       async function getCurrentUser() {
         if (!supabaseReady) return null;
         try {
+          // ✅ อ่าน Supabase Auth session จริง
           const { data: { user }, error } = await supabase.auth.getUser();
-          if (error) throw error;
-          return user;
+          if (error || !user) {
+            console.log('[Supabase] No active auth session');
+            return null;
+          }
+
+          // ดึง role จากตาราง profiles
+          const { data: profile, error: profileError } = await supabase
+            .from('profiles')
+            .select('role, full_name')
+            .eq('id', user.id)
+            .single();
+
+          if (profileError) {
+            console.warn('[Supabase] Profile fetch error (possible RLS issue):', profileError.message);
+          }
+
+          return {
+            id: user.id,
+            email: user.email,
+            role: profile?.role || 'technician',
+            full_name: profile?.full_name || user.email
+          };
         } catch (err) {
           console.error('[Supabase] getCurrentUser error:', err.message);
           return null;
