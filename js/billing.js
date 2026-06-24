@@ -265,7 +265,7 @@ function bindBilling() {
           <div>
             <input data-f="qty" type="number" min="0"
                    step="${it.unit === 'ลิตร' ? '0.5' : '1'}"
-                   value="${numFmt(it.qty)}" style="width:100%">
+                   value="${it.qty}" style="width:100%">
           </div>
           <div>
             <input data-f="price" type="number" min="0"
@@ -278,16 +278,22 @@ function bindBilling() {
         </div>`;
     }).join('');
 
-    /* Bind row inputs */
+    /* Bind row inputs — update model + total cell in-place (no DOM rebuild = no focus loss) */
     box.querySelectorAll('input[data-f]').forEach(inp => {
       inp.addEventListener('input', () => {
-        const it = bItems.find(x => x.k == inp.closest('[data-bk]')?.dataset.bk);
+        const row = inp.closest('[data-bk]');
+        const it  = bItems.find(x => x.k == row?.dataset.bk);
         if (!it) return;
         const f = inp.dataset.f;
         if      (f === 'qty')   it.qty   = parseFloat(inp.value) || 0;
         else if (f === 'price') it.price = parseFloat(inp.value) || 0;
         else                    it[f]    = inp.value;
-        renderRows();
+        /* update only the total cell — avoids full DOM rebuild that loses focus */
+        if (f === 'qty' || f === 'price') {
+          const totCell = row?.querySelector('.tot');
+          if (totCell) totCell.textContent = THB(it.qty * it.price);
+        }
+        recalc();
       });
     });
 
@@ -492,9 +498,9 @@ function openOrderItemModal() {
     const qty  = parseFloat(sv('oimQty')) || 1;
     const unit = sv('oimUnit') || 'ชิ้น';
 
-    if (!nm)      return showToast('กรุณากรอกชื่ออะไหล่', 'err');
-    if (!hasPermission('canViewCost') && cost <= 0) return showToast('กรุณากรอกราคาขาย', 'err');
-    if (hasPermission('canViewCost') && cost <= 0) return showToast('กรุณากรอกราคาทุน', 'err');
+    if (!nm)   return showToast('กรุณากรอกชื่ออะไหล่', 'err');
+    if ( hasPermission('canViewCost') && cost <= 0) return showToast('กรุณากรอกราคาทุน', 'err');
+    if (!hasPermission('canViewCost') && sell <= 0) return showToast('กรุณากรอกราคาขาย', 'err');
 
     bItems.push({ k: ++bKey, sid: null, nm, unit, qty, price: sell, itemType: 'order', cost });
     closeMod();

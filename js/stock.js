@@ -13,7 +13,7 @@ function stockHTML() {
   const low      = S.stockItems.filter(i => i.qty <= i.reorder && i.qty > 0).length;
   const out      = S.stockItems.filter(i => i.qty <= 0).length;
   const val      = S.stockItems.reduce((s, i) => s + i.qty * i.cost, 0);
-  const lowItems = S.stockItems.filter(i => i.qty <= i.reorder);
+  const lowItems = S.stockItems.filter(i => i.qty <= i.reorder && i.qty > 0);
 
   // Get unique categories for filtering
   const categories = ['ทั้งหมด', ...new Set(S.stockItems.map(i => i.cat).filter(Boolean))].filter(Boolean);
@@ -44,7 +44,7 @@ function stockHTML() {
           <span class="tag-stock">${esc(i.cat)}</span>
         </td>
         <td class="c">
-          <span class="badge b-${st}">${st==='bad'?'หมด':st==='warn'?'ใกล้หมด':'พอใช้'}</span>
+          <span class="badge b-${st}">${st==='bad'?'หมดสต๊อก':st==='warn'?'ถึงจุดสั่งซื้อ':'พอใช้'}</span>
         </td>
         <td class="r">
           <b style="font-family:'Saira Condensed',sans-serif;font-size:1.05rem">
@@ -118,7 +118,7 @@ function stockHTML() {
         <div class="sv">${items.length}<small style="font-size:.82rem;color:var(--fg2);font-weight:600"> SKU</small></div>
       </div>
       <div class="stat warn">
-        <div class="sk">${svgI('<path d="M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0Z"/><path d="M12 9v4M12 17h.01"/>')} ใกล้หมด</div>
+        <div class="sk">${svgI('<path d="M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0Z"/><path d="M12 9v4M12 17h.01"/>')} ถึงจุดสั่งซื้อ</div>
         <div class="sv">${low}<small style="font-size:.82rem;color:var(--fg2);font-weight:600"> รายการ</small></div>
       </div>
       <div class="stat bad">
@@ -215,7 +215,7 @@ function addToLedger(itemId, type, qty, note) {
     qty,
     unit: item.unit,
     note: note || '',
-    user: window.currentUser?.username || 'unknown'
+    user: (() => { try { return JSON.parse(localStorage.getItem('tbr_user_session') || '{}').username || 'unknown'; } catch { return 'unknown'; } })()
   });
 }
 

@@ -76,7 +76,7 @@ function buildInvoiceHTML(d) {
       <tr>
         <td class="c" style="color:#888">${i+1}</td>
         <td>${esc(it.name)}${typeNote}</td>
-        <td class="r">${numFmt(it.qty)}${it.unit ? ' '+esc(it.unit) : ''}</td>
+        <td class="r" style="white-space:nowrap">${numFmt(it.qty)}${it.unit ? '\u00a0'+esc(it.unit) : ''}</td>
         <td class="r">—</td>
         <td class="r">${THB(it.price)}</td>
         <td class="r" style="font-weight:700">${THB(it.qty * it.price)}</td>
@@ -210,7 +210,7 @@ function buildQuoteHTML(d) {
       <td>${esc(it.name)}${it.itemType==='order'
         ? ` <span style="font-size:.65rem;color:#C9850D">(อะไหล่ +37%)</span>`
         : ''}</td>
-      <td class="r">${numFmt(it.qty)}${it.unit ? ' '+esc(it.unit) : ''}</td>
+      <td class="r" style="white-space:nowrap">${numFmt(it.qty)}${it.unit ? '\u00a0'+esc(it.unit) : ''}</td>
       <td class="r">—</td>
       <td class="r">${THB(it.price)}</td>
       <td class="r" style="font-weight:700">${THB(it.qty * it.price)}</td>

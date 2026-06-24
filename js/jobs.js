@@ -232,7 +232,10 @@ function openJobDetail(jid) {
 
   const reqs      = S.requisitions.filter(r => r.jobId === jid);
   const inv       = S.invoices.find(i => i.jobId === jid);
-  const totalCost = reqs.reduce((s, r) => s + r.items.reduce((ss, it) => ss + it.qty * (it.cost || 0), 0), 0);
+  /* use inv.totalCost (includes stock + order + service costs) when invoice exists;
+     fall back to requisition cost only when no invoice yet */
+  const reqCost   = reqs.reduce((s, r) => s + r.items.reduce((ss, it) => ss + it.qty * (it.cost || 0), 0), 0);
+  const totalCost = inv ? (inv.totalCost || reqCost) : reqCost;
   const ov        = sel('mOv');
 
   const statusBtns = JOB_STATUS.map((s, i) => `
