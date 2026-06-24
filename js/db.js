@@ -25,7 +25,7 @@ async function loadData() {
       console.log('[DB] 🔄 Loading from Supabase (multi-user sync enabled)...');
       try {
         const data = await loadAllData();
-        if (data && (data.customers?.length > 0 || data.vehicles?.length > 0 || data.jobs?.length > 0 || data.invoices?.length > 0 || data.services?.length > 0)) {
+        if (data && (data.customers?.length > 0 || data.vehicles?.length > 0 || data.jobs?.length > 0 || data.invoices?.length > 0 || data.services?.length > 0 || data.stockItems?.length > 0)) {
           S = convertSupabaseToState(data);
           useSupabase = true;
           // ALWAYS merge localStorage records not yet in Supabase (safety net)
@@ -103,7 +103,10 @@ async function loadData() {
  */
 function convertSupabaseToState(dbData) {
   const state = seedData();
-  
+  // Reset stock items — don't use demo seed items when Supabase is available.
+  // mergeLocalStorageIntoS() will restore real items from localStorage if Supabase returns empty.
+  state.stockItems = [];
+
   if (dbData.customers) {
     state.customers = dbData.customers.map(c => ({
       id: c.id,
@@ -332,18 +335,24 @@ function mergeLocalStorageIntoS() {
       }
     }
 
-    // Stock items: match by SKU (id)
-    const sbSkus = new Set(S.stockItems.map(i => i.id).filter(Boolean));
-    for (const item of (local.stockItems || [])) {
-      if (item.id && !sbSkus.has(item.id)) {
-        S.stockItems.push(item);
-        merged++;
+    // Stock items: restore from localStorage when Supabase returned none,
+    // or add non-seed local items not yet in Supabase.
+    // Seed item IDs match pattern S##/C## (e.g. S01, C03) — skip those when merging.
+    const isSeedItem = id => /^[SC]\d{1,2}$/.test(id);
+    if (S.stockItems.length === 0) {
+      // Supabase returned no stock — use localStorage items (prefer real over seed)
+      const realLocal = (local.stockItems || []).filter(i => i.id && !isSeedItem(i.id));
+      S.stockItems = realLocal.length > 0 ? realLocal : (local.stockItems || []);
+      if (S.stockItems.length > 0) merged += S.stockItems.length;
+    } else {
+      // Add only real (non-seed) local items not already in Supabase
+      const sbSkus = new Set(S.stockItems.map(i => i.id).filter(Boolean));
+      for (const item of (local.stockItems || [])) {
+        if (item.id && !isSeedItem(item.id) && !sbSkus.has(item.id)) {
+          S.stockItems.push(item);
+          merged++;
+        }
       }
-    }
-    // If Supabase returned NO stock items at all, use all local stock items
-    if (S.stockItems.length === 0 && local.stockItems?.length > 0) {
-      S.stockItems = local.stockItems;
-      merged += local.stockItems.length;
     }
 
     if (merged > 0) {

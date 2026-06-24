@@ -189,6 +189,9 @@ function bindStock() {
       const m = S.stockItems.find(i => i.id === b.dataset.dsi);
       if (!confirm(`ลบ "${m?.name}" ออกจากคลัง?`)) return;
       S.stockItems = S.stockItems.filter(i => i.id !== b.dataset.dsi);
+      if (useSupabase && typeof deleteStockItemBySku === 'function') {
+        deleteStockItemBySku(b.dataset.dsi).catch(e => console.warn('[Stock] delete sync failed:', e));
+      }
       await saveData();
       renderPanel();
       renderNav();
@@ -272,6 +275,11 @@ function openStockAdj(id, type) {
         addToLedger(m.id, 'out', Math.abs(diff), note);
       }
       m.qty = fmt(q);
+    }
+
+    // Sync quantity to Supabase
+    if (useSupabase && typeof updateStockBySku === 'function') {
+      updateStockBySku(m.id, m.qty).catch(e => console.warn('[Stock] qty sync failed:', e));
     }
 
     await saveData();
@@ -374,8 +382,16 @@ function openStockItemModal(id) {
 
     if (m) {
       Object.assign(m, data);
+      // Sync edit to Supabase
+      if (useSupabase && typeof upsertStockItemBySku === 'function') {
+        upsertStockItemBySku(data).catch(e => console.warn('[Stock] edit sync failed:', e));
+      }
     } else {
       S.stockItems.push(data);
+      // Sync new item to Supabase
+      if (useSupabase && typeof upsertStockItemBySku === 'function') {
+        upsertStockItemBySku(data).catch(e => console.warn('[Stock] add sync failed:', e));
+      }
     }
 
     await saveData();
@@ -388,6 +404,10 @@ function openStockItemModal(id) {
   ov.querySelector('#delSI')?.addEventListener('click', async () => {
     if (!confirm('ลบรายการนี้?')) return;
     S.stockItems = S.stockItems.filter(x => x.id !== id);
+    // Sync delete to Supabase
+    if (useSupabase && typeof deleteStockItemBySku === 'function') {
+      deleteStockItemBySku(id).catch(e => console.warn('[Stock] delete sync failed:', e));
+    }
     await saveData();
     closeMod();
     renderPanel();

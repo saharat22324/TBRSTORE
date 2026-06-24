@@ -392,6 +392,65 @@ async function updateStockItem(itemId, updates) {
   }
 }
 
+/**
+ * Update stock quantity directly by SKU (local item id = sku in Supabase)
+ */
+async function updateStockBySku(sku, newQty) {
+  try {
+    const { error } = await getSupabase()
+      .from('stock_items')
+      .update({ quantity: newQty, updated_at: new Date().toISOString() })
+      .eq('sku', sku);
+    if (error) throw error;
+    return true;
+  } catch (err) {
+    console.warn('[Service] updateStockBySku error:', err.message);
+    return false;
+  }
+}
+
+/**
+ * Upsert stock item by SKU (insert if not exists, update if exists)
+ */
+async function upsertStockItemBySku(item) {
+  try {
+    const { error } = await getSupabase()
+      .from('stock_items')
+      .upsert({
+        sku: item.id,
+        name: item.name,
+        unit: item.unit || 'ลิตร',
+        cost_price: item.cost || 0,
+        sell_price: item.sell || 0,
+        quantity: item.qty || 0,
+        reorder_level: item.reorder || 10,
+        updated_at: new Date().toISOString()
+      }, { onConflict: 'sku' });
+    if (error) throw error;
+    return true;
+  } catch (err) {
+    console.warn('[Service] upsertStockItemBySku error:', err.message);
+    return false;
+  }
+}
+
+/**
+ * Delete stock item by SKU
+ */
+async function deleteStockItemBySku(sku) {
+  try {
+    const { error } = await getSupabase()
+      .from('stock_items')
+      .delete()
+      .eq('sku', sku);
+    if (error) throw error;
+    return true;
+  } catch (err) {
+    console.warn('[Service] deleteStockItemBySku error:', err.message);
+    return false;
+  }
+}
+
 async function getStockItems() {
   try {
     // Try with category join first
