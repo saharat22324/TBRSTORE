@@ -1,0 +1,327 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>TBR — กู้คืนข้อมูล</title>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: 'Segoe UI', Tahoma, sans-serif; background: #0f1117; color: #e2e8f0; padding: 20px; min-height: 100vh; }
+  .container { max-width: 780px; margin: 0 auto; }
+  h1 { color: #f59e0b; font-size: 1.6rem; margin-bottom: 4px; }
+  .sub { color: #94a3b8; font-size: .88rem; margin-bottom: 24px; }
+  .card { background: #1e2130; border: 1px solid #2d3448; border-radius: 10px; padding: 20px; margin-bottom: 16px; }
+  .card h2 { font-size: 1rem; color: #f59e0b; margin-bottom: 12px; }
+  .stat-row { display: flex; gap: 12px; flex-wrap: wrap; }
+  .stat { background: #252840; border-radius: 8px; padding: 12px 20px; text-align: center; min-width: 110px; }
+  .stat .num { font-size: 1.8rem; font-weight: 700; color: #f59e0b; }
+  .stat .lbl { font-size: .78rem; color: #94a3b8; margin-top: 2px; }
+  .btn { display: inline-block; padding: 10px 24px; border: none; border-radius: 7px; cursor: pointer; font-size: .95rem; font-weight: 600; transition: opacity .15s; }
+  .btn:disabled { opacity: .45; cursor: not-allowed; }
+  .btn-green { background: #16a34a; color: #fff; }
+  .btn-red { background: #dc2626; color: #fff; }
+  .btn-gray { background: #374151; color: #e2e8f0; }
+  .btn:hover:not(:disabled) { opacity: .85; }
+  .log { background: #0d1117; border: 1px solid #2d3448; border-radius: 8px; padding: 12px; font-family: 'Courier New', monospace; font-size: .8rem; max-height: 320px; overflow-y: auto; line-height: 1.6; margin-top: 12px; }
+  .log .ok { color: #4ade80; }
+  .log .err { color: #f87171; }
+  .log .info { color: #60a5fa; }
+  .log .warn { color: #fbbf24; }
+  .preview-table { width: 100%; border-collapse: collapse; font-size: .83rem; margin-top: 8px; }
+  .preview-table th { background: #252840; color: #94a3b8; padding: 6px 10px; text-align: left; font-weight: 600; }
+  .preview-table td { padding: 5px 10px; border-top: 1px solid #2d3448; }
+  .empty { color: #64748b; font-style: italic; font-size: .85rem; }
+  .badge-ok { background: #166534; color: #4ade80; border-radius: 4px; padding: 1px 6px; font-size: .75rem; }
+  .badge-warn { background: #713f12; color: #fbbf24; border-radius: 4px; padding: 1px 6px; font-size: .75rem; }
+  .progress { height: 6px; background: #252840; border-radius: 4px; margin-top: 10px; overflow: hidden; }
+  .progress-bar { height: 100%; background: #f59e0b; border-radius: 4px; transition: width .3s; }
+  .flex-btns { display: flex; gap: 10px; flex-wrap: wrap; margin-top: 14px; }
+  #step2, #step3 { display: none; }
+</style>
+</head>
+<body>
+<div class="container">
+  <h1>🔧 TBR — กู้คืนข้อมูลเก่า</h1>
+  <p class="sub">เครื่องมือนี้จะอ่านข้อมูลเก่าจาก browser นี้ แล้วย้ายเข้า Supabase</p>
+
+  <!-- Step 1: Scan -->
+  <div class="card" id="step1">
+    <h2>ขั้นตอนที่ 1 — ตรวจสอบข้อมูล</h2>
+    <p style="color:#94a3b8;font-size:.88rem;margin-bottom:14px">
+      คลิกปุ่มด้านล่างเพื่อสแกนข้อมูลใน browser นี้
+    </p>
+    <button class="btn btn-green" onclick="scanLocalStorage()">🔍 สแกนข้อมูล</button>
+    <div id="scanResult" style="margin-top:16px"></div>
+  </div>
+
+  <!-- Step 2: Preview -->
+  <div class="card" id="step2">
+    <h2>ขั้นตอนที่ 2 — ตรวจสอบข้อมูลที่พบ</h2>
+    <div id="previewContent"></div>
+    <div class="flex-btns">
+      <button class="btn btn-green" id="migrateBtn" onclick="startMigration()">🚀 ย้ายข้อมูลไป Supabase</button>
+      <button class="btn btn-gray" onclick="resetTool()">← กลับ</button>
+    </div>
+    <div class="progress" id="progressWrap" style="display:none">
+      <div class="progress-bar" id="progressBar" style="width:0%"></div>
+    </div>
+    <div class="log" id="logBox" style="display:none"></div>
+  </div>
+
+  <!-- Step 3: Done -->
+  <div class="card" id="step3">
+    <h2>✅ ย้ายข้อมูลสำเร็จ!</h2>
+    <p style="color:#4ade80;margin-bottom:14px">ข้อมูลถูกย้ายเข้า Supabase เรียบร้อยแล้ว</p>
+    <div class="log" id="finalLog"></div>
+    <div class="flex-btns" style="margin-top:14px">
+      <button class="btn btn-green" onclick="window.location.href='index.html'">🏠 กลับหน้าหลัก</button>
+    </div>
+  </div>
+</div>
+
+<script>
+const SUPABASE_URL = 'https://tgtuxvmuapiltmkulvlk.supabase.co';
+const SUPABASE_KEY = 'sb_publishable_8mmv4aAB8mPRvYe459ZwGQ_KVVJROax';
+const DB_KEY = 'tbr-system-v1';
+const ADMIN_USER_ID = '2fd34ed6-d87b-4f66-91f4-5eca292c07e6';
+
+let localData = null;
+let sb = null;
+
+// ─── Init Supabase ────────────────────────────────────────────────────────────
+function initSb() {
+  try {
+    sb = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+    return true;
+  } catch(e) {
+    return false;
+  }
+}
+
+// ─── Scan localStorage ────────────────────────────────────────────────────────
+function scanLocalStorage() {
+  const raw = localStorage.getItem(DB_KEY);
+  const el = document.getElementById('scanResult');
+
+  if (!raw) {
+    el.innerHTML = `<div style="color:#f87171;margin-top:8px">
+      ❌ ไม่พบข้อมูลใน localStorage (key: <code>${DB_KEY}</code>)<br>
+      <small style="color:#64748b">อาจเปิดผิด browser หรือข้อมูลถูกล้างไปแล้ว</small>
+    </div>`;
+    return;
+  }
+
+  try {
+    localData = JSON.parse(raw);
+  } catch(e) {
+    el.innerHTML = `<div style="color:#f87171">❌ ข้อมูล localStorage เสียหาย: ${e.message}</div>`;
+    return;
+  }
+
+  const custs = localData.customers || [];
+  const vehs  = localData.vehicles  || [];
+  const jobs  = localData.jobs      || [];
+  const invs  = localData.invoices  || [];
+
+  if (custs.length === 0 && vehs.length === 0 && jobs.length === 0) {
+    el.innerHTML = `<div style="color:#fbbf24">
+      ⚠️ พบไฟล์ข้อมูล แต่ไม่มีลูกค้า/รถ/งาน<br>
+      <small style="color:#64748b">ข้อมูลอาจถูกล้าง หรืออาจต้องเปิด browser อื่น</small>
+    </div>`;
+    return;
+  }
+
+  el.innerHTML = `<div style="color:#4ade80">✅ พบข้อมูล!</div>`;
+
+  // Build preview
+  document.getElementById('step2').style.display = 'block';
+  document.getElementById('step1').querySelector('button').disabled = true;
+
+  const custRows = custs.slice(0, 10).map(c =>
+    `<tr><td>${esc(c.name)}</td><td>${esc(c.phone||'—')}</td><td>${esc(c.email||'—')}</td></tr>`
+  ).join('');
+
+  const vehRows = vehs.slice(0, 10).map(v => {
+    const owner = custs.find(c => c.id === v.custId);
+    return `<tr><td>${esc(v.plate)}</td><td>${esc([v.brand,v.model,v.year].filter(Boolean).join(' '))}</td><td>${esc(owner?.name||'—')}</td></tr>`;
+  }).join('');
+
+  const jobRows = jobs.slice(0, 10).map(j =>
+    `<tr><td>${esc(j.no||j.id)}</td><td>${esc(j.custName||'—')}</td><td>${esc(j.complaint||'—').substring(0,40)}</td></tr>`
+  ).join('');
+
+  document.getElementById('previewContent').innerHTML = `
+    <div class="stat-row" style="margin-bottom:16px">
+      <div class="stat"><div class="num">${custs.length}</div><div class="lbl">ลูกค้า</div></div>
+      <div class="stat"><div class="num">${vehs.length}</div><div class="lbl">รถ</div></div>
+      <div class="stat"><div class="num">${jobs.length}</div><div class="lbl">Job Card</div></div>
+      <div class="stat"><div class="num">${invs.length}</div><div class="lbl">ใบแจ้งหนี้</div></div>
+    </div>
+
+    <h3 style="font-size:.9rem;color:#94a3b8;margin-bottom:6px">ลูกค้า (แสดง 10 รายแรก)</h3>
+    ${custs.length ? `<table class="preview-table">
+      <thead><tr><th>ชื่อ</th><th>โทรศัพท์</th><th>อีเมล</th></tr></thead>
+      <tbody>${custRows}${custs.length>10?`<tr><td colspan="3" class="empty">... และอีก ${custs.length-10} ราย</td></tr>`:''}</tbody>
+    </table>` : '<div class="empty">ไม่มีลูกค้า</div>'}
+
+    <h3 style="font-size:.9rem;color:#94a3b8;margin:14px 0 6px">รถ (แสดง 10 คันแรก)</h3>
+    ${vehs.length ? `<table class="preview-table">
+      <thead><tr><th>ทะเบียน</th><th>รุ่น</th><th>เจ้าของ</th></tr></thead>
+      <tbody>${vehRows}${vehs.length>10?`<tr><td colspan="3" class="empty">... และอีก ${vehs.length-10} คัน</td></tr>`:''}</tbody>
+    </table>` : '<div class="empty">ไม่มีรถ</div>'}
+
+    <h3 style="font-size:.9rem;color:#94a3b8;margin:14px 0 6px">Job Card (แสดง 10 ใบแรก)</h3>
+    ${jobs.length ? `<table class="preview-table">
+      <thead><tr><th>เลขที่งาน</th><th>ลูกค้า</th><th>อาการ</th></tr></thead>
+      <tbody>${jobRows}${jobs.length>10?`<tr><td colspan="3" class="empty">... และอีก ${jobs.length-10} ใบ</td></tr>`:''}</tbody>
+    </table>` : '<div class="empty">ไม่มี Job Card</div>'}
+  `;
+}
+
+function esc(s) {
+  return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+}
+
+function log(msg, type='info') {
+  const box = document.getElementById('logBox');
+  box.style.display = 'block';
+  box.innerHTML += `<div class="${type}">[${new Date().toLocaleTimeString('th')}] ${msg}</div>`;
+  box.scrollTop = box.scrollHeight;
+}
+
+function setProgress(pct) {
+  document.getElementById('progressWrap').style.display = 'block';
+  document.getElementById('progressBar').style.width = pct + '%';
+}
+
+// ─── Main Migration ───────────────────────────────────────────────────────────
+async function startMigration() {
+  if (!localData) { alert('ไม่พบข้อมูล'); return; }
+  
+  if (!confirm('ยืนยันการย้ายข้อมูลไป Supabase?\n\nข้อมูลใหม่จะถูกเพิ่มเข้าไป (ไม่ลบข้อมูลเดิม)')) return;
+
+  document.getElementById('migrateBtn').disabled = true;
+  initSb();
+
+  const custs = localData.customers || [];
+  const vehs  = localData.vehicles  || [];
+  const jobs  = localData.jobs      || [];
+
+  // Maps: old localStorage ID → new Supabase UUID
+  const custIdMap = {};
+  const vehIdMap  = {};
+
+  const total = custs.length + vehs.length + jobs.length;
+  let done = 0;
+
+  log(`เริ่มย้ายข้อมูล: ${custs.length} ลูกค้า, ${vehs.length} รถ, ${jobs.length} งาน`, 'info');
+
+  // ── 1. Migrate Customers ──────────────────────────────────────────────────
+  log(`📥 ย้ายลูกค้า ${custs.length} ราย...`, 'info');
+  for (const c of custs) {
+    try {
+      const row = {
+        name:       c.name || '(ไม่ระบุ)',
+        phone:      c.phone   || null,
+        email:      c.email   || null,
+        line_id:    c.line    || null,
+        address:    c.address || null,
+        note:       c.note    || null,
+        created_by: ADMIN_USER_ID
+      };
+      const { data, error } = await sb.from('customers').insert(row).select('id').single();
+      if (error) throw error;
+      custIdMap[c.id] = data.id;
+      done++;
+      setProgress(Math.round(done/total*100));
+      log(`  ✅ ลูกค้า: ${c.name}`, 'ok');
+    } catch(e) {
+      log(`  ❌ ลูกค้า ${c.name}: ${e.message}`, 'err');
+    }
+  }
+
+  // ── 2. Migrate Vehicles ───────────────────────────────────────────────────
+  log(`🚗 ย้ายรถ ${vehs.length} คัน...`, 'info');
+  for (const v of vehs) {
+    try {
+      const newCustId = custIdMap[v.custId];
+      if (!newCustId && v.custId) {
+        log(`  ⚠️ รถ ${v.plate}: ไม่พบเจ้าของ (custId=${v.custId}) ข้ามไป`, 'warn');
+        done++;
+        setProgress(Math.round(done/total*100));
+        continue;
+      }
+      const row = {
+        customer_id:    newCustId || null,
+        plate:          v.plate   || '???',
+        brand:          v.brand   || null,
+        model:          v.model   || null,
+        year:           v.year    || null,
+        color:          v.color   || null,
+        mileage:        v.mileage || null,
+        engine_number:  v.engineNumber || null,
+        chassis_number: v.chassisNumber || null,
+        note:           v.note    || null,
+        created_by:     ADMIN_USER_ID
+      };
+      const { data, error } = await sb.from('vehicles').insert(row).select('id').single();
+      if (error) throw error;
+      vehIdMap[v.id] = data.id;
+      done++;
+      setProgress(Math.round(done/total*100));
+      log(`  ✅ รถ: ${v.plate}`, 'ok');
+    } catch(e) {
+      log(`  ❌ รถ ${v.plate}: ${e.message}`, 'err');
+    }
+  }
+
+  // ── 3. Migrate Jobs ───────────────────────────────────────────────────────
+  log(`📋 ย้าย Job Card ${jobs.length} ใบ...`, 'info');
+  for (const j of jobs) {
+    try {
+      const newVehId  = vehIdMap[j.vehicleId];
+      const newCustId = custIdMap[j.custId];
+      const statusId  = (j.status || 0) + 1; // 0-based → 1-based
+
+      const row = {
+        job_number:  j.no || null,
+        vehicle_id:  newVehId  || null,
+        customer_id: newCustId || null,
+        complaint:   j.complaint || null,
+        assign_to:   j.assignTo || null,
+        mileage:     j.mileage || null,
+        note:        j.note || null,
+        status_id:   statusId,
+        created_by:  ADMIN_USER_ID
+      };
+      const { error } = await sb.from('jobs').insert(row);
+      if (error) throw error;
+      done++;
+      setProgress(Math.round(done/total*100));
+      log(`  ✅ งาน: ${j.no || j.id}`, 'ok');
+    } catch(e) {
+      log(`  ❌ งาน ${j.no || j.id}: ${e.message}`, 'err');
+    }
+  }
+
+  setProgress(100);
+  log('', 'info');
+  log('🎉 เสร็จสิ้น! ข้อมูลถูกย้ายไป Supabase แล้ว', 'ok');
+  log(`สรุป: ลูกค้า ${Object.keys(custIdMap).length}/${custs.length} · รถ ${Object.keys(vehIdMap).length}/${vehs.length} · งาน ${jobs.length} ใบ`, 'ok');
+
+  // Show step 3
+  setTimeout(() => {
+    document.getElementById('step3').style.display = 'block';
+    const fl = document.getElementById('finalLog');
+    fl.innerHTML = document.getElementById('logBox').innerHTML;
+    document.getElementById('step3').scrollIntoView({ behavior: 'smooth' });
+  }, 500);
+}
+
+function resetTool() {
+  location.reload();
+}
+</script>
+</body>
+</html>
