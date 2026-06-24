@@ -243,20 +243,43 @@ function convertSupabaseToState(dbData) {
 }
 
 /**
- * Repair invoice items where cost > price (sell) — impossible margin, data entry error.
- * Recalculates cost as Math.round(price / 1.37) for affected items.
+ * Repair invoice items with wrong or missing costs:
+ * 1. cost > price → recalculate as Math.round(price / 1.37)
+ * 2. cost = 0 for stock items → lookup from S.stockItems by sid or name
  */
 function repairInvoiceCosts() {
+  // Build quick lookup maps for stock items
+  const stockById   = {};
+  const stockByName = {};
+  for (const si of (S.stockItems || [])) {
+    if (si.id)   stockById[si.id]     = si;
+    if (si.name) stockByName[si.name.trim().toLowerCase()] = si;
+  }
+
   let repaired = 0;
   for (const inv of (S.invoices || [])) {
     let changed = false;
     for (const it of (inv.items || [])) {
-      if (it.cost > 0 && it.price > 0 && it.cost > it.price) {
+      if (!it.price || it.price <= 0) continue;
+
+      // Case 1: cost > sell price — impossible, recalculate
+      if (it.cost > it.price) {
         const fixed = Math.round(it.price / 1.37);
-        console.log(`[DB] 🔧 Repair cost: ${it.name} cost=${it.cost}→${fixed} (sell=${it.price})`);
+        console.log(`[DB] 🔧 cost>sell: ${it.name} ${it.cost}→${fixed}`);
         it.cost = fixed;
         changed = true;
         repaired++;
+      }
+      // Case 2: stock item with cost=0 — lookup from stock master
+      else if (it.cost === 0 && it.itemType === 'stock') {
+        const si = (it.sid && stockById[it.sid])
+                 || stockByName[(it.name || '').trim().toLowerCase()];
+        if (si && si.cost > 0) {
+          console.log(`[DB] 🔧 stock cost=0: ${it.name} →${si.cost}`);
+          it.cost = si.cost;
+          changed = true;
+          repaired++;
+        }
       }
     }
     if (changed) {
