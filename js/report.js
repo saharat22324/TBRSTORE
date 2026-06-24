@@ -89,6 +89,11 @@ function reportHTML() {
     : `<div style="font-size:.83rem;color:var(--fg3);padding:8px 0">ยังไม่มีรายการ</div>`;
 
   /* ── Invoice table rows ── */
+  // DEBUG: log invoice cost data
+  mInvs.forEach(i => {
+    const dbg = (i.items||[]).reduce((s,it)=>s+((it.qty||0)*(it.cost||0)),0);
+    console.log(`[RPT] ${i.no} grand=${i.grand} calcCost=${dbg} totalCost=${i.totalCost} items=${JSON.stringify((i.items||[]).map(it=>({n:it.name,q:it.qty,c:it.cost,p:it.price})))}`);
+  });
   const invRows = mInvs.length
     ? [...mInvs].reverse().map(i => {
         const invCost = (i.items || []).reduce((s, it) => s + ((it.qty || 0) * (it.cost || 0)), 0);
