@@ -326,11 +326,6 @@ async function checkAuth() {
     return false;
   }
 }
-    console.error('[Auth] checkAuth error:', err);
-    window.location.href = 'login.html';
-    return false;
-  }
-}
 
 /**
  * Sign out current user - ✅ ใช้ Supabase Auth signOut
