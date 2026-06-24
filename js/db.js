@@ -7,6 +7,41 @@
 
 const DB_KEY = 'tbr-system-v1';
 let useSupabase = false;
+let _servicesSynced = false; // one-time flag per session
+
+/**
+ * Sync all seed services to Supabase (upsert by service_code).
+ * Runs once per session after login so Supabase always has the latest prices/names.
+ */
+async function syncSeedServicesToSupabase() {
+  if (_servicesSynced || !window.supabaseReady || !window.supabase) return;
+  _servicesSynced = true;
+
+  const seedServices = (typeof seedData === 'function' ? seedData() : S)?.services || [];
+  if (!seedServices.length) return;
+
+  const rows = seedServices.map(s => ({
+    service_code: s.id,
+    name: s.name,
+    description: s.detail || '',
+    price: s.price || 0,
+  }));
+
+  const { error } = await window.supabase
+    .from('services')
+    .upsert(rows, { onConflict: 'service_code' });
+
+  if (error) {
+    console.warn('[DB] services sync failed:', error.message);
+  } else {
+    console.log(`[DB] ✅ Synced ${rows.length} services to Supabase`);
+    // Reload services into S
+    const { data } = await window.supabase.from('services').select('*');
+    if (data?.length) {
+      S.services = data.map(s => ({ id: s.service_code, name: s.name, detail: s.description || '', price: s.price }));
+    }
+  }
+}
 
 /**
  * โหลดข้อมูลทั้งหมด - ลองใช้ Supabase ก่อน ถ้าไม่ได้ใช้ localStorage
@@ -30,6 +65,8 @@ async function loadData() {
           useSupabase = true;
           // ALWAYS merge localStorage records not yet in Supabase (safety net)
           mergeLocalStorageIntoS();
+          // Sync seed services (prices/names) to Supabase in background
+          syncSeedServicesToSupabase().catch(e => console.warn('[DB] services sync error:', e));
           console.log('[DB] ✅ โหลดจาก Supabase สำเร็จ - ข้อมูลซิงค์ระหว่างผู้ใช้');
           return;
         } else if (data) {
