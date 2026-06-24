@@ -151,7 +151,7 @@ function convertSupabaseToState(dbData) {
     }));
   }
 
-  if (dbData.stockItems) {
+  if (dbData.stockItems && dbData.stockItems.length > 0) {
     state.stockItems = dbData.stockItems.map(i => {
       // Infer category from name/SKU if category_id is not set
       const catFromJoin = i.product_categories?.name || '';
@@ -330,6 +330,20 @@ function mergeLocalStorageIntoS() {
         toSync.vehicles.push(v);
         merged++;
       }
+    }
+
+    // Stock items: match by SKU (id)
+    const sbSkus = new Set(S.stockItems.map(i => i.id).filter(Boolean));
+    for (const item of (local.stockItems || [])) {
+      if (item.id && !sbSkus.has(item.id)) {
+        S.stockItems.push(item);
+        merged++;
+      }
+    }
+    // If Supabase returned NO stock items at all, use all local stock items
+    if (S.stockItems.length === 0 && local.stockItems?.length > 0) {
+      S.stockItems = local.stockItems;
+      merged += local.stockItems.length;
     }
 
     if (merged > 0) {

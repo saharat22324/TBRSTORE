@@ -394,12 +394,22 @@ async function updateStockItem(itemId, updates) {
 
 async function getStockItems() {
   try {
+    // Try with category join first
     const { data, error } = await getSupabase()
       .from('stock_items')
       .select('*, product_categories(name)')
       .order('sku', { ascending: true });
     
-    if (error) throw error;
+    if (error) {
+      // JOIN failed (product_categories may not exist) — fall back to simple select
+      console.warn('[Service] getStockItems JOIN failed, retrying without join:', error.message);
+      const { data: data2, error: error2 } = await getSupabase()
+        .from('stock_items')
+        .select('*')
+        .order('sku', { ascending: true });
+      if (error2) throw error2;
+      return data2 || [];
+    }
     return data || [];
   } catch (err) {
     console.error('[Service] getStockItems error:', err);
