@@ -75,12 +75,18 @@ async function loadData() {
     if (raw) {
       S = JSON.parse(raw);
       migrateData();
-      useSupabase = false;
-      console.log('[DB] ⚠️  โหลดจาก localStorage - ข้อมูลไม่ซิงค์ระหว่างผู้ใช้ (Supabase RLS issue?)');
+      // Keep useSupabase = true if Supabase was accessible (just empty tables)
+      // This allows future saves to go to Supabase for multi-device sync
+      if (useSupabase) {
+        console.log('[DB] ⚠️  โหลดจาก localStorage — กำลังซิงค์ข้อมูลไปยัง Supabase...');
+        // Run sync in background — don't block page load
+        syncLocalToSupabase().catch(e => console.warn('[DB] Background sync failed:', e));
+      } else {
+        console.log('[DB] ⚠️  โหลดจาก localStorage - ข้อมูลไม่ซิงค์ (Supabase ไม่พร้อม)');
+      }
     } else {
       S = seedData();
       await saveData();
-      useSupabase = false;
       console.log('[DB] ✅ สร้างข้อมูลใหม่');
     }
   } catch (err) {
@@ -253,6 +259,127 @@ async function saveData() {
 function clearData() {
   localStorage.removeItem(DB_KEY);
   S = seedData();
+}
+
+/**
+ * ซิงค์ข้อมูลจาก localStorage ไปยัง Supabase (one-time migration)
+ * ทำงานเมื่อ Supabase พร้อมแต่ยังไม่มีข้อมูล (tables empty)
+ */
+async function syncLocalToSupabase() {
+  if (!window.supabaseReady) return;
+  if (!S.customers?.length && !S.jobs?.length && !S.invoices?.length) return;
+
+  // Check if already synced (avoid re-syncing every load)
+  const alreadySynced = localStorage.getItem(DB_KEY + '-synced');
+  if (alreadySynced === 'true') return;
+
+  console.log('[DB] 🔄 One-time migration: syncing localStorage data to Supabase...');
+  const idMap = {}; // local ID → Supabase UUID
+  let syncedCount = 0;
+
+  try {
+    // 1. Sync customers
+    for (const c of (S.customers || [])) {
+      if (!c.id || c.id.startsWith('C-')) { // local timestamp IDs
+        try {
+          const result = await addCustomer(c.name || '', c.phone || '', c.email || '', c.line || '', c.address || '', c.note || '');
+          if (result?.id) {
+            idMap[c.id] = result.id;
+            c.id = result.id;
+            syncedCount++;
+          }
+        } catch (e) { /* skip individual failures */ }
+      }
+    }
+
+    // Remap vehicle custIds to Supabase UUIDs
+    for (const v of (S.vehicles || [])) {
+      if (idMap[v.custId]) v.custId = idMap[v.custId];
+    }
+
+    // 2. Sync vehicles
+    for (const v of (S.vehicles || [])) {
+      if (!v.id || v.id.startsWith('V-')) {
+        try {
+          const result = await addVehicle(v.custId, v.plate, v.brand, v.model, v.year, v.color, v.mileage, '', '', v.note || '');
+          if (result?.id) {
+            idMap[v.id] = result.id;
+            v.id = result.id;
+            syncedCount++;
+          }
+        } catch (e) { /* skip individual failures */ }
+      }
+    }
+
+    // Remap job references
+    for (const j of (S.jobs || [])) {
+      if (idMap[j.custId]) j.custId = idMap[j.custId];
+      if (idMap[j.vehicleId]) j.vehicleId = idMap[j.vehicleId];
+    }
+
+    // 3. Sync jobs
+    for (const j of (S.jobs || [])) {
+      if (!j.id || j.id.startsWith('J-')) {
+        try {
+          const result = await addJob(j.vehicleId, j.custId, j.complaint || '', j.assignTo || '', j.mileage || 0, j.note || '');
+          if (result?.id) {
+            idMap[j.id] = result.id;
+            j.id = result.id;
+            syncedCount++;
+          }
+        } catch (e) { /* skip individual failures */ }
+      }
+    }
+
+    // Remap invoice references
+    for (const inv of (S.invoices || [])) {
+      if (idMap[inv.custId]) inv.custId = idMap[inv.custId];
+      if (idMap[inv.vehicleId]) inv.vehicleId = idMap[inv.vehicleId];
+      if (idMap[inv.jobId]) inv.jobId = idMap[inv.jobId];
+    }
+
+    // 4. Sync invoices
+    for (const inv of (S.invoices || [])) {
+      if (!inv.id || inv.id.startsWith('I-')) {
+        try {
+          const items = (inv.items || []).map(it => ({
+            type: it.itemType || 'service',
+            description: it.name || '',
+            quantity: it.qty || 1,
+            unitPrice: it.price || 0,
+            total: (it.qty || 1) * (it.price || 0),
+            note: ''
+          }));
+          const result = await addInvoice(
+            inv.jobId || null, inv.custId, inv.vehicleId || null,
+            items, inv.sub || 0, inv.disc || 0, inv.vat || 0, inv.grand || 0,
+            inv.note || '', inv.no || ''
+          );
+          if (result?.id) {
+            idMap[inv.id] = result.id;
+            inv.id = result.id;
+            syncedCount++;
+          }
+        } catch (e) { /* skip individual failures */ }
+      }
+    }
+
+    // Save updated S (with Supabase UUIDs) back to localStorage
+    localStorage.setItem(DB_KEY, JSON.stringify(S));
+    localStorage.setItem(DB_KEY + '-synced', 'true');
+
+    if (syncedCount > 0) {
+      console.log(`[DB] ✅ Synced ${syncedCount} records to Supabase — data is now backed up`);
+      if (typeof showToast === 'function') {
+        showToast(`ซิงค์ข้อมูล ${syncedCount} รายการไปยัง Supabase แล้ว ✅`, 'ok');
+      }
+    } else {
+      console.log('[DB] Sync ran but nothing was migrated (possibly all IDs already synced)');
+      localStorage.setItem(DB_KEY + '-synced', 'true');
+    }
+  } catch (err) {
+    console.error('[DB] syncLocalToSupabase error:', err);
+  }
 }
 
 /**
