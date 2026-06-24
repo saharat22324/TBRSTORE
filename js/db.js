@@ -150,18 +150,32 @@ function convertSupabaseToState(dbData) {
   }
 
   if (dbData.stockItems) {
-    state.stockItems = dbData.stockItems.map(i => ({
-      id: i.sku,
-      cat: i.product_categories?.name || '',
-      name: i.name,
-      unit: i.unit,
-      cost: i.cost_price,
-      sell: i.sell_price,
-      qty: i.quantity,
-      reorder: i.reorder_level,
-      recv: i.quantity,
-      used: 0
-    }));
+    state.stockItems = dbData.stockItems.map(i => {
+      // Infer category from name/SKU if category_id is not set
+      const catFromJoin = i.product_categories?.name || '';
+      let catFallback = '';
+      if (!catFromJoin) {
+        const n = (i.name || '').toLowerCase();
+        const s = (i.sku || '').toLowerCase();
+        if (n.includes('เครื่อง') || s.includes('5w')) catFallback = 'น้ำมันเครื่อง';
+        else if (n.includes('เบรก') || n.includes('dot') || s.includes('brake')) catFallback = 'น้ำมันเบรก';
+        else if (n.includes('เกียร์') || n.includes('gear') || n.includes('dexron') || n.includes('atf') || s.includes('dex') || s.includes('gear') || s.includes('ulv')) catFallback = 'น้ำมันเกียร์';
+        else if (n.includes('ไส้กรอง') || n.includes('filter') || n.includes('แหวน')) catFallback = 'ไส้กรอง';
+        else catFallback = 'น้ำยา';
+      }
+      return {
+        id: i.sku,
+        cat: catFromJoin || catFallback,
+        name: i.name,
+        unit: i.unit || 'ลิตร',
+        cost: i.cost_price,
+        sell: i.sell_price,
+        qty: i.quantity,
+        reorder: i.reorder_level || 10,
+        recv: i.quantity,
+        used: 0
+      };
+    });
   }
 
   if (dbData.services) {

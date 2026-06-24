@@ -396,7 +396,7 @@ async function getStockItems() {
   try {
     const { data, error } = await getSupabase()
       .from('stock_items')
-      .select('*')
+      .select('*, product_categories(name)')
       .order('sku', { ascending: true });
     
     if (error) throw error;
