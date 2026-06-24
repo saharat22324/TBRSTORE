@@ -67,21 +67,19 @@ function buildInvoiceHTML(d) {
     ? (parseInt(String(d.mileage).replace(/\D/g,'')) + 10000).toLocaleString('th-TH')
     : null;
 
+  /* ราคาในใบเสร็จ — ปัดเป็นจำนวนเต็ม */
+  const R = n => '฿' + Math.round(n).toLocaleString('th-TH');
+
   /* Item rows — fill to min 8 rows */
-  const itemRows = d.items.map((it, i) => {
-    const typeNote =
-      it.itemType === 'order'   ? ` <span style="font-size:.65rem;color:#C9850D">(อะไหล่)</span>` :
-      it.itemType === 'service' ? ` <span style="font-size:.65rem;color:#9b59b6">(บริการ)</span>`      : '';
-    return `
+  const itemRows = d.items.map((it, i) => `
       <tr>
         <td class="c" style="color:#888">${i+1}</td>
-        <td>${esc(it.name)}${typeNote}</td>
+        <td>${esc(it.name)}</td>
         <td class="r" style="white-space:nowrap">${numFmt(it.qty)}${it.unit ? '\u00a0'+esc(it.unit) : ''}</td>
         <td class="r">—</td>
-        <td class="r">${THB(it.price)}</td>
-        <td class="r" style="font-weight:700">${THB(it.qty * it.price)}</td>
-      </tr>`;
-  }).join('');
+        <td class="r">${R(it.price)}</td>
+        <td class="r" style="font-weight:700">${R(it.qty * it.price)}</td>
+      </tr>`).join('');
 
   const blankRows = Array(Math.max(0, 8 - d.items.length))
     .fill('<tr><td class="c" style="color:#ddd">·</td><td></td><td></td><td></td><td></td><td></td></tr>')
@@ -203,17 +201,16 @@ function buildInvoiceActions(d) {
 ══════════════════════════════════════ */
 function buildQuoteHTML(d) {
   const expD = new Date((d.ts || Date.now()) + 7 * 86400000);
+  const R = n => '฿' + Math.round(n).toLocaleString('th-TH');
 
   const itemRows = d.items.map((it, i) => `
     <tr>
       <td class="c" style="color:#888">${i+1}</td>
-      <td>${esc(it.name)}${it.itemType==='order'
-        ? ` <span style="font-size:.65rem;color:#C9850D">(อะไหล่ +37%)</span>`
-        : ''}</td>
+      <td>${esc(it.name)}</td>
       <td class="r" style="white-space:nowrap">${numFmt(it.qty)}${it.unit ? '\u00a0'+esc(it.unit) : ''}</td>
       <td class="r">—</td>
-      <td class="r">${THB(it.price)}</td>
-      <td class="r" style="font-weight:700">${THB(it.qty * it.price)}</td>
+      <td class="r">${R(it.price)}</td>
+      <td class="r" style="font-weight:700">${R(it.qty * it.price)}</td>
     </tr>`).join('');
 
   const blankRows = Array(Math.max(0, 8 - d.items.length))

@@ -87,16 +87,22 @@ function billingHTML() {
               : ''}
           </div>
           <div class="card-b">
+            ${(() => {
+              const _j = bJobId ? S.jobs.find(j => j.id === bJobId) : null;
+              const _c = _j?.custId ? S.customers.find(c => c.id === _j.custId) : null;
+              const _v = (id => id ? S.vehicles.find(v => v.id === id) : null)(_j?.vehicleId);
+              return `
             <div class="fgrid c2 mb12">
-              <div class="fld"><label>ชื่อลูกค้า</label><input id="bCust" placeholder="ชื่อ-นามสกุล"></div>
-              <div class="fld"><label>เบอร์โทร</label><input id="bPhone" placeholder="08X-XXXXXXX"></div>
+              <div class="fld"><label>ชื่อลูกค้า</label><input id="bCust" placeholder="ชื่อ-นามสกุล" value="${esc(_j?.custName||'')}"></div>
+              <div class="fld"><label>เบอร์โทร</label><input id="bPhone" placeholder="08X-XXXXXXX" value="${esc(_c?.phone||'')}"></div>
             </div>
             <div class="fgrid c2 mb12">
-              <div class="fld"><label>ทะเบียนรถ</label><input id="bPlate" placeholder="กข 1234 กทม."></div>
-              <div class="fld"><label>รุ่นรถ</label><input id="bModel" placeholder="BMW X3 2022"></div>
+              <div class="fld"><label>ทะเบียนรถ</label><input id="bPlate" placeholder="กข 1234 กทม." value="${esc(_j?.plate||'')}"></div>
+              <div class="fld"><label>รุ่นรถ</label><input id="bModel" placeholder="BMW X3 2022" value="${esc(_j?.carModel||'')}"></div>
             </div>
             <div class="fgrid c2">
-              <div class="fld"><label>เลขไมล์ (กม.)</label><input id="bMile" inputmode="numeric" placeholder="85000"></div>
+              <div class="fld"><label>เลขไมล์ (กม.)</label><input id="bMile" inputmode="numeric" placeholder="85000" value="${_j?.mileage||''}"></div>`;
+            })()}
               <div class="fld">
                 <label>อ้างอิง Job / ใบแจ้งซ่อม</label>
                 <input id="bRef" value="${bJobId ? esc(S.jobs.find(j=>j.id===bJobId)?.no||'') : ''}"
