@@ -527,7 +527,7 @@ function openReqModal(jid) {
           </div>
           <div style="display:flex;align-items:center;gap:4px">
             <input type="number" min="0" step="${it.unit==='ลิตร'?'0.5':'1'}"
-                   value="${numFmt(it.qty)}" data-rk="${it.k}"
+                   value="${it.qty}" data-rk="${it.k}"
                    style="width:64px;background:var(--ink);border:1px solid var(--ln2);
                           color:var(--fg);border-radius:7px;padding:6px 7px;font-size:.84rem;
                           outline:none;text-align:right">
@@ -666,7 +666,7 @@ function openEditReqModal(jid, reqId) {
         </div>
         <div style="display:flex;align-items:center;gap:4px">
           <input type="number" min="0" step="${it.unit==='ลิตร'?'0.5':'1'}"
-                 value="${numFmt(it.qty)}" data-eidx="${idx}"
+                 value="${it.qty}" data-eidx="${idx}"
                  style="width:64px;background:var(--ink);border:1px solid var(--ln2);
                         color:var(--fg);border-radius:7px;padding:6px 7px;font-size:.84rem;
                         outline:none;text-align:right">

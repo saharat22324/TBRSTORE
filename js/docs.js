@@ -155,13 +155,13 @@ function buildInvoiceHTML(d) {
           <div class="doc-words">(${bahtWords(d.grand)})</div>
           <div style="display:flex;justify-content:flex-end">
             <div class="doc-sum-box">
-              <div class="dsr"><span>จำนวนเงิน</span><span>${THB(d.sub)}</span></div>
-              <div class="dsr"><span>ส่วนลด</span><span>${d.disc > 0 ? THB(d.disc) : '—'}</span></div>
-              <div class="dsr"><span>หลังหักส่วนลด</span><span>${THB(Math.max(0, d.sub - d.disc))}</span></div>
-              <div class="dsr"><span>Vat 7%</span><span>${d.vat > 0 ? THB(d.vat) : '—'}</span></div>
+              <div class="dsr"><span>จำนวนเงิน</span><span>${R(d.sub)}</span></div>
+              <div class="dsr"><span>ส่วนลด</span><span>${d.disc > 0 ? R(d.disc) : '—'}</span></div>
+              <div class="dsr"><span>หลังหักส่วนลด</span><span>${R(Math.max(0, d.sub - d.disc))}</span></div>
+              <div class="dsr"><span>Vat 7%</span><span>${d.vat > 0 ? R(d.vat) : '—'}</span></div>
               <div class="dsr tot">
                 <span class="lbl">จำนวนเงินทั้งสิ้น</span>
-                <span class="lv">${THB(d.grand)}</span>
+                <span class="lv">${R(d.grand)}</span>
               </div>
             </div>
           </div>
@@ -266,10 +266,10 @@ function buildQuoteHTML(d) {
           </div>
           <div style="display:flex;justify-content:flex-end">
             <div class="doc-sum-box">
-              <div class="dsr"><span>ยอดรวม</span><span>${THB(d.sub)}</span></div>
-              <div class="dsr"><span>ส่วนลด</span><span>${d.disc > 0 ? THB(d.disc) : '—'}</span></div>
-              <div class="dsr"><span>VAT 7%</span><span>${d.vat > 0 ? THB(d.vat) : '—'}</span></div>
-              <div class="dsr tot"><span class="lbl">รวมสุทธิ</span><span class="lv">${THB(d.grand)}</span></div>
+              <div class="dsr"><span>ยอดรวม</span><span>${R(d.sub)}</span></div>
+              <div class="dsr"><span>ส่วนลด</span><span>${d.disc > 0 ? R(d.disc) : '—'}</span></div>
+              <div class="dsr"><span>VAT 7%</span><span>${d.vat > 0 ? R(d.vat) : '—'}</span></div>
+              <div class="dsr tot"><span class="lbl">รวมสุทธิ</span><span class="lv">${R(d.grand)}</span></div>
             </div>
           </div>
         </div>

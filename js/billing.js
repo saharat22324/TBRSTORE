@@ -511,16 +511,8 @@ function openOrderItemModal() {
 
     bItems.push({ k: ++bKey, sid: null, nm, unit, qty, price: sell, itemType: 'order', cost });
     closeMod();
-
-    /* Re-render billing rows (panel already rendered) */
-    const box = sel('biRows');
-    if (box) {
-      /* Trigger re-render by re-binding */
-      const ev = new CustomEvent('rerender');
-      box.dispatchEvent(ev);
-    }
     renderPanel();
-    showToast(`เพิ่ม ${nm} ${THB(sell)}/ชิ้น · ทุน ${THB(cost)} (+37%)`);
+    showToast(`เพิ่ม ${nm} ขาย ${THB(sell)} · ทุน ${THB(cost)} (+37%)`);
   });
 
   bindModalClose(ov, '#mCl', '#mCl2');
@@ -677,14 +669,5 @@ function openBillFromJob(jid) {
   /* Navigate to billing tab */
   currentTab = 'billing';
   renderNav();
-  renderPanel();
-
-  /* Auto-fill customer / vehicle fields */
-  setTimeout(() => {
-    const fill = (id, val) => { const el = sel(id); if (el) el.value = val || ''; };
-    fill('bCust',  j.custName);
-    fill('bPlate', j.plate);
-    fill('bModel', j.carModel);
-    fill('bMile',  j.mileage || '');
-  }, 50);
+  renderPanel(); /* billingHTML() pre-fills customer fields from bJobId */
 }
