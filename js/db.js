@@ -243,6 +243,33 @@ function convertSupabaseToState(dbData) {
 }
 
 /**
+ * Repair invoice items where cost > price (sell) — impossible margin, data entry error.
+ * Recalculates cost as Math.round(price / 1.37) for affected items.
+ */
+function repairInvoiceCosts() {
+  let repaired = 0;
+  for (const inv of (S.invoices || [])) {
+    let changed = false;
+    for (const it of (inv.items || [])) {
+      if (it.cost > 0 && it.price > 0 && it.cost > it.price) {
+        const fixed = Math.round(it.price / 1.37);
+        console.log(`[DB] 🔧 Repair cost: ${it.name} cost=${it.cost}→${fixed} (sell=${it.price})`);
+        it.cost = fixed;
+        changed = true;
+        repaired++;
+      }
+    }
+    if (changed) {
+      inv.totalCost = (inv.items || []).reduce((s, it) => s + ((it.qty || 0) * (it.cost || 0)), 0);
+    }
+  }
+  if (repaired > 0) {
+    localStorage.setItem(DB_KEY, JSON.stringify(S));
+    console.log(`[DB] ✅ Repaired ${repaired} item costs`);
+  }
+}
+
+/**
  * บันทึกข้อมูลทั้งหมด
  * Note: Individual operations (addCustomer, addVehicle, etc.) already save to Supabase
  * This function serves as a backup to localStorage and triggers sync
@@ -383,6 +410,8 @@ function mergeLocalStorageIntoS() {
         syncLocalToSupabase().catch(e => console.warn('[DB] Background sync failed:', e));
       }
     }
+    // Always repair any invoice items where cost > sell (data entry errors)
+    repairInvoiceCosts();
   } catch (e) {
     console.warn('[DB] mergeLocalStorageIntoS error:', e);
   }
