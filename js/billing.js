@@ -414,18 +414,18 @@ function openOrderItemModal() {
           <div class="fld"><label>จำนวน</label><input id="oimQty" type="number" min="1" value="1"></div>
         </div>
         <div class="fgrid c2 mb4">
-          ${hasPermission('canViewCost') ? `
           <div class="fld">
             <label>ราคาทุน (฿) *</label>
             <input id="oimCost" type="number" min="0" placeholder="0" inputmode="numeric">
-          </div>` : ''}
+          </div>
           <div class="fld">
             <label>
               ราคาขาย (฿)
               <span id="oimPctHint" style="color:var(--gold);font-family:'JetBrains Mono',monospace;
                                           font-size:.7rem"></span>
             </label>
-            <input id="oimSell" type="number" min="0" placeholder="คำนวณอัตโนมัติ">
+            <input id="oimSell" type="number" min="0" placeholder="คำนวณอัตโนมัติ" readonly
+                   style="background:var(--p3);color:var(--gold);font-weight:700">
             <div class="hint ok" id="oimAutoHint" style="display:none">
               ทุน × 1.37 — แก้ไขได้ถ้าต้องการ
             </div>
@@ -454,8 +454,7 @@ function openOrderItemModal() {
 
   /* ── Live calculation ── */
   function calcSell() {
-    const costEl = sel('oimCost');
-    const cost = costEl ? parseFloat(costEl.value) || 0 : 0;
+    const cost = parseFloat(sel('oimCost')?.value) || 0;
     const auto = Math.round(cost * MARKUP_RATE);
 
     if (cost > 0) {
@@ -471,8 +470,7 @@ function openOrderItemModal() {
   }
 
   function updateSummary() {
-    const costEl = sel('oimCost');
-    const cost   = costEl ? parseFloat(costEl.value) || 0 : 0;
+    const cost   = parseFloat(sel('oimCost')?.value) || 0;
     const sell   = parseFloat(sv('oimSell')) || 0;
     const profit = fmt(sell - cost);
     const oS1 = sel('oS1');
@@ -485,22 +483,25 @@ function openOrderItemModal() {
     }
   }
 
-  const costInput = sel('oimCost');
-  if (costInput) costInput.addEventListener('input', calcSell);
-  sel('oimSell').addEventListener('input', updateSummary);
+  /* admin สามารถ override ราคาขายเองได้ */
+  sel('oimCost').addEventListener('input', calcSell);
+  if (hasPermission('canViewCost')) {
+    sel('oimSell').removeAttribute('readonly');
+    sel('oimSell').style.background = '';
+    sel('oimSell').style.fontWeight  = '';
+    sel('oimSell').addEventListener('input', updateSummary);
+  }
 
   /* ── Confirm add ── */
   ov.querySelector('#mOk').addEventListener('click', () => {
     const nm   = sv('oimNm').trim();
-    const costEl = sel('oimCost');
-    const cost = costEl ? parseFloat(costEl.value) || 0 : 0;
+    const cost = parseFloat(sel('oimCost')?.value) || 0;
     const sell = parseFloat(sv('oimSell')) || 0;
     const qty  = parseFloat(sv('oimQty')) || 1;
     const unit = sv('oimUnit') || 'ชิ้น';
 
-    if (!nm)   return showToast('กรุณากรอกชื่ออะไหล่', 'err');
-    if ( hasPermission('canViewCost') && cost <= 0) return showToast('กรุณากรอกราคาทุน', 'err');
-    if (!hasPermission('canViewCost') && sell <= 0) return showToast('กรุณากรอกราคาขาย', 'err');
+    if (!nm)        return showToast('กรุณากรอกชื่ออะไหล่', 'err');
+    if (cost <= 0)  return showToast('กรุณากรอกราคาทุน', 'err');
 
     bItems.push({ k: ++bKey, sid: null, nm, unit, qty, price: sell, itemType: 'order', cost });
     closeMod();
