@@ -317,6 +317,18 @@ function mergeLocalStorageIntoS() {
         S.invoices.push(inv);
         toSync.invoices.push(inv);
         merged++;
+      } else if (inv.no && sbInvNos.has(inv.no)) {
+        // Invoice exists in Supabase but item costs may be 0 — merge costs from localStorage
+        const sInv = S.invoices.find(i => i.no === inv.no);
+        if (sInv && (inv.items || []).length > 0) {
+          const localCostSum = (inv.items || []).reduce((s, it) => s + ((it.qty || 0) * (it.cost || 0)), 0);
+          const sCostSum = (sInv.items || []).reduce((s, it) => s + ((it.qty || 0) * (it.cost || 0)), 0);
+          if (localCostSum > 0 && sCostSum === 0) {
+            // Use localStorage items (have costs) over Supabase items (cost=0)
+            sInv.items = inv.items;
+            merged++;
+          }
+        }
       }
     }
 
