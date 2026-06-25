@@ -12,9 +12,11 @@ let reportMonth = nowYM(); // yyyy-MM ที่แสดงอยู่
 let reportTab   = 'summary'; // 'summary' | 'daily'
 
 /* ── Daily tab filter state ── */
-let _dailyFrom = '';
-let _dailyTo   = '';
-let _dailyType = 'all'; // 'all' | 'oil' | 'parts'
+let _dailyFrom   = '';
+let _dailyTo     = '';
+let _dailyType   = 'all'; // 'all' | 'oil' | 'parts'
+let _dailyCust   = '';    // customer name filter
+let _dailyPlate  = '';    // vehicle plate filter
 
 /* ══════════════════════════════════════
    HTML
@@ -297,10 +299,19 @@ function dailyTransactionHTML() {
   const from    = _dailyFrom || fromDef;
   const to      = _dailyTo   || toDef;
 
-  /* ── Filter invoices by date range ── */
+  /* ── Unique customers + plates for dropdowns ── */
+  const allCusts  = [...new Set(S.invoices.map(i => i.cust).filter(Boolean))].sort();
+  const allPlates = _dailyCust
+    ? [...new Set(S.invoices.filter(i => i.cust === _dailyCust).map(i => i.plate).filter(Boolean))].sort()
+    : [...new Set(S.invoices.map(i => i.plate).filter(Boolean))].sort();
+
+  /* ── Filter invoices by date range + customer + plate ── */
   const filtered = S.invoices.filter(inv => {
     const d = new Date(inv.ts).toISOString().slice(0,10);
-    return d >= from && d <= to;
+    if (d < from || d > to) return false;
+    if (_dailyCust  && inv.cust  !== _dailyCust)  return false;
+    if (_dailyPlate && inv.plate !== _dailyPlate) return false;
+    return true;
   });
 
   /* ── Group items by day ── */
@@ -477,6 +488,27 @@ function dailyTransactionHTML() {
             <button class="btn btn-sm ${_dailyType==='parts'?'btn-red':'btn-ghost'}" data-dtype="parts">🔧 อะไหล่</button>
           </div>
         </div>
+        <div class="flex gap12 mt8" style="flex-wrap:wrap;align-items:flex-end">
+          <div class="fld" style="min-width:140px;margin:0">
+            <label style="font-size:.75rem;color:var(--fg2);display:block;margin-bottom:3px">ลูกค้า</label>
+            <select id="dailyCust"
+              style="background:var(--ink);border:1px solid var(--ln2);color:var(--fg);
+                     border-radius:8px;padding:7px 10px;font-size:.85rem;outline:none;width:100%">
+              <option value="">— ทั้งหมด —</option>
+              ${allCusts.map(c => `<option value="${esc(c)}" ${_dailyCust===c?'selected':''}>${esc(c)}</option>`).join('')}
+            </select>
+          </div>
+          <div class="fld" style="min-width:130px;margin:0">
+            <label style="font-size:.75rem;color:var(--fg2);display:block;margin-bottom:3px">รถ (ทะเบียน)</label>
+            <select id="dailyPlate"
+              style="background:var(--ink);border:1px solid var(--ln2);color:var(--fg);
+                     border-radius:8px;padding:7px 10px;font-size:.85rem;outline:none;width:100%">
+              <option value="">— ทั้งหมด —</option>
+              ${allPlates.map(p => `<option value="${esc(p)}" ${_dailyPlate===p?'selected':''}>${esc(p)}</option>`).join('')}
+            </select>
+          </div>
+          ${(_dailyCust || _dailyPlate) ? `<button class="btn btn-ghost btn-sm" id="dailyClearFilter">✕ ล้างตัวกรอง</button>` : ''}
+        </div>
       </div>
     </div>
 
@@ -520,8 +552,11 @@ function bindReport() {
 
   /* ── Daily tab bindings ── */
   if (reportTab === 'daily') {
-    sel('dailyFrom')?.addEventListener('change', e => { _dailyFrom = e.target.value; renderPanel(); });
-    sel('dailyTo')?.addEventListener('change',   e => { _dailyTo   = e.target.value; renderPanel(); });
+    sel('dailyFrom')?.addEventListener('change',  e => { _dailyFrom  = e.target.value; renderPanel(); });
+    sel('dailyTo')?.addEventListener('change',    e => { _dailyTo    = e.target.value; renderPanel(); });
+    sel('dailyCust')?.addEventListener('change',  e => { _dailyCust  = e.target.value; _dailyPlate = ''; renderPanel(); });
+    sel('dailyPlate')?.addEventListener('change', e => { _dailyPlate = e.target.value; renderPanel(); });
+    sel('dailyClearFilter')?.addEventListener('click', () => { _dailyCust = ''; _dailyPlate = ''; renderPanel(); });
 
     document.querySelectorAll('[data-dtype]').forEach(b =>
       b.addEventListener('click', () => { _dailyType = b.dataset.dtype; renderPanel(); })
