@@ -85,32 +85,34 @@ function billingHTML() {
           <div class="card-h">
             ${svgI('<circle cx="12" cy="8" r="4"/><path d="M4 21a8 8 0 0 1 16 0"/>')}
             <h2>ข้อมูล</h2>
-            ${bJobId
-              ? `<span class="badge b-teal" style="margin-left:4px">
-                   Job: ${esc(S.jobs.find(j=>j.id===bJobId)?.no||'')}
-                 </span>`
-              : ''}
+            ${bEditInvNo
+              ? `<span class="badge b-warn" style="margin-left:4px">✏️ แก้ไข: ${esc(bEditInvNo)}</span>`
+              : bJobId
+                ? `<span class="badge b-teal" style="margin-left:4px">
+                     Job: ${esc(S.jobs.find(j=>j.id===bJobId)?.no||'')}
+                   </span>`
+                : ''}
           </div>
           <div class="card-b">
             ${(() => {
               const _j = bJobId ? S.jobs.find(j => j.id === bJobId) : null;
               const _c = _j?.custId ? S.customers.find(c => c.id === _j.custId) : null;
-              const _v = (id => id ? S.vehicles.find(v => v.id === id) : null)(_j?.vehicleId);
+              const ed = bEditData || {};  // prefill เมื่อแก้ไขบิล
               return `
             <div class="fgrid c2 mb12">
-              <div class="fld"><label>ชื่อลูกค้า</label><input id="bCust" placeholder="ชื่อ-นามสกุล" value="${esc(_j?.custName||'')}"></div>
-              <div class="fld"><label>เบอร์โทร</label><input id="bPhone" placeholder="08X-XXXXXXX" value="${esc(_c?.phone||'')}"></div>
+              <div class="fld"><label>ชื่อลูกค้า</label><input id="bCust" placeholder="ชื่อ-นามสกุล" value="${esc(ed.cust || _j?.custName||'')}"></div>
+              <div class="fld"><label>เบอร์โทร</label><input id="bPhone" placeholder="08X-XXXXXXX" value="${esc(ed.phone || _c?.phone||'')}"></div>
             </div>
             <div class="fgrid c2 mb12">
-              <div class="fld"><label>ทะเบียนรถ</label><input id="bPlate" placeholder="กข 1234 กทม." value="${esc(_j?.plate||'')}"></div>
-              <div class="fld"><label>รุ่นรถ</label><input id="bModel" placeholder="BMW X3 2022" value="${esc(_j?.carModel||'')}"></div>
+              <div class="fld"><label>ทะเบียนรถ</label><input id="bPlate" placeholder="กข 1234 กทม." value="${esc(ed.plate || _j?.plate||'')}"></div>
+              <div class="fld"><label>รุ่นรถ</label><input id="bModel" placeholder="BMW X3 2022" value="${esc(ed.model || _j?.carModel||'')}"></div>
             </div>
             <div class="fgrid c2">
-              <div class="fld"><label>เลขไมล์ (กม.)</label><input id="bMile" inputmode="numeric" placeholder="85000" value="${_j?.mileage||''}"></div>`;
+              <div class="fld"><label>เลขไมล์ (กม.)</label><input id="bMile" inputmode="numeric" placeholder="85000" value="${ed.mileage || _j?.mileage||''}"></div>`;
             })()}
               <div class="fld">
                 <label>อ้างอิง Job / ใบแจ้งซ่อม</label>
-                <input id="bRef" value="${bJobId ? esc(S.jobs.find(j=>j.id===bJobId)?.no||'') : ''}"
+                <input id="bRef" value="${esc(bEditData?.ref || (bJobId ? esc(S.jobs.find(j=>j.id===bJobId)?.no||'') : ''))}"
                        placeholder="JOB-…">
               </div>
             </div>
@@ -158,7 +160,7 @@ function billingHTML() {
 
             <div class="fld mt12">
               <label>หมายเหตุในบิล</label>
-              <textarea id="bNote" rows="2" placeholder="หมายเหตุ…"></textarea>
+              <textarea id="bNote" rows="2" placeholder="หมายเหตุ…">${bEditData ? esc(bEditData.note || '') : ''}</textarea>
             </div>
           </div>
         </div>
@@ -190,7 +192,7 @@ function billingHTML() {
         <div class="flex gap8 mb12" style="flex-direction:column">
           <button class="btn btn-gold" id="bSaveInv" style="width:100%;justify-content:center" disabled>
             ${svgI('<path d="M6 9V2h12v7M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><rect x="6" y="14" width="12" height="8"/>')}
-            บันทึก &amp; ออกใบเสร็จ
+            ${bEditInvNo ? 'บันทึกการแก้ไข' : 'บันทึก &amp; ออกใบเสร็จ'}
           </button>
           <button class="btn btn-teal"  id="bSaveQt" style="width:100%;justify-content:center" disabled>
             ${svgI('<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/>')}
@@ -380,6 +382,7 @@ function bindBilling() {
   sel('bClear')?.addEventListener('click', () => {
     if (bItems.length && !confirm('ล้างบิลทั้งหมด?')) return;
     bItems = []; bKey = 0; bDisc = 0; bVat = false; bJobId = null;
+    bEditInvNo = null; bEditData = null;
     renderPanel();
   });
 
@@ -537,9 +540,80 @@ async function saveInvoice() {
   const ref   = sv('bRef');
   const note  = sv('bNote');
   const phone = sv('bPhone');
-
-  const no        = nextSeqNo('inv').replace('inv-','INV-');
   const totalCost = bItems.reduce((s, it) => s + fmt(it.qty * (it.cost || 0)), 0);
+
+  const newItems = bItems.map(it => ({
+    name: it.nm || '-', unit: it.unit,
+    qty: fmt(it.qty), price: it.price,
+    cost: it.cost || 0, itemType: it.itemType, sid: it.sid,
+  }));
+
+  /* ── EDIT MODE — แก้ไขบิลที่มีอยู่ ── */
+  if (bEditInvNo) {
+    const existing = S.invoices.find(x => x.no === bEditInvNo);
+    if (!existing) { showToast('ไม่พบบิลที่ต้องการแก้ไข', 'err'); return; }
+
+    // 1. คืนสต๊อก items เดิมก่อน
+    (existing.items || []).forEach(it => {
+      if (it.sid && it.itemType === 'stock') {
+        const m = S.stockItems.find(x => x.id === it.sid);
+        if (m) {
+          m.qty  = fmt(m.qty  + it.qty);
+          m.used = fmt(Math.max(0, (m.used || 0) - it.qty));
+        }
+      }
+    });
+
+    // 2. ตัดสต๊อก items ใหม่
+    bItems.forEach(it => {
+      if (it.sid && it.itemType === 'stock') {
+        const m = S.stockItems.find(x => x.id === it.sid);
+        if (m) {
+          m.qty  = fmt(m.qty  - it.qty);
+          m.used = fmt((m.used || 0) + it.qty);
+          if (typeof addToLedger === 'function')
+            addToLedger(m.id, 'out', it.qty, 'แก้ไขบิล ' + existing.no);
+          if (useSupabase && typeof updateStockBySku === 'function')
+            updateStockBySku(m.id, m.qty).catch(e => console.warn('[Billing] stock sync:', e));
+        }
+      }
+    });
+
+    // 3. อัปเดต invoice object (เก็บ no, ts, jobId, paid, id เดิม)
+    Object.assign(existing, {
+      cust, phone, plate, model, mileage: mile, ref, note,
+      items: newItems, sub, disc: bDisc, vat, grand, totalCost,
+    });
+
+    // 4. Sync to Supabase
+    if (useSupabase && existing.id && typeof updateInvoiceFull === 'function') {
+      updateInvoiceFull(
+        existing.id,
+        { sub, disc: bDisc, vat, grand, cust, plate, phone, model, note },
+        bItems.map(it => ({
+          type: it.itemType || 'service',
+          stockItemId: it.itemType === 'stock'   ? it.sid : null,
+          serviceId:   it.itemType === 'service' ? it.sid : null,
+          description: it.nm, quantity: it.qty, unitPrice: it.price,
+          costPrice: it.cost || 0, total: fmt(it.qty * it.price), note: '',
+        }))
+      ).catch(e => console.warn('[Billing] Supabase edit sync:', e));
+    }
+
+    await saveData();
+    showToast(`แก้ไขบิล ${existing.no} สำเร็จ ✓`, 'ok');
+
+    /* Reset state */
+    bItems = []; bKey = 0; bDisc = 0; bVat = false; bJobId = null;
+    bEditInvNo = null; bEditData = null;
+    renderNav();
+    renderPanel();
+    showDoc('inv', existing);
+    return;
+  }
+
+  /* ── NEW INVOICE — ออกบิลใหม่ ── */
+  const no = nextSeqNo('inv').replace('inv-','INV-');
 
   /* Deduct Stock Items only */
   bItems.forEach(it => {
@@ -572,11 +646,7 @@ async function saveInvoice() {
   const inv = {
     no, ts: Date.now(), jobId: bJobId,
     cust, phone, plate, model, mileage: mile, ref,
-    items: bItems.map(it => ({
-      name: it.nm || '-', unit: it.unit,
-      qty: fmt(it.qty), price: it.price,
-      cost: it.cost || 0, itemType: it.itemType, sid: it.sid,
-    })),
+    items: newItems,
     sub, disc: bDisc, vat, grand, totalCost, note,
     paid: false,
   };
@@ -651,6 +721,7 @@ async function saveQuote() {
   showToast(`ออกใบเสนอราคา ${no} แล้ว`);
 
   bItems = []; bKey = 0; bDisc = 0; bVat = false; bJobId = null;
+  bEditInvNo = null; bEditData = null;
   renderPanel();
   showDoc('qt', qt);
 }
@@ -665,6 +736,7 @@ function openBillFromJob(jid) {
 
   /* Reset billing state */
   bItems = []; bKey = 0; bDisc = 0; bVat = false;
+  bEditInvNo = null; bEditData = null;
   bJobId = jid;
 
   /* Pre-fill from requisitions */

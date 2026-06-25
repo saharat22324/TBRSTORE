@@ -10,11 +10,13 @@ let currentTab = 'dash';
 let settingsTab = 'shop';
 
 /* ── Billing state (persists while open) ── */
-let bItems  = [];
-let bKey    = 0;
-let bDisc   = 0;
-let bVat    = false;
-let bJobId  = null;
+let bItems     = [];
+let bKey       = 0;
+let bDisc      = 0;
+let bVat       = false;
+let bJobId     = null;
+let bEditInvNo = null;   // เลขบิลที่กำลังแก้ไข (null = บิลใหม่)
+let bEditData  = null;   // ข้อมูล prefill เมื่อแก้ไขบิล
 
 /* ══════════════════════════════════════
    SEED DATA — ค่าเริ่มต้นสำหรับระบบใหม่

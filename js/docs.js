@@ -200,6 +200,10 @@ function buildInvoiceActions(d) {
         style="background:#fde8e8;color:var(--bad)">
         ${svgI('<path d="M3 6h18M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/>')} ลบบิล
       </button>
+      <button class="btn-cdoc" id="dEditBill"
+        style="background:#fff8e1;color:#f57f17;border-color:#ffe082">
+        ${svgI('<path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 1 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/>')} แก้ไขบิล
+      </button>
       ${paidBtn}
       <button class="btn-prt" id="dPr">
         ${svgI('<path d="M6 9V2h12v7M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><rect x="6" y="14" width="12" height="8"/>')}
@@ -324,6 +328,43 @@ function bindDocActions(type, data, dc) {
     document.getElementById('pz').innerHTML = dc;
     window.print();
     setTimeout(() => { document.getElementById('pz').innerHTML = ''; }, 600);
+  });
+
+  /* Edit invoice — load into billing form */
+  ov.querySelector('#dEditBill')?.addEventListener('click', () => {
+    const inv = S.invoices.find(x => x.no === data.no);
+    if (!inv) return;
+
+    // โหลด items กลับเข้าฟอร์ม billing
+    bItems = (inv.items || []).map(it => ({
+      k: ++bKey,
+      sid:      it.sid || null,
+      nm:       it.name || '',
+      unit:     it.unit || '',
+      qty:      it.qty  || 1,
+      price:    it.price || 0,
+      itemType: it.itemType || 'other',
+      cost:     it.cost || 0,
+    }));
+    bDisc      = inv.disc || 0;
+    bVat       = (inv.vat || 0) > 0;
+    bJobId     = inv.jobId || null;
+    bEditInvNo = inv.no;
+    bEditData  = {
+      cust:    inv.cust    || '',
+      phone:   inv.phone   || '',
+      plate:   inv.plate   || '',
+      model:   inv.model   || '',
+      mileage: inv.mileage || '',
+      ref:     inv.ref     || '',
+      note:    inv.note    || '',
+    };
+
+    closeDoc();
+    currentTab = 'billing';
+    renderNav();
+    renderPanel();
+    showToast(`แก้ไขบิล ${inv.no} — แก้รายการแล้วกด บันทึกการแก้ไข`, 'inf');
   });
 
   /* Mark as paid */

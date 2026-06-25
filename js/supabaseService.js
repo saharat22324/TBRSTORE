@@ -620,6 +620,55 @@ async function updateInvoicePaid(invId, paid) {
   }
 }
 
+/**
+ * แก้ไขใบเสร็จ — อัปเดต header + ลบ items เดิม + ใส่ items ใหม่
+ */
+async function updateInvoiceFull(invId, invoiceData, items) {
+  const uuidRe = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+  try {
+    const { error: invErr } = await getSupabase()
+      .from('invoices')
+      .update({
+        subtotal:      invoiceData.sub,
+        discount:      invoiceData.disc,
+        vat_rate:      invoiceData.vat > 0 ? 0.07 : 0,
+        grand_total:   invoiceData.grand,
+        customer_name: invoiceData.cust  || null,
+        plate:         invoiceData.plate || null,
+        phone:         invoiceData.phone || null,
+        car_model:     invoiceData.model || null,
+        notes:         invoiceData.note  || null,
+      })
+      .eq('id', invId);
+    if (invErr) throw invErr;
+
+    // ลบ items เดิม
+    await getSupabase().from('invoice_items').delete().eq('invoice_id', invId);
+
+    // ใส่ items ใหม่
+    if (items.length > 0) {
+      const itemsData = items.map(item => ({
+        invoice_id:    invId,
+        stock_item_id: item.stockItemId && uuidRe.test(item.stockItemId) ? item.stockItemId : null,
+        service_id:    item.serviceId   && uuidRe.test(item.serviceId)   ? item.serviceId   : null,
+        item_type:     item.type        || 'service',
+        description:   item.description || '',
+        quantity:      item.quantity,
+        unit_price:    item.unitPrice,
+        cost_price:    item.costPrice   || 0,
+        total:         item.total,
+        note:          item.note        || '',
+      }));
+      const { error: itemsErr } = await getSupabase().from('invoice_items').insert(itemsData);
+      if (itemsErr) throw itemsErr;
+    }
+    return true;
+  } catch (err) {
+    console.error('[Service] updateInvoiceFull error:', err);
+    return false;
+  }
+}
+
 async function getInvoices() {
   try {
     const { data, error } = await getSupabase()
