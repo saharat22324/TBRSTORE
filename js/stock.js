@@ -421,52 +421,74 @@ function openStockItemModal(id) {
 /* ══════════════════════════════════════
    STOCK LEDGER (บันทึกรับ/ขายรายวัน)
 ══════════════════════════════════════ */
-function openStockLedger() {
-  // Group by date
-  const byDate = {};
-  S.stockLedger.forEach(entry => {
-    if (!byDate[entry.date]) byDate[entry.date] = [];
-    byDate[entry.date].push(entry);
-  });
+function openStockLedger(fromDate, toDate) {
+  const today   = new Date().toISOString().slice(0,10);
+  const from    = fromDate || today;
+  const to      = toDate   || today;
 
-  // Sort dates descending
+  // Filter entries by date range
+  const filtered = S.stockLedger.filter(e => e.date >= from && e.date <= to);
+
+  // Group by date descending
+  const byDate = {};
+  filtered.forEach(e => {
+    if (!byDate[e.date]) byDate[e.date] = [];
+    byDate[e.date].push(e);
+  });
   const dates = Object.keys(byDate).sort().reverse();
-  
+
+  // Grand totals
+  const gIn  = filtered.filter(e => e.type === 'in').reduce((s, e) => s + e.qty, 0);
+  const gOut = filtered.filter(e => e.type === 'out').reduce((s, e) => s + e.qty, 0);
+
   const rows = dates.map(date => {
-    const entries = byDate[date];
-    const inTotal = entries.filter(e => e.type === 'in').reduce((s, e) => s + e.qty, 0);
+    const entries  = byDate[date];
+    const inTotal  = entries.filter(e => e.type === 'in').reduce((s, e) => s + e.qty, 0);
     const outTotal = entries.filter(e => e.type === 'out').reduce((s, e) => s + e.qty, 0);
-    
+
     return `
-      <div class="ledger-day" style="margin-bottom:24px;border:1px solid var(--bd2);border-radius:8px;padding:12px">
-        <div class="fjb mb12" style="padding-bottom:12px;border-bottom:1px solid var(--bd2)">
+      <div style="margin-bottom:14px;border:1px solid var(--ln);border-radius:10px;overflow:hidden">
+        <div class="fjb" style="padding:10px 14px;background:var(--p3);border-bottom:1px solid var(--ln)">
           <div>
-            <div style="font-weight:700;font-size:1.05rem">${formatDate(date)}</div>
-            <div style="font-size:.8rem;color:var(--fg2)">${entries.length} รายการบันทึก</div>
+            <div style="font-weight:700;font-size:.95rem">${formatDate(date)}</div>
+            <div style="font-size:.73rem;color:var(--fg2);margin-top:1px">${entries.length} รายการ</div>
           </div>
-          <div style="text-align:right">
-            <div style="color:var(--grn);font-weight:700">รับเข้า: ${numFmt(inTotal)} ชิ้น</div>
-            <div style="color:var(--gold);font-weight:700">ขายออก: ${numFmt(outTotal)} ชิ้น</div>
-          </div>
-        </div>
-        
-        ${entries.map(e => `
-          <div style="padding:8px;border-bottom:1px solid var(--bd3);display:grid;grid-template-columns:80px 1fr 80px 100px;gap:12px;font-size:.85rem">
-            <div style="font-size:.75rem;color:var(--fg2)">${e.time}</div>
+          <div style="display:flex;gap:16px;text-align:right">
             <div>
-              <div style="font-weight:600">${esc(e.name)}</div>
-              <div style="font-size:.75rem;color:var(--fg2)">
-                ${esc(e.cat)} • ${e.note ? `${esc(e.note)}` : '—'}
+              <div style="font-size:.65rem;color:var(--fg2)">รับเข้า</div>
+              <div style="color:var(--grn);font-weight:700">+${numFmt(inTotal)}</div>
+            </div>
+            <div>
+              <div style="font-size:.65rem;color:var(--fg2)">ขายออก</div>
+              <div style="color:var(--gold);font-weight:700">−${numFmt(outTotal)}</div>
+            </div>
+            <div>
+              <div style="font-size:.65rem;color:var(--fg2)">สุทธิ</div>
+              <div style="font-weight:700;color:${inTotal-outTotal>=0?'var(--grn)':'var(--bad)'}">
+                ${inTotal-outTotal>=0?'+':''}${numFmt(inTotal-outTotal)}
               </div>
             </div>
-            <div style="text-align:center;font-weight:600;color:${e.type==='in'?'var(--grn)':'var(--gold)'};font-size:.95rem">
-              ${e.type==='in' ? '+' : '−'}${numFmt(e.qty)} ${e.unit}
-            </div>
-            <div style="text-align:right;font-size:.75rem;color:var(--fg2)">
-              ${esc(e.user || 'ระบบ')}
-            </div>
           </div>
-        `).join('')}
+        </div>
+        ${entries.map(e => `
+          <div style="padding:8px 14px;border-bottom:1px solid var(--ln3);
+                      display:grid;grid-template-columns:70px 1fr 80px 90px;gap:10px;
+                      font-size:.83rem;align-items:center">
+            <div style="font-size:.72rem;color:var(--fg2);font-family:'JetBrains Mono',monospace">${e.time}</div>
+            <div>
+              <div style="font-weight:600">${esc(e.name)}</div>
+              <div style="font-size:.72rem;color:var(--fg2)">${esc(e.cat||'')}${e.note?' · '+esc(e.note):''}</div>
+            </div>
+            <div style="text-align:center">
+              <span class="badge ${e.type==='in'?'b-grn':'b-gold'}" style="font-size:.68rem">
+                ${e.type==='in'?'รับเข้า':'ขายออก'}
+              </span>
+            </div>
+            <div style="text-align:right;font-weight:600;
+                        color:${e.type==='in'?'var(--grn)':'var(--gold)'}">
+              ${e.type==='in'?'+':'−'}${numFmt(e.qty)} ${e.unit}
+            </div>
+          </div>`).join('')}
       </div>`;
   }).join('');
 
@@ -477,12 +499,61 @@ function openStockLedger() {
         <h3>บันทึกรับสินค้า/ขายออก รายวัน</h3>
         <button class="closex" id="mCl">${svgI('<path d="M18 6 6 18M6 6l12 12"/>')}</button>
       </div>
-      <div class="modal-b" style="max-height:70vh;overflow-y:auto">
-        ${rows.length ? rows : '<div style="text-align:center;padding:24px;color:var(--fg2)">ยังไม่มีบันทึก</div>'}
+      <div class="modal-b" style="padding:14px">
+
+        <div class="flex gap8 mb12" style="flex-wrap:wrap;align-items:flex-end">
+          <div>
+            <div style="font-size:.72rem;color:var(--fg2);margin-bottom:3px">จาก</div>
+            <input type="date" id="slFrom" value="${from}"
+              style="background:var(--ink);border:1px solid var(--ln2);color:var(--fg);
+                     border-radius:8px;padding:7px 10px;font-size:.84rem;outline:none">
+          </div>
+          <div>
+            <div style="font-size:.72rem;color:var(--fg2);margin-bottom:3px">ถึง</div>
+            <input type="date" id="slTo" value="${to}"
+              style="background:var(--ink);border:1px solid var(--ln2);color:var(--fg);
+                     border-radius:8px;padding:7px 10px;font-size:.84rem;outline:none">
+          </div>
+          <button class="btn btn-ghost btn-sm" id="slToday">วันนี้</button>
+          <button class="btn btn-ghost btn-sm" id="slMonth">เดือนนี้</button>
+          <button class="btn btn-ghost btn-sm" id="slAll">ทั้งหมด</button>
+        </div>
+
+        ${filtered.length > 0 ? `
+        <div class="flex gap16 mb12" style="padding:10px 14px;background:var(--p3);border-radius:8px;flex-wrap:wrap">
+          <div><div style="font-size:.67rem;color:var(--fg2)">รายการ</div>
+               <div style="font-weight:700">${filtered.length} รายการ · ${dates.length} วัน</div></div>
+          <div><div style="font-size:.67rem;color:var(--fg2)">รับเข้ารวม</div>
+               <div style="font-weight:700;color:var(--grn)">+${numFmt(gIn)}</div></div>
+          <div><div style="font-size:.67rem;color:var(--fg2)">ขายออกรวม</div>
+               <div style="font-weight:700;color:var(--gold)">−${numFmt(gOut)}</div></div>
+          <div><div style="font-size:.67rem;color:var(--fg2)">สุทธิ</div>
+               <div style="font-weight:700;color:${gIn-gOut>=0?'var(--grn)':'var(--bad)'}">
+                 ${gIn-gOut>=0?'+':''}${numFmt(gIn-gOut)}</div></div>
+        </div>` : ''}
+
+        <div style="max-height:55vh;overflow-y:auto">
+          ${rows || '<div style="text-align:center;padding:32px;color:var(--fg2)">ยังไม่มีบันทึกในช่วงวันที่เลือก</div>'}
+        </div>
       </div>
     </div>`;
-  
+
   openOv('mOv');
+
+  const reopen = () => openStockLedger(sel('slFrom')?.value, sel('slTo')?.value);
+  sel('slFrom')?.addEventListener('change', reopen);
+  sel('slTo')?.addEventListener('change',   reopen);
+  sel('slToday')?.addEventListener('click', () => openStockLedger(today, today));
+  sel('slMonth')?.addEventListener('click', () => {
+    const d = new Date();
+    openStockLedger(`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-01`, today);
+  });
+  sel('slAll')?.addEventListener('click', () => {
+    const all = S.stockLedger.map(e => e.date).filter(Boolean);
+    const min = all.length ? all.reduce((a, b) => a < b ? a : b) : today;
+    openStockLedger(min, today);
+  });
+
   bindModalClose(ov, '#mCl');
 }
 
