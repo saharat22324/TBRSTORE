@@ -8,6 +8,129 @@
 const DB_KEY = 'tbr-system-v1';
 let useSupabase = false;
 let _servicesSynced = false; // one-time flag per session
+let _liveSync      = null;   // polling interval for remote sync
+let _lastSyncTs    = 0;      // debounce timestamp
+
+/* ══════════════════════════════════════
+   LIVE SYNC — ดึงข้อมูลใหม่จาก Supabase
+   เรียกจาก Realtime subscription / polling / visibilitychange
+══════════════════════════════════════ */
+async function syncRemoteData() {
+  if (!useSupabase || !window.supabaseReady || typeof loadAllData !== 'function') return;
+  if (Date.now() - _lastSyncTs < 10000) return; // debounce 10 วิ
+  _lastSyncTs = Date.now();
+
+  try {
+    const data = await loadAllData();
+    if (!data) return;
+
+    const newState = convertSupabaseToState(data);
+    let changed = false;
+
+    // ── Jobs: เพิ่ม job ใหม่ + sync สถานะ ──
+    const jobById = new Map(S.jobs.map(j => [j.id, j]));
+    const jobByNo = new Map(S.jobs.map(j => [j.no,  j]));
+    for (const j of newState.jobs) {
+      if (jobById.has(j.id)) {
+        const ex = jobById.get(j.id);
+        if (ex.status !== j.status) { ex.status = j.status; changed = true; }
+      } else if (!jobByNo.has(j.no)) {
+        S.jobs.push(j); changed = true;
+      }
+    }
+
+    // ── Invoices: เพิ่ม invoice ใหม่ + sync paid ──
+    const invById = new Map(S.invoices.filter(i => i.id).map(i => [i.id, i]));
+    const invByNo = new Map(S.invoices.map(i => [i.no, i]));
+    for (const inv of newState.invoices) {
+      if (inv.id && invById.has(inv.id)) {
+        const ex = invById.get(inv.id);
+        // ถ้าไม่มี _editedAt local ให้ Supabase override paid status
+        if (!ex._editedAt && ex.paid !== inv.paid) { ex.paid = inv.paid; changed = true; }
+      } else if (!invByNo.has(inv.no)) {
+        S.invoices.push(inv); changed = true;
+      }
+    }
+
+    // ── Stock: sync quantity ──
+    const stockById = new Map(S.stockItems.map(i => [i.id, i]));
+    for (const item of newState.stockItems) {
+      if (stockById.has(item.id)) {
+        const ex = stockById.get(item.id);
+        if (ex.qty !== item.qty) { ex.qty = item.qty; changed = true; }
+      }
+    }
+
+    // ── Customers: เพิ่มลูกค้าใหม่ ──
+    const custById = new Set(S.customers.map(c => c.id));
+    for (const c of newState.customers) {
+      if (!custById.has(c.id)) { S.customers.push(c); custById.add(c.id); changed = true; }
+    }
+
+    // ── Vehicles: เพิ่มรถใหม่ ──
+    const vehById = new Set(S.vehicles.map(v => v.id));
+    for (const v of newState.vehicles) {
+      if (!vehById.has(v.id)) { S.vehicles.push(v); vehById.add(v.id); changed = true; }
+    }
+
+    if (changed) {
+      syncSeqFromState();
+      localStorage.setItem(DB_KEY, JSON.stringify(S));
+
+      // Re-render เฉพาะตอนที่ผู้ใช้ไม่กำลังกรอกฟอร์ม
+      const modalOpen    = sel('mOv')?.style.display !== 'none' || sel('dOv')?.style.display !== 'none';
+      const inBillingEdit = currentTab === 'billing' && bItems.length > 0;
+      if (!modalOpen && !inBillingEdit) {
+        renderNav();
+        renderPanel();
+        console.log('[DB] 🔄 Remote data synced & re-rendered');
+      } else {
+        showToast('มีข้อมูลใหม่จากผู้ใช้อื่น ● รีเฟรชเพื่ออัปเดต', 'inf');
+        console.log('[DB] 🔄 Remote changes buffered (user in form)');
+      }
+    }
+  } catch (e) {
+    console.warn('[DB] syncRemoteData error:', e);
+  }
+}
+
+function _onTabVisible() {
+  if (document.visibilityState === 'visible') syncRemoteData();
+}
+
+function startLiveSync() {
+  if (!useSupabase) return;
+
+  // 1. Supabase Realtime — instant push on table changes
+  try {
+    const sbClient = typeof getSupabase === 'function' && getSupabase();
+    if (sbClient?.channel) {
+      sbClient
+        .channel('tbr-live-' + Date.now())
+        .on('postgres_changes', { event: '*', schema: 'public', table: 'jobs'        }, syncRemoteData)
+        .on('postgres_changes', { event: '*', schema: 'public', table: 'invoices'    }, syncRemoteData)
+        .on('postgres_changes', { event: '*', schema: 'public', table: 'stock_items' }, syncRemoteData)
+        .on('postgres_changes', { event: '*', schema: 'public', table: 'customers'   }, syncRemoteData)
+        .on('postgres_changes', { event: '*', schema: 'public', table: 'vehicles'    }, syncRemoteData)
+        .subscribe(status => {
+          if (status === 'SUBSCRIBED')
+            console.log('[DB] ✅ Supabase Realtime เชื่อมต่อแล้ว — sync อัตโนมัติทุก operation');
+        });
+    }
+  } catch (e) {
+    console.warn('[DB] Realtime setup failed (will use polling):', e);
+  }
+
+  // 2. Polling 60 วิ — fallback สำหรับเครื่องที่ Realtime ยังไม่ enabled
+  if (_liveSync) clearInterval(_liveSync);
+  _liveSync = setInterval(syncRemoteData, 60000);
+
+  // 3. Sync เมื่อกลับมาที่แท็บ
+  document.removeEventListener('visibilitychange', _onTabVisible);
+  document.addEventListener('visibilitychange', _onTabVisible);
+
+  console.log('[DB] 🔁 Live sync started (Realtime + polling 60s + visibilitychange)');
+}
 
 /**
  * Sync all seed services to Supabase (upsert by service_code).
@@ -69,6 +192,8 @@ async function loadData() {
           syncSeqFromState();
           // Sync seed services (prices/names) to Supabase in background
           syncSeedServicesToSupabase().catch(e => console.warn('[DB] services sync error:', e));
+          // Start live sync (Realtime + polling + visibilitychange)
+          startLiveSync();
           console.log('[DB] ✅ โหลดจาก Supabase สำเร็จ - ข้อมูลซิงค์ระหว่างผู้ใช้');
           return;
         } else if (data) {
