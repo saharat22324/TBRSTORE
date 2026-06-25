@@ -9,12 +9,14 @@ function dashboardHTML() {
   const ym       = nowYM();
 
   /* ── Monthly invoice stats ── */
+  const calcInvCost = inv => (inv.items || []).reduce((s, it) => s + ((it.qty || 0) * (it.cost || 0)), 0);
+
   const mInv     = S.invoices.filter(i => {
     const d = new Date(i.ts);
     return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}` === ym;
   });
   const mRev     = mInv.reduce((s, i) => s + i.grand, 0);
-  const mCost    = mInv.reduce((s, i) => s + (i.totalCost || 0), 0);
+  const mCost    = mInv.reduce((s, i) => s + calcInvCost(i), 0);
   const mProfit  = mRev - mCost;
   const mAvgBill = mInv.length > 0 ? mRev / mInv.length : 0;
 
@@ -50,7 +52,7 @@ function dashboardHTML() {
       return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}` === m;
     });
     const rev = mSales[i];
-    const cost = inv.reduce((s, x) => s + (x.totalCost || 0), 0);
+    const cost = inv.reduce((s, x) => s + calcInvCost(x), 0);
     const profit = rev - cost;
     const [y, mo] = m.split('-');
     return {y, mo, rev, cost, profit, count: inv.length};
