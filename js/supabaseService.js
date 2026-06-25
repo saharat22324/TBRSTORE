@@ -537,17 +537,23 @@ async function addInvoice(jobId, customerId, vehicleId, items, subtotal, discoun
       window.invoiceCounter = parseInt(counter);
       invNo = `INV-${dateStr}-${counter}`;
     }
+
+    // Validate UUIDs — local IDs (non-UUID) must not be sent as FK references
+    const uuidRe = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+    const safeJobId      = jobId      && uuidRe.test(jobId)      ? jobId      : null;
+    const safeCustomerId = customerId && uuidRe.test(customerId) ? customerId : null;
+    const safeVehicleId  = vehicleId  && uuidRe.test(vehicleId)  ? vehicleId  : null;
     
-    console.log('[Service] Creating invoice:', invNo);
+    console.log('[Service] Creating invoice:', invNo, '| job:', safeJobId, '| cust:', safeCustomerId);
     
     // Create invoice
     const { data: invoice, error: invErr } = await getSupabase()
       .from('invoices')
       .insert([{
         invoice_number: invNo || '',
-        job_id: jobId,
-        customer_id: customerId,
-        vehicle_id: vehicleId,
+        job_id: safeJobId,
+        customer_id: safeCustomerId,
+        vehicle_id: safeVehicleId,
         subtotal,
         discount,
         vat,
@@ -564,8 +570,8 @@ async function addInvoice(jobId, customerId, vehicleId, items, subtotal, discoun
     const itemsData = items.map(item => ({
       invoice_id: invoice.id,
       item_type: item.type,
-      stock_item_id: item.stockItemId || null,
-      service_id: item.serviceId || null,
+      stock_item_id: item.stockItemId && uuidRe.test(item.stockItemId) ? item.stockItemId : null,
+      service_id:    item.serviceId   && uuidRe.test(item.serviceId)   ? item.serviceId   : null,
       description: item.description,
       quantity: item.quantity,
       unit_price: item.unitPrice,
