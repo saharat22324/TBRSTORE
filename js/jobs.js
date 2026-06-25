@@ -17,7 +17,7 @@ function jobsHTML() {
   const openJobs = S.jobs.filter(j => j.status < 5).length;
   const closeJobs = S.jobs.filter(j => j.status === 5).length;
   const totalRev = S.jobs.reduce((s, j) => {
-    const inv = S.invoices.find(i => i.jobId === j.id);
+    const inv = S.invoices.find(i => i.jobId === j.id || (j.no && i.ref === j.no));
     return s + (inv ? inv.grand : 0);
   }, 0);
   const avgRev = totalJobs > 0 ? totalRev / totalJobs : 0;
@@ -34,7 +34,7 @@ function jobsHTML() {
 
   const rows = filtered.length
     ? filtered.map(j => {
-        const inv = S.invoices.find(i => i.jobId === j.id);
+        const inv = S.invoices.find(i => i.jobId === j.id || (j.no && i.ref === j.no));
         return `
           <tr data-oj="${j.id}">
             <td class="mono" style="font-size:.75rem;color:var(--teal)">${j.no}</td>
@@ -255,7 +255,7 @@ function openJobDetail(jid) {
   if (!j) return;
 
   const reqs      = S.requisitions.filter(r => r.jobId === jid);
-  const inv       = S.invoices.find(i => i.jobId === jid);
+  const inv       = S.invoices.find(i => i.jobId === jid || (j.no && i.ref === j.no));
   /* use inv.totalCost (includes stock + order + service costs) when invoice exists;
      fall back to requisition cost only when no invoice yet */
   const reqCost   = reqs.reduce((s, r) => s + r.items.reduce((ss, it) => ss + it.qty * (it.cost || 0), 0), 0);

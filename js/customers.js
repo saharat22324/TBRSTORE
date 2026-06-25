@@ -566,7 +566,7 @@ function openVehDetail(vid) {
 
   const histRows = vJobs.length
     ? vJobs.map(j => {
-        const inv = S.invoices.find(i => i.jobId === j.id);
+        const inv = S.invoices.find(i => i.jobId === j.id || (j.no && i.ref === j.no));
         return `
           <tr>
             <td class="mono" style="font-size:.75rem;color:var(--teal)">${j.no}</td>
