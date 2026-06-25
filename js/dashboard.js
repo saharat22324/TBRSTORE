@@ -202,8 +202,8 @@ function bindDashboard() {
         try {
           const freshData = await getInvoices();
           if (freshData && freshData.length > 0) {
-            // Convert raw Supabase format to app state format before assigning
-            S.invoices = freshData.map(i => ({
+            // Convert raw Supabase format to app state format
+            const converted = freshData.map(i => ({
               id: i.id,
               no: i.invoice_number,
               ts: new Date(i.created_at).getTime(),
@@ -231,6 +231,10 @@ function bindDashboard() {
               totalCost: 0,
               note: i.note || ''
             }));
+            // Preserve invoices that only exist in localStorage (not yet synced to Supabase)
+            const supabaseNos = new Set(converted.map(i => i.no).filter(Boolean));
+            const localOnly = S.invoices.filter(i => i.no && !supabaseNos.has(i.no));
+            S.invoices = [...converted, ...localOnly];
             renderPanel();
           }
         } catch(err) {
