@@ -47,6 +47,9 @@ async function syncRemoteData() {
         const ex = invById.get(inv.id);
         // ถ้าไม่มี _editedAt local ให้ Supabase override paid status
         if (!ex._editedAt && ex.paid !== inv.paid) { ex.paid = inv.paid; changed = true; }
+        // sync jobId จาก Supabase ถ้า local มี ID ผิดรูปแบบ
+        const _uuidRe = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+        if (inv.jobId && !_uuidRe.test(ex.jobId)) { ex.jobId = inv.jobId; changed = true; }
       } else if (!invByNo.has(inv.no)) {
         S.invoices.push(inv); changed = true;
       }
@@ -576,11 +579,15 @@ function mergeLocalStorageIntoS() {
 
         // ถ้า local มี _editedAt ที่ใหม่กว่า → ผู้ใช้เพิ่งแก้ไข ให้ใช้ข้อมูล local
         if (inv._editedAt && inv._editedAt > (sInv._editedAt || sInv.ts || 0)) {
-          const keepId  = sInv.id;
-          const keepPaid = sInv.paid;
+          const uuidRe = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+          const keepId    = sInv.id;
+          const keepPaid  = sInv.paid;
+          const keepJobId = sInv.jobId; // คง Supabase job UUID ไว้
           Object.assign(sInv, inv);
           sInv.id   = keepId;    // คง Supabase UUID ไว้
           sInv.paid = keepPaid;  // คงสถานะชำระเงินจาก Supabase ไว้
+          // ถ้า local jobId ไม่ใช่ UUID ให้ใช้ของ Supabase (กรณีสร้างก่อน sync)
+          if (!uuidRe.test(sInv.jobId) && keepJobId) sInv.jobId = keepJobId;
           merged++;
         } else if ((inv.items || []).length > 0) {
           // Merge costs from localStorage (กรณีเก่า)
