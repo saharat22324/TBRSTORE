@@ -342,7 +342,7 @@ async function getJobs() {
   try {
     const { data, error } = await getSupabase()
       .from('jobs')
-      .select('*, job_statuses(name, color), vehicles(plate, brand, model), customers(name)')
+      .select('*, job_statuses(name, color), vehicles(plate, brand, model), customers(name), profiles(full_name)')
       .order('created_at', { ascending: false });
     
     if (error) throw error;

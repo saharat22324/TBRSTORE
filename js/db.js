@@ -310,7 +310,7 @@ function convertSupabaseToState(dbData) {
       carModel: [j.vehicles?.brand, j.vehicles?.model].filter(Boolean).join(' '),
       mileage: j.mileage,
       complaint: j.complaint,
-      assignTo: j.assign_to,
+      assignTo: j.profiles?.full_name || j.assign_to || '',
       status: (j.status_id || 1) - 1,
       note: j.note,
       requisitions: [],
