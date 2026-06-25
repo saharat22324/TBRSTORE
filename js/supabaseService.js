@@ -899,6 +899,62 @@ async function getServices() {
   }
 }
 
+/* ══════════════════════════════════════
+   AUDIT LOG
+══════════════════════════════════════ */
+async function addAuditLog(action, entityType, entityId, entityRef, details = {}) {
+  try {
+    if (!currentUser) return;
+    await getSupabase()
+      .from('audit_logs')
+      .insert([{
+        user_id:     currentUser.id,
+        user_name:   currentUser.user_metadata?.full_name || currentUser.email || 'unknown',
+        action,
+        entity_type: entityType,
+        entity_id:   entityId   || null,
+        entity_ref:  entityRef  || null,
+        details
+      }]);
+  } catch (err) {
+    console.warn('[Service] addAuditLog error:', err);
+  }
+}
+
+async function getAuditLogs(limit = 150) {
+  try {
+    const { data, error } = await getSupabase()
+      .from('audit_logs')
+      .select('*')
+      .order('created_at', { ascending: false })
+      .limit(limit);
+    if (error) throw error;
+    return data || [];
+  } catch (err) {
+    console.error('[Service] getAuditLogs error:', err);
+    return [];
+  }
+}
+
+/* ══════════════════════════════════════
+   JOB IMAGE UPLOAD (Supabase Storage)
+══════════════════════════════════════ */
+async function uploadJobImage(jobId, file) {
+  try {
+    const ext  = file.name.split('.').pop().toLowerCase() || 'jpg';
+    const path = `${jobId}/${Date.now()}-${Math.random().toString(36).slice(2)}.${ext}`;
+    const { error } = await getSupabase().storage
+      .from('job-images')
+      .upload(path, file, { contentType: file.type, upsert: false });
+    if (error) throw error;
+    const { data } = getSupabase().storage.from('job-images').getPublicUrl(path);
+    return data.publicUrl || null;
+  } catch (err) {
+    console.error('[Service] uploadJobImage error:', err);
+    return null;
+  }
+}
+
 // ═══════════════════════════════════════════════════════════════
 // EXPORT FUNCTIONS FOR GLOBAL USE (in other JS files)
 // ═══════════════════════════════════════════════════════════════

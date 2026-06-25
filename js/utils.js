@@ -117,6 +117,32 @@ function closeDoc() {
   document.getElementById('dOv').innerHTML = '';
 }
 
+/* ── Confirmation dialog (Promise-based, dark-theme) ── */
+function showConfirm(title, msg, btnLabel = 'ยืนยัน') {
+  return new Promise((resolve) => {
+    const ov = document.getElementById('cfOv');
+    ov.innerHTML = `
+      <div class="modal sm" style="max-width:360px">
+        <div class="modal-h"><h3>${title}</h3></div>
+        <div class="modal-b">
+          <p style="margin:0;color:var(--fg2);line-height:1.6">${msg}</p>
+        </div>
+        <div class="modal-f">
+          <button class="btn btn-ghost" id="cfNo">ยกเลิก</button>
+          <button class="btn btn-red"   id="cfYes">${btnLabel}</button>
+        </div>
+      </div>`;
+    ov.classList.add('open');
+    const done = (v) => {
+      ov.classList.remove('open');
+      ov.innerHTML = '';
+      resolve(v);
+    };
+    ov.querySelector('#cfYes').addEventListener('click', () => done(true));
+    ov.querySelector('#cfNo' ).addEventListener('click', () => done(false));
+  });
+}
+
 /* Close on Escape key */
 document.addEventListener('keydown', (e) => {
   if (e.key === 'Escape') {

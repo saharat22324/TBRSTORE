@@ -2,8 +2,10 @@
    JOBS.JS — Job Card, สถานะงาน, ใบเบิกสต๊อก (Requisition)
    ============================================================ */
 
-let _jobFilter = -1; // -1 = แสดงทั้งหมด
-let _jobSearch  = ''; // ค้นหา
+let _jobFilter   = -1;  // -1 = แสดงทั้งหมด
+let _jobSearch   = '';  // ค้นหา
+let _jobDateFrom = '';  // กรองวันที่: YYYY-MM-DD
+let _jobDateTo   = '';  // กรองวันที่: YYYY-MM-DD
 
 /* ══════════════════════════════════════
    HTML
@@ -15,7 +17,7 @@ function jobsHTML() {
 
   // ── Search filter ──
   const q = _jobSearch.trim().toLowerCase();
-  const displayed = q
+  const qFiltered = q
     ? filtered.filter(j =>
         (j.no         || '').toLowerCase().includes(q) ||
         (j.custName   || '').toLowerCase().includes(q) ||
@@ -25,6 +27,18 @@ function jobsHTML() {
         (j.assignTo   || '').toLowerCase().includes(q)
       )
     : filtered;
+
+  // ── Date range filter ──
+  const dfrom = _jobDateFrom ? new Date(_jobDateFrom).setHours(0,0,0,0) : null;
+  const dto   = _jobDateTo   ? new Date(_jobDateTo).setHours(23,59,59,999) : null;
+  const displayed = (dfrom || dto)
+    ? qFiltered.filter(j => {
+        const t = j.createdAt || j.ts || 0;
+        if (dfrom && t < dfrom) return false;
+        if (dto   && t > dto)   return false;
+        return true;
+      })
+    : qFiltered;
   
   /* ── Stats ── */
   const totalJobs = S.jobs.length;
@@ -105,7 +119,7 @@ function jobsHTML() {
     </div>
 
     <!-- ── Filter, Search and table ── -->
-    <div class="fjb gap8 mb12" style="flex-wrap:wrap">
+    <div class="fjb gap8 mb8" style="flex-wrap:wrap">
       <div class="flex gap8" style="flex-wrap:wrap;flex:1">${filterBtns}</div>
       <div style="position:relative;min-width:220px">
         <input id="jobSearchBox" value="${esc(_jobSearch)}" placeholder="🔍 ค้นหา ชื่อ / ทะเบียน / งาน…"
@@ -115,6 +129,19 @@ function jobsHTML() {
           style="position:absolute;right:8px;top:50%;transform:translateY(-50%);background:none;border:none;
                  color:var(--fg2);cursor:pointer;font-size:.9rem;padding:0;line-height:1">✕</button>` : ''}
       </div>
+    </div>
+    <!-- ── Date range filter ── -->
+    <div class="flex gap8 mb12" style="align-items:center;flex-wrap:wrap">
+      <span style="font-size:.8rem;color:var(--fg2)">ช่วงวันที่:</span>
+      <input type="date" id="jobDateFrom" value="${_jobDateFrom}"
+        style="background:var(--ink);border:1px solid var(--ln2);color:var(--fg);border-radius:8px;
+               padding:5px 9px;font-size:.82rem;outline:none">
+      <span style="color:var(--fg2);font-size:.8rem">—</span>
+      <input type="date" id="jobDateTo" value="${_jobDateTo}"
+        style="background:var(--ink);border:1px solid var(--ln2);color:var(--fg);border-radius:8px;
+               padding:5px 9px;font-size:.82rem;outline:none">
+      ${(_jobDateFrom||_jobDateTo) ? `<button id="jobDateClear" class="btn btn-ghost btn-sm">ล้างวันที่</button>` : ''}
+      ${displayed.length !== filtered.length ? `<span style="font-size:.78rem;color:var(--teal)">แสดง ${displayed.length} / ${S.jobs.length} รายการ</span>` : ''}
     </div>
 
     <div class="tbl-wrap">
@@ -147,6 +174,10 @@ function bindJobs() {
     sb.addEventListener('keydown', e => { if (e.key === 'Escape') { _jobSearch = ''; renderPanel(); } });
   }
   sel('jobSearchClear')?.addEventListener('click', () => { _jobSearch = ''; renderPanel(); });
+
+  sel('jobDateFrom')?.addEventListener('change', e => { _jobDateFrom = e.target.value; renderPanel(); });
+  sel('jobDateTo'  )?.addEventListener('change', e => { _jobDateTo   = e.target.value; renderPanel(); });
+  sel('jobDateClear')?.addEventListener('click', () => { _jobDateFrom = ''; _jobDateTo = ''; renderPanel(); });
 
   document.querySelectorAll('[data-oj]').forEach(el =>
     el.addEventListener('click', () => openJobDetail(el.dataset.oj))
@@ -391,6 +422,36 @@ function openJobDetail(jid) {
         </div>
         ${reqCards}
 
+        <!-- Images -->
+        <div class="card mt12">
+          <div class="card-h" style="justify-content:space-between">
+            <div class="flex gap8">
+              ${svgI('<path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 0 2 2h7"/><circle cx="9" cy="9" r="2"/><path d="m21 15-3.086-3.086a2 2 0 0 0-2.828 0L6 21"/>')}
+              <h2>รูปภาพ</h2>
+            </div>
+            <label class="btn btn-ghost btn-sm" style="cursor:pointer">
+              ${svgI('<path d="M12 5v14M5 12h14"/>')} เพิ่มรูป
+              <input type="file" id="imgUpload" accept="image/*" multiple style="display:none">
+            </label>
+          </div>
+          <div class="card-b">
+            <div id="imgGrid" style="display:flex;flex-wrap:wrap;gap:8px">
+              ${(j.images||[]).length
+                ? (j.images||[]).map((url,idx) => `
+                    <div style="position:relative">
+                      <img src="${esc(url)}" style="width:100px;height:80px;object-fit:cover;
+                           border-radius:7px;cursor:pointer" data-imgurl="${esc(url)}">
+                      <button data-del-img="${idx}" title="ลบ"
+                        style="position:absolute;top:2px;right:2px;background:rgba(0,0,0,.7);border:none;
+                               color:#fff;border-radius:50%;width:20px;height:20px;cursor:pointer;
+                               font-size:.75rem;line-height:1;padding:0">×</button>
+                    </div>`).join('')
+                : '<span style="font-size:.82rem;color:var(--fg3)">ยังไม่มีรูปภาพ</span>'}
+            </div>
+            <div id="imgStatus" style="font-size:.78rem;color:var(--teal);margin-top:4px"></div>
+          </div>
+        </div>
+
         <!-- Billing -->
         <div class="g2 mt12">
           <div class="card">
@@ -410,18 +471,30 @@ function openJobDetail(jid) {
 
   openOv('mOv');
 
-  /* Status buttons */
+  /* Status buttons — with confirmation dialog */
   ov.querySelectorAll('[data-jst]').forEach(b => {
     b.addEventListener('click', async () => {
-      j.status = parseInt(b.dataset.jst);
-      // Sync status to Supabase (status_id = status + 1)
+      const newStatus = parseInt(b.dataset.jst);
+      if (newStatus === j.status) return;
+      const ok = await showConfirm(
+        'เปลี่ยนสถานะงาน',
+        `เปลี่ยนจาก <b>${JOB_STATUS[j.status]}</b> → <b>${JOB_STATUS[newStatus]}</b> ?`,
+        'ยืนยัน'
+      );
+      if (!ok) return;
+      const oldStatus = j.status;
+      j.status = newStatus;
       if (useSupabase && j.id && typeof updateJob === 'function') {
         updateJob(j.id, { status_id: j.status + 1 }).catch(e => console.warn('[Jobs] status sync failed:', e));
+      }
+      if (typeof addAuditLog === 'function') {
+        addAuditLog('JOB_STATUS_CHANGE', 'job', j.id, j.no,
+          { from: JOB_STATUS[oldStatus], to: JOB_STATUS[newStatus] });
       }
       await saveData();
       renderNav();
       renderPanel();
-      openJobDetail(jid); /* re-open with new status */
+      openJobDetail(jid);
       showToast(`อัปเดตสถานะ: ${JOB_STATUS[j.status]}`);
     });
   });
@@ -443,6 +516,52 @@ function openJobDetail(jid) {
 
   ov.querySelector('#viewInvBtn')?.addEventListener('click', () => {
     if (inv) { closeMod(); setTimeout(() => showDoc('inv', inv), 80); }
+  });
+
+  /* Image upload */
+  sel('imgUpload')?.addEventListener('change', async (e) => {
+    const files = Array.from(e.target.files);
+    if (!files.length) return;
+    const st = sel('imgStatus');
+    if (st) st.textContent = `กำลังอัปโหลด ${files.length} รูป…`;
+    const urls = [];
+    for (const f of files) {
+      if (typeof uploadJobImage === 'function') {
+        const url = await uploadJobImage(j.id, f);
+        if (url) urls.push(url);
+      }
+    }
+    if (urls.length) {
+      j.images = [...(j.images || []), ...urls];
+      if (useSupabase && j.id && typeof updateJob === 'function') {
+        updateJob(j.id, { images: j.images }).catch(() => {});
+      }
+      await saveData();
+      openJobDetail(jid);
+      showToast(`เพิ่มรูป ${urls.length} รูปแล้ว`);
+    } else {
+      if (st) st.textContent = 'อัปโหลดไม่สำเร็จ';
+    }
+  });
+
+  /* Image preview (click to enlarge) */
+  ov.querySelectorAll('[data-imgurl]').forEach(img => {
+    img.addEventListener('click', () => {
+      const w = window.open(); w.document.write(`<img src="${img.dataset.imgurl}" style="max-width:100%">`);
+    });
+  });
+
+  /* Delete image */
+  ov.querySelectorAll('[data-del-img]').forEach(btn => {
+    btn.addEventListener('click', async () => {
+      const idx = parseInt(btn.dataset.delImg);
+      j.images = (j.images || []).filter((_,i) => i !== idx);
+      if (useSupabase && j.id && typeof updateJob === 'function') {
+        updateJob(j.id, { images: j.images }).catch(() => {});
+      }
+      await saveData();
+      openJobDetail(jid);
+    });
   });
 
   /* Edit requisition */

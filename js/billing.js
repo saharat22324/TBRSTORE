@@ -631,6 +631,8 @@ async function saveInvoice() {
 
     await saveData();
     showToast(`แก้ไขบิล ${existing.no} สำเร็จ ✓`, 'ok');
+    if (typeof addAuditLog === 'function')
+      addAuditLog('INVOICE_EDIT', 'invoice', existing.id, existing.no, { grand });
 
     /* Reset state */
     bItems = []; bKey = 0; bDisc = 0; bVat = false; bJobId = null;
@@ -715,6 +717,8 @@ async function saveInvoice() {
 
   S.invoices.push(inv);
   await saveData();
+  if (typeof addAuditLog === 'function')
+    addAuditLog('INVOICE_CREATE', 'invoice', inv.id || null, no, { grand });
   showToast(`ออกใบเสร็จ ${no} แล้ว`);
 
   /* Reset billing state */

@@ -18,11 +18,62 @@ function settingsHTML() {
       <button class="btn btn-sm ${settingsTab==='shop'  ?'btn-red':'btn-ghost'}" data-st="shop">ข้อมูลร้าน</button>
       <button class="btn btn-sm ${settingsTab==='svc'   ?'btn-red':'btn-ghost'}" data-st="svc">Service Package</button>
       <button class="btn btn-sm ${settingsTab==='sys'   ?'btn-red':'btn-ghost'}" data-st="sys">ระบบ &amp; ข้อมูล</button>
+      <button class="btn btn-sm ${settingsTab==='audit' ?'btn-red':'btn-ghost'}" data-st="audit">ประวัติการแก้ไข</button>
     </div>
 
-    ${settingsTab === 'shop' ? shopSettingsHTML()    : ''}
-    ${settingsTab === 'svc'  ? serviceSettingsHTML() : ''}
-    ${settingsTab === 'sys'  ? systemSettingsHTML()  : ''}`;
+    ${settingsTab === 'shop'  ? shopSettingsHTML()    : ''}
+    ${settingsTab === 'svc'   ? serviceSettingsHTML() : ''}
+    ${settingsTab === 'sys'   ? systemSettingsHTML()  : ''}
+    ${settingsTab === 'audit' ? auditLogHTML()        : ''}`;
+}
+
+/* ── Sub-tab: ประวัติการแก้ไข (Audit Log) ── */
+function auditLogHTML() {
+  return `
+    <div class="card">
+      <div class="card-h" style="justify-content:space-between">
+        <div class="flex gap8">
+          ${svgI('<path d="M9 12h6m-6 4h6m2 5H7a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5.586a1 1 0 0 1 .707.293l5.414 5.414a1 1 0 0 1 .293.707V19a2 2 0 0 1-2 2z"/>')}
+          <h2>ประวัติการแก้ไข</h2>
+        </div>
+        <button class="btn btn-ghost btn-sm" id="refreshAuditBtn">โหลดใหม่</button>
+      </div>
+      <div class="card-b">
+        <div id="auditLogList"><div style="text-align:center;padding:20px;color:var(--fg3)">กำลังโหลด…</div></div>
+      </div>
+    </div>`;
+}
+
+async function loadAndRenderAuditLog() {
+  const box = sel('auditLogList');
+  if (!box) return;
+  box.innerHTML = '<div style="text-align:center;padding:20px;color:var(--fg3)">กำลังโหลด…</div>';
+  const logs = typeof getAuditLogs === 'function' ? await getAuditLogs(200) : [];
+  if (!logs.length) {
+    box.innerHTML = '<div style="text-align:center;padding:20px;color:var(--fg3)">ยังไม่มีประวัติ</div>';
+    return;
+  }
+  const ACTION_LABEL = {
+    JOB_STATUS_CHANGE: 'เปลี่ยนสถานะ',
+    INVOICE_CREATE:    'ออกบิล',
+    INVOICE_EDIT:      'แก้ไขบิล',
+    JOB_CREATE:        'เปิดงาน',
+    JOB_EDIT:          'แก้ไขงาน',
+  };
+  box.innerHTML = `
+    <table class="tbl" style="font-size:.82rem">
+      <thead><tr><th>วันเวลา</th><th>ผู้ใช้</th><th>การกระทำ</th><th>รายการ</th><th>รายละเอียด</th></tr></thead>
+      <tbody>
+        ${logs.map(l => `
+          <tr>
+            <td style="color:var(--fg2);white-space:nowrap">${new Date(l.created_at).toLocaleString('th-TH',{dateStyle:'short',timeStyle:'short'})}</td>
+            <td>${esc(l.user_name||'—')}</td>
+            <td><span class="badge b-blue">${esc(ACTION_LABEL[l.action]||l.action)}</span></td>
+            <td class="mono" style="font-size:.72rem;color:var(--teal)">${esc(l.entity_ref||l.entity_id||'—')}</td>
+            <td style="color:var(--fg2);font-size:.78rem">${l.details && Object.keys(l.details).length ? JSON.stringify(l.details) : '—'}</td>
+          </tr>`).join('')}
+      </tbody>
+    </table>`;
 }
 
 /* ── Sub-tab: ข้อมูลร้าน ── */
@@ -187,8 +238,17 @@ function bindSettings() {
 
   /* Sub-tab switch */
   document.querySelectorAll('[data-st]').forEach(b =>
-    b.addEventListener('click', () => { settingsTab = b.dataset.st; renderPanel(); })
+    b.addEventListener('click', () => {
+      settingsTab = b.dataset.st;
+      renderPanel();
+      if (settingsTab === 'audit') loadAndRenderAuditLog();
+    })
   );
+
+  /* Auto-load audit log if already on that tab */
+  if (settingsTab === 'audit') loadAndRenderAuditLog();
+
+  sel('refreshAuditBtn')?.addEventListener('click', loadAndRenderAuditLog);
 
   /* ── Shop settings ── */
   sel('saveShopBtn')?.addEventListener('click', async () => {
