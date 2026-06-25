@@ -5,16 +5,37 @@
    - กราฟ 6 เดือน
    - ค่าใช้จ่ายร้าน (เพิ่ม/ลบได้)
    - ตารางบิลพร้อมปุ่มลบ (คืนสต๊อก)
+   - รายการรับ-จ่ายรายวัน (Daily Transaction Log)
    ============================================================ */
 
 let reportMonth = nowYM(); // yyyy-MM ที่แสดงอยู่
+let reportTab   = 'summary'; // 'summary' | 'daily'
+
+/* ── Daily tab filter state ── */
+let _dailyFrom = '';
+let _dailyTo   = '';
+let _dailyType = 'all'; // 'all' | 'oil' | 'parts'
 
 /* ══════════════════════════════════════
    HTML
 ══════════════════════════════════════ */
 function reportHTML() {
 
-  /* ── Filter invoices by month ── */
+  /* ── Tab bar ── */
+  const tabBar = `
+    <div class="flex gap8 mb16" style="border-bottom:1px solid var(--ln);padding-bottom:0">
+      <button class="btn btn-sm ${reportTab==='summary'?'btn-red':'btn-ghost'}"
+              data-rtab="summary" style="border-radius:8px 8px 0 0;border-bottom:none">
+        ${svgI('<path d="M18 20V10M12 20V4M6 20v-6"/>',14)} รายงาน & บัญชี
+      </button>
+      <button class="btn btn-sm ${reportTab==='daily'?'btn-red':'btn-ghost'}"
+              data-rtab="daily" style="border-radius:8px 8px 0 0;border-bottom:none">
+        ${svgI('<path d="M3 3h18v4H3zM5 7v13a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1V7M9 12h6"/>',14)} รายการรับ-จ่ายรายวัน
+      </button>
+    </div>`;
+
+  if (reportTab === 'daily') return tabBar + dailyTransactionHTML();
+
   const mInvs = S.invoices.filter(i => {
     const d = new Date(i.ts);
     return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}` === reportMonth;
@@ -144,7 +165,7 @@ function reportHTML() {
       <td class="r money fc-gold">${THB(total)}</td>
     </tr>`).join('');
 
-  return `
+  return tabBar + `
     <!-- ── Header ── -->
     <div class="fjb mb16">
       <div>
@@ -256,9 +277,299 @@ function reportHTML() {
 }
 
 /* ══════════════════════════════════════
+   DAILY TRANSACTION LOG
+══════════════════════════════════════ */
+function dailyTransactionHTML() {
+
+  /* ── Determine if a stock item is oil ── */
+  const isOilItem = (item) => {
+    const si    = S.stockItems.find(s => s.id === item.sid);
+    const cat   = (si?.cat || '').toLowerCase();
+    const name  = (item.name || '').toLowerCase();
+    return cat.includes('น้ำมัน') || cat.includes('oil') || cat.includes('fluid')
+        || name.includes('น้ำมัน') || name.includes('น้ำยา');
+  };
+
+  /* ── Default date range: current month ── */
+  const today   = new Date();
+  const fromDef = `${today.getFullYear()}-${String(today.getMonth()+1).padStart(2,'0')}-01`;
+  const toDef   = today.toISOString().slice(0,10);
+  const from    = _dailyFrom || fromDef;
+  const to      = _dailyTo   || toDef;
+
+  /* ── Filter invoices by date range ── */
+  const filtered = S.invoices.filter(inv => {
+    const d = new Date(inv.ts).toISOString().slice(0,10);
+    return d >= from && d <= to;
+  });
+
+  /* ── Group items by day ── */
+  const dayMap = {};
+  for (const inv of filtered) {
+    const dayKey  = new Date(inv.ts).toISOString().slice(0,10);
+    const job     = S.jobs.find(j => j.id === inv.jobId);
+    const custName= inv.cust || job?.custName || '—';
+    const jobNo   = job?.no  || '—';
+
+    for (const item of (inv.items || [])) {
+      const isOil  = isOilItem(item);
+      if (_dailyType === 'oil'   && !isOil) continue;
+      if (_dailyType === 'parts' &&  isOil) continue;
+
+      const qty     = item.qty   || 0;
+      const cost    = item.cost  || 0;
+      const price   = item.price || 0;
+      const tCost   = fmt(qty * cost);
+      const tSell   = fmt(qty * price);
+      const profit  = fmt(tSell - tCost);
+
+      if (!dayMap[dayKey]) dayMap[dayKey] = { oil: [], parts: [] };
+      dayMap[dayKey][isOil ? 'oil' : 'parts'].push({
+        name: item.name || '—', qty, unit: item.unit || '',
+        tCost, tSell, profit, jobNo, custName, invNo: inv.no,
+      });
+    }
+  }
+
+  /* ── Grand totals ── */
+  let gCost = 0, gSell = 0, gProfit = 0, gRows = 0;
+  for (const day of Object.values(dayMap)) {
+    const all = [...day.oil, ...day.parts];
+    gRows   += all.length;
+    gCost   += all.reduce((s, i) => s + i.tCost, 0);
+    gSell   += all.reduce((s, i) => s + i.tSell, 0);
+    gProfit += all.reduce((s, i) => s + i.profit, 0);
+  }
+
+  /* ── Day blocks ── */
+  const days = Object.keys(dayMap).sort().reverse();
+
+  const dayBlocks = days.length ? days.map(day => {
+    const { oil, parts } = dayMap[day];
+    const all  = [...oil, ...parts];
+    const dCost   = fmt(all.reduce((s, i) => s + i.tCost, 0));
+    const dSell   = fmt(all.reduce((s, i) => s + i.tSell, 0));
+    const dProfit = fmt(all.reduce((s, i) => s + i.profit, 0));
+    const dDate   = dateStr(new Date(day).getTime() + 12*3600*1000); // noon to avoid tz shift
+
+    const oilRows = oil.length ? oil.map(r => `
+      <tr>
+        <td style="font-size:.83rem">${esc(r.name)}</td>
+        <td class="c" style="font-size:.78rem;color:var(--fg2)">${r.qty}${r.unit?' '+r.unit:' ล.'}</td>
+        ${hasPermission('canViewCost') ? `<td class="r money" style="font-size:.8rem;color:var(--bad)">${THB(r.tCost)}</td>` : ''}
+        <td class="r money fc-gold" style="font-size:.8rem">${THB(r.tSell)}</td>
+        <td class="r" style="font-size:.8rem;font-weight:600;color:${r.profit>=0?'var(--grn)':'var(--bad)'}">${THB(r.profit)}</td>
+        <td class="mono" style="font-size:.7rem;color:var(--teal)">${esc(r.jobNo)}</td>
+        <td style="font-size:.8rem">${esc(r.custName)}</td>
+      </tr>`).join('')
+    : `<tr><td colspan="7" style="text-align:center;color:var(--fg3);font-size:.78rem;padding:6px">—</td></tr>`;
+
+    const partsRows = parts.length ? parts.map(r => `
+      <tr>
+        <td style="font-size:.83rem">${esc(r.name)}</td>
+        ${hasPermission('canViewCost') ? `<td class="r money" style="font-size:.8rem;color:var(--bad)">${THB(r.tCost)}</td>` : ''}
+        <td class="r money fc-gold" style="font-size:.8rem">${THB(r.tSell)}</td>
+        <td class="r" style="font-size:.8rem;font-weight:600;color:${r.profit>=0?'var(--grn)':'var(--bad)'}">${THB(r.profit)}</td>
+        <td class="mono" style="font-size:.7rem;color:var(--teal)">${esc(r.jobNo)}</td>
+        <td style="font-size:.8rem">${esc(r.custName)}</td>
+      </tr>`).join('')
+    : `<tr><td colspan="6" style="text-align:center;color:var(--fg3);font-size:.78rem;padding:6px">—</td></tr>`;
+
+    const costCol = hasPermission('canViewCost');
+
+    return `
+      <div class="card mb12">
+        <div class="card-h" style="background:var(--p3)">
+          <span style="font-size:.95rem;font-weight:700">${dDate}</span>
+          <span style="margin-left:auto;font-size:.78rem;color:var(--fg2)">${all.length} รายการ</span>
+        </div>
+
+        ${_dailyType !== 'parts' ? `
+        <div style="padding:8px 14px 6px">
+          <div style="font-size:.78rem;font-weight:700;color:var(--teal);margin-bottom:4px">
+            🛢️ น้ำมัน (${oil.length} รายการ)
+          </div>
+          <div class="tbl-wrap">
+            <table class="tbl" style="font-size:.82rem">
+              <thead><tr>
+                <th>ชื่อน้ำมัน</th><th class="c">ปริมาณ</th>
+                ${costCol ? '<th class="r">ทุน</th>' : ''}
+                <th class="r">ขาย</th><th class="r">กำไร</th><th>Job</th><th>ลูกค้า</th>
+              </tr></thead>
+              <tbody>${oilRows}</tbody>
+            </table>
+          </div>
+        </div>` : ''}
+
+        ${_dailyType !== 'oil' ? `
+        <div style="padding:${_dailyType==='all'?'2':'8'}px 14px 6px">
+          <div style="font-size:.78rem;font-weight:700;color:var(--warn);margin-bottom:4px">
+            🔧 อะไหล่ / บริการ (${parts.length} รายการ)
+          </div>
+          <div class="tbl-wrap">
+            <table class="tbl" style="font-size:.82rem">
+              <thead><tr>
+                <th>ชื่อรายการ</th>
+                ${costCol ? '<th class="r">ทุน</th>' : ''}
+                <th class="r">ขาย (+37%)</th><th class="r">กำไร</th><th>Job</th><th>ลูกค้า</th>
+              </tr></thead>
+              <tbody>${partsRows}</tbody>
+            </table>
+          </div>
+        </div>` : ''}
+
+        <div style="display:flex;gap:20px;flex-wrap:wrap;padding:10px 14px;
+                    border-top:1px solid var(--ln);background:var(--p3);
+                    border-radius:0 0 10px 10px">
+          ${costCol ? `<div>
+            <div style="font-size:.68rem;color:var(--fg2)">รวมทุน</div>
+            <div class="money" style="font-weight:700;color:var(--bad)">${THB(dCost)}</div>
+          </div>` : ''}
+          <div>
+            <div style="font-size:.68rem;color:var(--fg2)">รวมขาย</div>
+            <div class="money fc-gold" style="font-weight:700">${THB(dSell)}</div>
+          </div>
+          <div>
+            <div style="font-size:.68rem;color:var(--fg2)">รวมกำไร</div>
+            <div class="money" style="font-weight:700;color:${dProfit>=0?'var(--grn)':'var(--bad)'}">${THB(dProfit)}</div>
+          </div>
+        </div>
+      </div>`;
+  }).join('')
+  : `<div class="tbl-empty" style="padding:40px;text-align:center">ไม่มีรายการในช่วงวันที่เลือก</div>`;
+
+  const costCol = hasPermission('canViewCost');
+
+  return `
+    <!-- ── Daily Header ── -->
+    <div class="fjb mb12" style="flex-wrap:wrap;gap:8px">
+      <div>
+        <h1 class="cond" style="font-size:1.4rem;font-weight:800;text-transform:uppercase">
+          รายการรับ-จ่ายรายวัน
+        </h1>
+        <div style="font-size:.8rem;color:var(--fg2);margin-top:2px">${gRows} รายการ</div>
+      </div>
+      <button class="btn btn-ghost btn-sm" id="dailyExportCSV">
+        ${svgI('<path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M7 10l5 5 5-5M12 15V3"/>',13)}
+        Export CSV
+      </button>
+    </div>
+
+    <!-- ── Filters ── -->
+    <div class="card mb16">
+      <div class="card-b" style="padding:12px 14px">
+        <div class="flex gap12" style="flex-wrap:wrap;align-items:flex-end">
+          <div class="fld" style="min-width:130px;margin:0">
+            <label style="font-size:.75rem;color:var(--fg2);display:block;margin-bottom:3px">จาก</label>
+            <input type="date" id="dailyFrom" value="${from}"
+              style="background:var(--ink);border:1px solid var(--ln2);color:var(--fg);
+                     border-radius:8px;padding:7px 10px;font-size:.85rem;outline:none">
+          </div>
+          <div class="fld" style="min-width:130px;margin:0">
+            <label style="font-size:.75rem;color:var(--fg2);display:block;margin-bottom:3px">ถึง</label>
+            <input type="date" id="dailyTo" value="${to}"
+              style="background:var(--ink);border:1px solid var(--ln2);color:var(--fg);
+                     border-radius:8px;padding:7px 10px;font-size:.85rem;outline:none">
+          </div>
+          <div class="flex gap6">
+            <button class="btn btn-sm ${_dailyType==='all'?'btn-red':'btn-ghost'}" data-dtype="all">ทั้งหมด</button>
+            <button class="btn btn-sm ${_dailyType==='oil'?'btn-red':'btn-ghost'}" data-dtype="oil">🛢️ น้ำมัน</button>
+            <button class="btn btn-sm ${_dailyType==='parts'?'btn-red':'btn-ghost'}" data-dtype="parts">🔧 อะไหล่</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ── Grand Summary ── -->
+    ${gRows > 0 ? `
+    <div class="g4 mb16">
+      <div class="stat gold" style="min-height:76px">
+        <div class="sk">${svgI('<path d="M12 1v22M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/>')} ยอดขายรวม</div>
+        <div class="sv" style="font-size:1.3rem">${THB(gSell)}</div>
+      </div>
+      ${costCol ? `<div class="stat red" style="min-height:76px">
+        <div class="sk">${svgI('<path d="M3 3h18v4H3zM5 7v13a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1V7"/>')} ต้นทุนรวม</div>
+        <div class="sv" style="font-size:1.3rem">${THB(gCost)}</div>
+      </div>` : ''}
+      <div class="stat grn" style="min-height:76px">
+        <div class="sk">${svgI('<path d="M18 20V10M12 20V4M6 20v-6"/>')} กำไรรวม</div>
+        <div class="sv" style="font-size:1.3rem">${THB(gProfit)}</div>
+      </div>
+      <div class="stat teal" style="min-height:76px">
+        <div class="sk">${svgI('<path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/>')} จำนวนรายการ</div>
+        <div class="sv" style="font-size:1.3rem">${gRows}</div>
+      </div>
+    </div>` : ''}
+
+    <!-- ── Day Blocks ── -->
+    ${dayBlocks}`;
+}
+
+/* ══════════════════════════════════════
    BIND
 ══════════════════════════════════════ */
 function bindReport() {
+
+  /* ── Tab switching ── */
+  document.querySelectorAll('[data-rtab]').forEach(b =>
+    b.addEventListener('click', () => {
+      reportTab = b.dataset.rtab;
+      renderPanel();
+    })
+  );
+
+  /* ── Daily tab bindings ── */
+  if (reportTab === 'daily') {
+    sel('dailyFrom')?.addEventListener('change', e => { _dailyFrom = e.target.value; renderPanel(); });
+    sel('dailyTo')?.addEventListener('change',   e => { _dailyTo   = e.target.value; renderPanel(); });
+
+    document.querySelectorAll('[data-dtype]').forEach(b =>
+      b.addEventListener('click', () => { _dailyType = b.dataset.dtype; renderPanel(); })
+    );
+
+    sel('dailyExportCSV')?.addEventListener('click', () => {
+      const today   = new Date();
+      const from    = _dailyFrom || `${today.getFullYear()}-${String(today.getMonth()+1).padStart(2,'0')}-01`;
+      const to      = _dailyTo   || today.toISOString().slice(0,10);
+      const isOilIt = (item) => {
+        const si = S.stockItems.find(s => s.id === item.sid);
+        const c  = (si?.cat || '').toLowerCase();
+        const n  = (item.name || '').toLowerCase();
+        return c.includes('น้ำมัน')||c.includes('oil')||c.includes('fluid')||n.includes('น้ำมัน')||n.includes('น้ำยา');
+      };
+      const rows = [];
+      const hdrs = ['วันที่','ประเภท','ชื่อรายการ','ปริมาณ','ทุน','ขาย','กำไร','Job','ลูกค้า','เลขที่บิล'];
+      for (const inv of S.invoices) {
+        const d = new Date(inv.ts).toISOString().slice(0,10);
+        if (d < from || d > to) continue;
+        const job     = S.jobs.find(j => j.id === inv.jobId);
+        const custName= inv.cust || job?.custName || '';
+        const jobNo   = job?.no || '';
+        for (const item of (inv.items || [])) {
+          const isOil = isOilIt(item);
+          if (_dailyType === 'oil' && !isOil) continue;
+          if (_dailyType === 'parts' && isOil) continue;
+          const qty   = item.qty || 0;
+          const tCost = fmt(qty * (item.cost || 0));
+          const tSell = fmt(qty * (item.price || 0));
+          rows.push([
+            d, isOil ? 'น้ำมัน' : 'อะไหล่/บริการ',
+            `"${(item.name||'').replace(/"/g,'""')}"`, qty, tCost, tSell, fmt(tSell-tCost),
+            `"${jobNo.replace(/"/g,'""')}"`, `"${custName.replace(/"/g,'""')}"`, inv.no
+          ].join(','));
+        }
+      }
+      if (!rows.length) return showToast('ไม่มีรายการในช่วงที่เลือก', 'err');
+      const csv = [hdrs.join(','), ...rows].join('\n');
+      const a   = document.createElement('a');
+      a.href    = URL.createObjectURL(new Blob(["\uFEFF"+csv], { type:'text/csv;charset=utf-8' }));
+      a.download = `TBR-รายวัน-${from}-${to}.csv`;
+      a.click();
+      showToast('Export CSV สำเร็จ', 'ok');
+    });
+
+    return; // skip summary bindings
+  }
 
   /* Month selector */
   sel('rMSel')?.addEventListener('input', e => {
