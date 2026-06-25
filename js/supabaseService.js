@@ -587,6 +587,20 @@ async function addInvoice(jobId, customerId, vehicleId, items, subtotal, discoun
   }
 }
 
+async function updateInvoicePaid(invId, paid) {
+  try {
+    const { error } = await getSupabase()
+      .from('invoices')
+      .update({ payment_status: paid })
+      .eq('id', invId);
+    if (error) throw error;
+    return true;
+  } catch (err) {
+    console.warn('[Service] updateInvoicePaid:', err);
+    return false;
+  }
+}
+
 async function getInvoices() {
   try {
     const { data, error } = await getSupabase()

@@ -104,6 +104,12 @@ function reportHTML() {
             ${hasPermission('canViewCost') ? `<td class="r" style="font-size:.82rem;color:var(--bad)">${THB(invCost)}</td>` : ''}
             <td class="r" style="font-weight:700;color:${gp>=0?'var(--grn)':'var(--bad)'}">${THB(gp)}</td>
             <td class="c">
+              <span class="badge ${i.paid ? 'b-grn' : 'b-bad'}" style="cursor:pointer;font-size:.65rem"
+                    data-togglepaid="${i.no}">
+                ${i.paid ? 'ชำระแล้ว' : 'ค้างชำระ'}
+              </span>
+            </td>
+            <td class="c">
               <div class="flex gap6" style="justify-content:center">
                 <button class="btn-icon" data-vi="${i.no}" title="ดูใบเสร็จ">
                   ${svgI('<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>',13)}
@@ -116,7 +122,27 @@ function reportHTML() {
             </td>
           </tr>`;
       }).join('')
-    : `<tr><td colspan="8" class="tbl-empty">ยังไม่มีบิลในเดือนนี้</td></tr>`;
+    : `<tr><td colspan="9" class="tbl-empty">ยังไม่มีบิลในเดือนนี้</td></tr>`;
+
+  /* ── Top customers (all-time) ── */
+  const custSpend = {};
+  for (const inv of S.invoices) {
+    const key = (inv.cust || '').trim();
+    if (key) custSpend[key] = (custSpend[key] || 0) + inv.grand;
+  }
+  const topCusts = Object.entries(custSpend).sort((a,b)=>b[1]-a[1]).slice(0, 10);
+  const topMax   = topCusts[0]?.[1] || 1;
+  const topRows  = topCusts.map(([name, total], idx) => `
+    <tr>
+      <td class="c" style="font-size:.8rem;color:var(--fg2);width:24px">${idx+1}</td>
+      <td style="font-weight:600;font-size:.87rem">${esc(name)}</td>
+      <td style="width:50%">
+        <div style="background:var(--p3);border-radius:99px;height:8px;overflow:hidden">
+          <div style="background:var(--gold);height:8px;width:${Math.round(total/topMax*100)}%;border-radius:99px"></div>
+        </div>
+      </td>
+      <td class="r money fc-gold">${THB(total)}</td>
+    </tr>`).join('');
 
   return `
     <!-- ── Header ── -->
@@ -192,6 +218,10 @@ function reportHTML() {
       <div class="card-h">
         ${svgI('<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/>')}
         <h2>บิลเดือนนี้ (${mInvs.length} บิล)</h2>
+        <button class="btn btn-ghost btn-xs" id="rExportCSV" style="margin-left:auto">
+          ${svgI('<path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M7 10l5 5 5-5M12 15V3"/>',13)}
+          ดาวน์โหลด CSV
+        </button>
       </div>
       <div class="tbl-wrap">
         <table class="tbl">
@@ -201,14 +231,28 @@ function reportHTML() {
               <th class="r">ยอดรวม</th>
               ${hasPermission('canViewCost') ? '<th class="r">COGS</th>' : ''}
               <th class="r">กำไร</th>
+              <th class="c">ชำระ</th>
               <th class="c"></th>
             </tr>
           </thead>
           <tbody>${invRows}</tbody>
         </table>
       </div>
+    </div>
+
+    <!-- ── Top Customers ── -->
+    <div class="card" style="margin-top:16px">
+      <div class="card-h">
+        ${svgI('<circle cx="12" cy="8" r="4"/><path d="M4 21a8 8 0 0 1 16 0"/>')}
+        <h2>ลูกค้ารายใหญ่ (ตลอดเวลา)</h2>
+      </div>
+      <div class="tbl-wrap">
+        <table class="tbl">
+          <thead><tr><th class="c">#</th><th>ชื่อลูกค้า</th><th></th><th class="r">ยอดรวม</th></tr></thead>
+          <tbody>${topRows.length ? topRows : `<tr><td colspan="4" class="tbl-empty">ยังไม่มีข้อมูล</td></tr>`}</tbody>
+        </table>
+      </div>
     </div>`;
-}
 
 /* ══════════════════════════════════════
    BIND
@@ -223,6 +267,41 @@ function bindReport() {
 
   /* Add expense button */
   sel('addExpBtn')?.addEventListener('click', openExpModal);
+
+  /* Export CSV */
+  sel('rExportCSV')?.addEventListener('click', () => {
+    const mInvs2 = S.invoices.filter(i => {
+      const d = new Date(i.ts);
+      return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}` === reportMonth;
+    });
+    if (!mInvs2.length) return showToast('ไม่มีบิลในเดือนนี้', 'err');
+    const header = 'เลขที่,วันที่,ลูกค้า,ทะเบียน,ยอดรวม,ชำระ';
+    const rows = mInvs2.map(i =>
+      `"${i.no}","${dateStr(i.ts)}","${(i.cust||'').replace(/"/g,'""')}","${(i.plate||'').replace(/"/g,'""')}",${i.grand},${i.paid ? 'ชำระแล้ว' : 'ค้างชำระ'}`
+    );
+    const csv = [header, ...rows].join('\n');
+    const a   = document.createElement('a');
+    a.href    = URL.createObjectURL(new Blob(["\uFEFF"+csv], { type:'text/csv;charset=utf-8' }));
+    a.download = `TBR-บิล-${reportMonth}.csv`;
+    a.click();
+    showToast('ดาวน์โหลด CSV แล้ว', 'ok');
+  });
+
+  /* Paid toggle */
+  document.querySelectorAll('[data-togglepaid]').forEach(b =>
+    b.addEventListener('click', async (e) => {
+      e.stopPropagation();
+      const inv = S.invoices.find(x => x.no === b.dataset.togglepaid);
+      if (!inv) return;
+      inv.paid = !inv.paid;
+      if (useSupabase && inv.id && typeof updateInvoicePaid === 'function') {
+        updateInvoicePaid(inv.id, inv.paid).catch(() => {});
+      }
+      await saveData();
+      renderPanel();
+      showToast(`บิล ${inv.no} ${inv.paid ? 'ชำระแล้ว ✓' : 'ยังไม่ชำระ'}`);
+    })
+  );
 
   /* Delete expense */
   document.querySelectorAll('[data-dex]').forEach(b =>

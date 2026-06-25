@@ -111,6 +111,10 @@ function buildInvoiceHTML(d) {
           <span>เลขที่: <b>${d.no}</b></span>
           ${d.ref ? `<span>อ้างอิง: <b>${esc(d.ref)}</b></span>` : ''}
           <span>วันที่: <b>${dateStr(d.ts)} ${timeStr(d.ts)}</b></span>
+          <span style="background:${d.paid ? '#d4edda' : '#f8d7da'};color:${d.paid ? '#155724' : '#721c24'};
+                      padding:2px 8px;border-radius:99px;font-size:.7rem;font-weight:700">
+            ${d.paid ? '✓ ชำระแล้ว' : '● ค้างชำระ'}
+          </span>
         </div>
 
         <!-- Customer + Vehicle boxes -->
@@ -180,6 +184,13 @@ function buildInvoiceHTML(d) {
 }
 
 function buildInvoiceActions(d) {
+  const paidBtn = d.paid
+    ? `<span style="background:#d4edda;color:#155724;padding:6px 14px;border-radius:8px;font-size:.84rem;font-weight:600">
+         ✓ ชำระแล้ว
+       </span>`
+    : `<button class="btn-cdoc" id="dPaid" style="background:#e8f5e9;color:#2e7d32;border-color:#a5d6a7">
+         ${svgI('<path d="M20 6 9 17l-5-5"/>')} ชำระแล้ว
+       </button>`;
   return `
     <div class="doc-acts">
       <button class="btn-cdoc" id="dCl">
@@ -189,6 +200,7 @@ function buildInvoiceActions(d) {
         style="background:#fde8e8;color:var(--bad)">
         ${svgI('<path d="M3 6h18M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/>')} ลบบิล
       </button>
+      ${paidBtn}
       <button class="btn-prt" id="dPr">
         ${svgI('<path d="M6 9V2h12v7M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><rect x="6" y="14" width="12" height="8"/>')}
         พิมพ์ใบเสร็จ
@@ -312,6 +324,20 @@ function bindDocActions(type, data, dc) {
     document.getElementById('pz').innerHTML = dc;
     window.print();
     setTimeout(() => { document.getElementById('pz').innerHTML = ''; }, 600);
+  });
+
+  /* Mark as paid */
+  ov.querySelector('#dPaid')?.addEventListener('click', async () => {
+    const inv = S.invoices.find(x => x.no === data.no);
+    if (!inv) return;
+    inv.paid = true;
+    if (useSupabase && inv.id && typeof updateInvoicePaid === 'function') {
+      updateInvoicePaid(inv.id, true).catch(e => console.warn('[Docs] paid sync:', e));
+    }
+    await saveData();
+    closeDoc();
+    renderPanel();
+    showToast(`บิล ${data.no} ชำระแล้ว ✓`, 'ok');
   });
 
   /* Delete invoice */

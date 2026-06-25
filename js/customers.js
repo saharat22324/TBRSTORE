@@ -14,6 +14,25 @@ function customersHTML() {
   const activeJobs = S.jobs.filter(j => j.custId && j.status < 5).length;
   const totalMileage = vehs.reduce((s, v) => s + (v.mileage || 0), 0);
 
+  /* ── Service Reminders (vehicles with no job in last 90 days) ── */
+  const now90 = Date.now() - 90 * 86400000;
+  const remindRows = vehs.map(v => {
+    const c = S.customers.find(x => x.id === v.custId);
+    const lastJob = S.jobs
+      .filter(j => j.vehicleId === v.id)
+      .sort((a,b) => (b.createdAt||0) - (a.createdAt||0))[0];
+    const lastTs = lastJob?.createdAt || v.createdAt || 0;
+    if (lastTs > now90) return null; // serviced recently
+    const daysAgo = Math.floor((Date.now() - lastTs) / 86400000);
+    return `
+      <tr>
+        <td style="font-weight:700;color:var(--teal);font-family:'JetBrains Mono',monospace">${esc(v.plate)}</td>
+        <td style="font-size:.84rem">${esc(c?.name || '—')}</td>
+        <td style="font-size:.8rem;color:var(--fg2)">${lastJob ? dateStr(lastJob.createdAt) : '—'}</td>
+        <td><span class="badge b-warn">${daysAgo} วันที่แล้ว</span></td>
+      </tr>`;
+  }).filter(Boolean);
+
   const custRows = custs.length
     ? custs.map(c => {
         const vCnt = S.vehicles.filter(v => v.custId === c.id).length;
@@ -26,6 +45,9 @@ function customersHTML() {
             <td class="c"><span class="badge b-gold">${jCnt} งาน</span></td>
             <td class="c">
               <div class="flex gap6" style="justify-content:center">
+                <button class="btn-icon" data-hist="${c.id}" title="ประวัติบริการ">
+                  ${svgI('<circle cx="12" cy="12" r="9"/><path d="M12 8v4l3 2"/>',14)}
+                </button>
                 <button class="btn-icon" data-vc="${c.id}" title="ดูรถของลูกค้า">
                   ${svgI('<path d="M5 11l1.5-4.5A2 2 0 0 1 8.4 5h7.2a2 2 0 0 1 1.9 1.5L19 11"/><path d="M3 11h18v5a1 1 0 0 1-1 1h-1a1 1 0 0 1-1-1v-1H6v1a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1v-5Z"/><circle cx="7" cy="14" r="1"/><circle cx="17" cy="14" r="1"/>',14)}
                 </button>
@@ -130,8 +152,22 @@ function customersHTML() {
           </table>
         </div>
       </div>
+    <!-- ── Service Reminders ── -->
+    ${remindRows.length ? `
+    <div class="card" style="margin-top:16px;border-left:3px solid var(--warn)">
+      <div class="card-h">
+        ${svgI('<path d="M18 8h1a4 4 0 0 1 0 8h-1M2 8h16v9a4 4 0 0 1-4 4H6a4 4 0 0 1-4-4V8zM6 1v3M10 1v3M14 1v3"/>',16)}
+        <h2>แจ้งเตือนบริการที่ครบกำหนด (${remindRows.length} คัน)</h2>
+      </div>
+      <div class="tbl-wrap">
+        <table class="tbl">
+          <thead><tr><th>ทะเบียน</th><th>เจ้าของ</th><th>ซ่อมครั้งล่าสุด</th><th>ครบกำหนดใน</th></tr></thead>
+          <tbody>${remindRows.join('')}</tbody>
+        </table>
+      </div>
+    </div>` : ''}
+
     </div>`;
-}
 
 /* ══════════════════════════════════════
    BIND
@@ -140,12 +176,162 @@ function bindCustomers() {
   sel('addCustBtn')?.addEventListener('click', () => openCustModal(null));
   sel('addVehBtn')?.addEventListener('click',  () => openVehModal(null, null));
 
+  document.querySelectorAll('[data-hist]').forEach(b =>
+    b.addEventListener('click', e => { e.stopPropagation(); openCustHistory(b.dataset.hist); })
+  );
   document.querySelectorAll('[data-ec]').forEach(b =>
     b.addEventListener('click', e => { e.stopPropagation(); openCustModal(b.dataset.ec); })
   );
   document.querySelectorAll('[data-eveh]').forEach(r =>
     r.addEventListener('click', () => openVehDetail(r.dataset.eveh))
   );
+  document.querySelectorAll('[data-vc]').forEach(b =>
+    b.addEventListener('click', e => { e.stopPropagation(); openCustDetail(b.dataset.vc); })
+  );
+}
+
+/* ══════════════════════════════════════
+   CUSTOMER HISTORY MODAL
+══════════════════════════════════════ */
+function openCustHistory(cid) {
+  const c = S.customers.find(x => x.id === cid);
+  if (!c) return;
+
+  const cVehs = S.vehicles.filter(v => v.custId === cid);
+  const vIds  = cVehs.map(v => v.id);
+
+  const cInvs = S.invoices.filter(i => {
+    if ((i.cust || '').trim() === (c.name || '').trim()) return true;
+    return S.jobs.some(j => i.jobId === j.id && vIds.includes(j.vehicleId));
+  }).slice().reverse();
+
+  const totalSpent = cInvs.reduce((s, i) => s + i.grand, 0);
+  const pendingAmt = cInvs.filter(i => !i.paid).reduce((s, i) => s + i.grand, 0);
+
+  const invRows = cInvs.length
+    ? cInvs.map(i => `
+        <tr>
+          <td class="mono" style="font-size:.75rem;color:var(--teal);cursor:pointer"
+              data-vi="${i.no}">${i.no}</td>
+          <td style="font-size:.8rem">${dateStr(i.ts)}</td>
+          <td style="font-size:.8rem">${esc(i.plate || '—')}</td>
+          <td class="r money fc-gold">${THB(i.grand)}</td>
+          <td class="c">
+            <span class="badge ${i.paid ? 'b-grn' : 'b-bad'}" style="font-size:.65rem">
+              ${i.paid ? 'ชำระแล้ว' : 'ค้างชำระ'}
+            </span>
+          </td>
+        </tr>`).join('')
+    : `<tr><td colspan="5" class="tbl-empty">ยังไม่มีบิล</td></tr>`;
+
+  const ov = sel('mOv');
+  ov.innerHTML = `
+    <div class="modal lg">
+      <div class="modal-h">
+        <div>
+          <h3>${esc(c.name)}</h3>
+          <div style="font-size:.76rem;color:var(--fg2);margin-top:2px">
+            ${esc(c.phone || '')}${c.line ? ' · LINE: '+esc(c.line) : ''}
+          </div>
+        </div>
+        <button class="closex" id="mCl">${svgI('<path d="M18 6 6 18M6 6l12 12"/>')}</button>
+      </div>
+      <div class="modal-b">
+        <div class="g4 mb14">
+          <div class="stat gold" style="min-height:72px">
+            <div class="sk">ยอดรวมที่ใช้</div>
+            <div class="sv">${THB(totalSpent)}</div>
+          </div>
+          <div class="stat teal" style="min-height:72px">
+            <div class="sk">จำนวนบิล</div>
+            <div class="sv">${cInvs.length}</div>
+          </div>
+          <div class="stat red" style="min-height:72px">
+            <div class="sk">จำนวนรถ</div>
+            <div class="sv">${cVehs.length} คัน</div>
+          </div>
+          <div class="stat ${pendingAmt > 0 ? 'bad' : 'grn'}" style="min-height:72px">
+            <div class="sk">ค้างชำระ</div>
+            <div class="sv">${THB(pendingAmt)}</div>
+          </div>
+        </div>
+
+        ${cVehs.length ? `
+        <div class="card mb14">
+          <div class="card-h">${svgI('<path d="M5 11l1.5-4.5A2 2 0 0 1 8.4 5h7.2a2 2 0 0 1 1.9 1.5L19 11"/><path d="M3 11h18v5a1 1 0 0 1-1 1h-1a1 1 0 0 1-1-1v-1H6v1a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1v-5Z"/><circle cx="7" cy="14" r="1"/><circle cx="17" cy="14" r="1"/>')} <h2>รถ</h2></div>
+          <div class="card-b">
+            ${cVehs.map(v => `<span class="badge b-teal" style="margin:2px;font-size:.78rem">
+              ${esc(v.plate)} ${esc([v.brand,v.model].filter(Boolean).join(' '))}
+            </span>`).join('')}
+          </div>
+        </div>` : ''}
+
+        <div class="card">
+          <div class="card-h">${svgI('<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>')} <h2>ประวัติบิล</h2></div>
+          <div class="tbl-wrap">
+            <table class="tbl">
+              <thead><tr><th>เลขที่</th><th>วันที่</th><th>ทะเบียน</th><th class="r">ยอด</th><th class="c">สถานะ</th></tr></thead>
+              <tbody>${invRows}</tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+      <div class="modal-f">
+        <button class="btn btn-ghost" id="mCl2">ปิด</button>
+      </div>
+    </div>`;
+
+  openOv('mOv');
+
+  ov.querySelectorAll('[data-vi]').forEach(el =>
+    el.addEventListener('click', () => {
+      const i = S.invoices.find(x => x.no === el.dataset.vi);
+      if (i) { closeMod(); showDoc('inv', i); }
+    })
+  );
+
+  bindModalClose(ov, '#mCl', '#mCl2');
+}
+
+/* ══════════════════════════════════════
+   CUSTOMER VEHICLES QUICK VIEW
+══════════════════════════════════════ */
+function openCustDetail(cid) {
+  const c = S.customers.find(x => x.id === cid);
+  if (!c) return;
+  const cVehs = S.vehicles.filter(v => v.custId === cid);
+  if (cVehs.length === 1) { openVehDetail(cVehs[0].id); return; }
+  if (cVehs.length === 0) { openVehModal(null, cid); return; }
+
+  const ov = sel('mOv');
+  ov.innerHTML = `
+    <div class="modal sm">
+      <div class="modal-h">
+        <h3>รถของ ${esc(c.name)}</h3>
+        <button class="closex" id="mCl">${svgI('<path d="M18 6 6 18M6 6l12 12"/>')}</button>
+      </div>
+      <div class="modal-b">
+        ${cVehs.map(v => `
+          <div class="fjb" style="padding:10px 0;border-bottom:1px solid var(--ln);cursor:pointer"
+               data-eveh2="${v.id}">
+            <div>
+              <div style="font-weight:700;color:var(--teal)">${esc(v.plate)}</div>
+              <div style="font-size:.78rem;color:var(--fg2)">${esc([v.brand,v.model,v.year].filter(Boolean).join(' '))}</div>
+            </div>
+            <span style="font-size:.75rem;color:var(--fg2)">${S.jobs.filter(j=>j.vehicleId===v.id).length} งาน</span>
+          </div>`).join('')}
+      </div>
+      <div class="modal-f">
+        <button class="btn btn-ghost" id="mCl2">ปิด</button>
+        <button class="btn btn-teal" id="addVehHere">เพิ่มรถ</button>
+      </div>
+    </div>`;
+  openOv('mOv');
+  ov.querySelectorAll('[data-eveh2]').forEach(r =>
+    r.addEventListener('click', () => { closeMod(); openVehDetail(r.dataset.eveh2); })
+  );
+  ov.querySelector('#addVehHere')?.addEventListener('click', () => { closeMod(); openVehModal(null, cid); });
+  bindModalClose(ov, '#mCl', '#mCl2');
 }
 
 /* ══════════════════════════════════════

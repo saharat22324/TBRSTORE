@@ -275,7 +275,8 @@ function convertSupabaseToState(dbData) {
       vat: i.vat || 0,
       grand: i.grand_total,
       totalCost: 0,
-      note: i.note || ''
+      note: i.note || '',
+      paid: i.payment_status || false,
     }));
   }
 

@@ -40,7 +40,12 @@ function billingHTML() {
               ${i.no} · ${dateStr(i.ts)}
             </div>
           </div>
-          <span class="money fc-gold">${THB(i.grand)}</span>
+          <div class="flex gap6" style="align-items:center">
+            <span class="badge ${i.paid ? 'b-grn' : 'b-bad'}" style="font-size:.6rem">
+              ${i.paid ? 'ชำระแล้ว' : 'ค้างชำระ'}
+            </span>
+            <span class="money fc-gold">${THB(i.grand)}</span>
+          </div>
         </div>`)
       .join('')
     : `<div style="padding:14px;font-size:.82rem;color:var(--fg3)">ยังไม่มีบิล</div>`;
@@ -573,6 +578,7 @@ async function saveInvoice() {
       cost: it.cost || 0, itemType: it.itemType, sid: it.sid,
     })),
     sub, disc: bDisc, vat, grand, totalCost, note,
+    paid: false,
   };
 
   /* Close job if billing from job */
