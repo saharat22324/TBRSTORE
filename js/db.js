@@ -372,10 +372,18 @@ async function saveData() {
     // Save to localStorage as fallback/backup
     localStorage.setItem(DB_KEY, JSON.stringify(S));
 
-    // If using Supabase, individual operations should have already saved
-    // This is a safety checkpoint
+    // If using Supabase, trigger background sync for any remaining local-ID entities
     if (useSupabase && window.supabaseReady) {
-      console.log('[DB] ✅ Data persisted (localStorage + Supabase operations)');
+      const hasLocalIds = [
+        ...(S.customers || []),
+        ...(S.vehicles  || []),
+        ...(S.jobs      || []),
+        ...(S.invoices  || []),
+      ].some(e => e.id && (e.id.startsWith('C-') || e.id.startsWith('V-') || e.id.startsWith('J-') || e.id.startsWith('I-')));
+
+      if (hasLocalIds && typeof syncLocalToSupabase === 'function') {
+        syncLocalToSupabase().catch(e => console.warn('[DB] background sync error:', e));
+      }
       return;
     }
     

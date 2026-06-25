@@ -202,9 +202,17 @@ function openJobModal(jid, prefVid) {
 
     if (j) {
       Object.assign(j, data);
-      // Update in Supabase if available
-      if (useSupabase && typeof updateJob === 'function') {
-        updateJob(j.id, data).catch(e => console.warn('[Jobs] updateJob Supabase error:', e));
+      // Update in Supabase — only if j.id is a real Supabase UUID
+      if (useSupabase) {
+        const isUUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+        if (isUUID.test(j.id) && typeof updateJob === 'function') {
+          updateJob(j.id, data).catch(e => console.warn('[Jobs] updateJob Supabase error:', e));
+        } else if (typeof addJob === 'function') {
+          // Local ID → create in Supabase, replace local ID
+          addJob(data.vehicleId, data.custId, data.complaint, data.assignTo, data.mileage, data.note)
+            .then(result => { if (result?.id) { j.id = result.id; localStorage.setItem(DB_KEY, JSON.stringify(S)); } })
+            .catch(e => console.warn('[Jobs] addJob (upsert) error:', e));
+        }
       }
     } else {
       const no = nextSeqNo('job').replace('job-', 'JOB-');

@@ -379,10 +379,18 @@ function openCustModal(id) {
     };
 
     try {
+      const isUUID = id => /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id);
       if (m) {
         // Update existing
-        if (useSupabase && typeof updateCustomer === 'function') {
-          await updateCustomer(m.id, data);
+        if (useSupabase) {
+          if (isUUID(m.id)) {
+            // Real Supabase ID → update
+            await updateCustomer(m.id, data);
+          } else {
+            // Local ID → create in Supabase and replace local ID
+            const result = await addCustomer(data.name, data.phone, data.email, data.line, '', data.note);
+            if (result) m.id = result.id;
+          }
         }
         Object.assign(m, data);
       } else {
@@ -490,17 +498,28 @@ function openVehModal(vid, prefCustId) {
     };
 
     try {
+      const isUUID = id => /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id);
+      const safeCustId = isUUID(custId) ? custId : null;
       if (v) {
         // Update existing
-        if (useSupabase && typeof updateVehicle === 'function') {
-          await updateVehicle(v.id, { ...data, customer_id: custId });
+        if (useSupabase) {
+          if (isUUID(v.id)) {
+            // Real Supabase ID → update (only pass customer_id if valid UUID)
+            const vUpdates = { ...data };
+            if (safeCustId) vUpdates.customer_id = safeCustId;
+            await updateVehicle(v.id, vUpdates);
+          } else {
+            // Local ID → create in Supabase and replace local ID
+            const result = await addVehicle(safeCustId, data.plate, data.brand, data.model, data.year, data.color, data.mileage, '', data.vin, '');
+            if (result) v.id = result.id;
+          }
         }
         Object.assign(v, data);
       } else {
         // Add new
-        const newVeh = { id: 'V-' + Date.now(), createdAt: Date.now(), ...data };
+        const newVeh = { id: 'V-' + Date.now(), createdAt: Date.now(), custId, ...data };
         if (useSupabase && typeof addVehicle === 'function') {
-          const result = await addVehicle(custId, data.plate, data.brand, data.model, data.year, data.color, data.mileage, '', data.vin, '');
+          const result = await addVehicle(safeCustId, data.plate, data.brand, data.model, data.year, data.color, data.mileage, '', data.vin, '');
           if (result) newVeh.id = result.id;
         }
         S.vehicles.push(newVeh);
