@@ -203,10 +203,13 @@ async function deleteCustomer(customerId) {
 
 async function addVehicle(customerId, plate, brand, model, year, color, mileage, engineNumber, chassisNumber, note) {
   try {
+    const uuidRe = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+    const safeCustomerId = customerId && uuidRe.test(customerId) ? customerId : null;
+
     const { data, error } = await getSupabase()
       .from('vehicles')
       .insert([{
-        customer_id: customerId,
+        customer_id: safeCustomerId,
         plate,
         brand,
         model,
@@ -284,15 +287,21 @@ async function addJob(vehicleId, customerId, complaint, assignTo, mileage, note)
   try {
     // Get job number
     const jobNo = await getNextJobNumber();
+
+    // Validate UUIDs — local IDs must not be sent as FK references
+    const uuidRe = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+    const safeVehicleId  = vehicleId  && uuidRe.test(vehicleId)  ? vehicleId  : null;
+    const safeCustomerId = customerId && uuidRe.test(customerId) ? customerId : null;
+    const safeAssignTo   = assignTo   && uuidRe.test(assignTo)   ? assignTo   : null;
     
     const { data, error } = await getSupabase()
       .from('jobs')
       .insert([{
         job_number: jobNo,
-        vehicle_id: vehicleId,
-        customer_id: customerId,
+        vehicle_id: safeVehicleId,
+        customer_id: safeCustomerId,
         complaint,
-        assign_to: assignTo,
+        assign_to: safeAssignTo,
         mileage,
         note,
         status_id: 1, // เปิดงาน
