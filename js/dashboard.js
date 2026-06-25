@@ -202,7 +202,35 @@ function bindDashboard() {
         try {
           const freshData = await getInvoices();
           if (freshData && freshData.length > 0) {
-            S.invoices = freshData;
+            // Convert raw Supabase format to app state format before assigning
+            S.invoices = freshData.map(i => ({
+              id: i.id,
+              no: i.invoice_number,
+              ts: new Date(i.created_at).getTime(),
+              jobId: i.job_id,
+              cust: i.customers?.name || '',
+              phone: i.phone || '',
+              plate: i.vehicles?.plate || '',
+              model: i.model || '',
+              mileage: i.mileage,
+              ref: i.note || '',
+              items: (i.invoice_items || []).map(it => ({
+                _itemId: it.id,
+                name: it.description,
+                unit: '',
+                qty: it.quantity,
+                price: it.unit_price,
+                cost: it.cost_price > 0 ? it.cost_price : 0,
+                itemType: it.item_type,
+                sid: it.stock_item_id,
+              })),
+              sub: i.subtotal,
+              disc: i.discount || 0,
+              vat: i.vat || 0,
+              grand: i.grand_total,
+              totalCost: 0,
+              note: i.note || ''
+            }));
             renderPanel();
           }
         } catch(err) {
