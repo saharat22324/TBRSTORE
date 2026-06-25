@@ -152,6 +152,8 @@ function customersHTML() {
           </table>
         </div>
       </div>
+    </div>
+
     <!-- ── Service Reminders ── -->
     ${remindRows.length ? `
     <div class="card" style="margin-top:16px;border-left:3px solid var(--warn)">
@@ -166,8 +168,8 @@ function customersHTML() {
         </table>
       </div>
     </div>` : ''}
-
-    </div>`;
+    `;
+}
 
 /* ══════════════════════════════════════
    BIND
