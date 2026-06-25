@@ -17,6 +17,7 @@ let _dailyTo     = '';
 let _dailyType   = 'all'; // 'all' | 'oil' | 'parts'
 let _dailyCust   = '';    // customer name filter
 let _dailyPlate  = '';    // vehicle plate filter
+let _bonusHeads  = 0;     // จำนวนช่างที่หาร (0 = ดึงจาก profiles)
 
 /* ══════════════════════════════════════
    HTML
@@ -147,8 +148,112 @@ function reportHTML() {
       }).join('')
     : `<tr><td colspan="9" class="tbl-empty">ยังไม่มีบิลในเดือนนี้</td></tr>`;
 
+  /* ── โบนัสช่าง ── */
+  const [ym_y, ym_m] = reportMonth.split('-').map(Number);
+  const lastDay = new Date(ym_y, ym_m, 0).getDate(); // last day of month
+  const p1From  = `${reportMonth}-01`;
+  const p1To    = `${reportMonth}-15`;
+  const p2From  = `${reportMonth}-16`;
+  const p2To    = `${reportMonth}-${String(lastDay).padStart(2,'0')}`;
+
+  const invInRange = (inv, from, to) => {
+    const d = new Date(inv.ts).toISOString().slice(0,10);
+    return d >= from && d <= to;
+  };
+  const periodProfit = (from, to) => {
+    const invs = mInvs.filter(i => invInRange(i, from, to));
+    const sell = invs.reduce((s, i) => s + i.grand, 0);
+    const cost = invs.reduce((s, i) => s + calcInvCost(i), 0);
+    return { sell: fmt(sell), cost: fmt(cost), profit: fmt(sell - cost), count: invs.length };
+  };
+
+  const p1 = periodProfit(p1From, p1To);
+  const p2 = periodProfit(p2From, p2To);
+  const BONUS_RATE = 0.10;
+  const defaultHeads = S.profiles?.filter(p => p.role !== 'admin').length || 3;
+  const heads = _bonusHeads > 0 ? _bonusHeads : defaultHeads;
+
+  const bonusPeriodCard = (label, p, from, to) => {
+    const pool      = fmt(p.profit * BONUS_RATE);
+    const perPerson = heads > 0 ? fmt(pool / heads) : 0;
+    return `
+      <div class="card" style="flex:1;min-width:240px">
+        <div class="card-h" style="background:var(--p3)">
+          <span style="font-size:.9rem;font-weight:700">${label}</span>
+          <span style="font-size:.72rem;color:var(--fg2);margin-left:6px">${from} — ${to}</span>
+          <span class="badge b-gold" style="margin-left:auto">${p.count} บิล</span>
+        </div>
+        <div class="card-b" style="padding:12px 14px">
+          <div class="flex gap16 mb10" style="flex-wrap:wrap">
+            <div>
+              <div style="font-size:.67rem;color:var(--fg2)">ยอดขาย</div>
+              <div class="money fc-gold" style="font-weight:700">${THB(p.sell)}</div>
+            </div>
+            ${hasPermission('canViewCost') ? `<div>
+              <div style="font-size:.67rem;color:var(--fg2)">ต้นทุน</div>
+              <div class="money" style="font-weight:700;color:var(--bad)">${THB(p.cost)}</div>
+            </div>` : ''}
+            <div>
+              <div style="font-size:.67rem;color:var(--fg2)">กำไร</div>
+              <div class="money" style="font-weight:700;color:${p.profit>=0?'var(--grn)':'var(--bad)'}">${THB(p.profit)}</div>
+            </div>
+          </div>
+          <div style="border-top:1px dashed var(--ln);padding-top:10px">
+            <div style="font-size:.72rem;color:var(--fg2);margin-bottom:6px">
+              โบนัสทีม = กำไร × 10%
+            </div>
+            <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
+              <div style="background:var(--p3);border-radius:8px;padding:8px 14px;text-align:center">
+                <div style="font-size:.65rem;color:var(--fg2)">โบนัสรวม</div>
+                <div class="money" style="font-size:1.15rem;font-weight:800;color:var(--teal)">${THB(pool)}</div>
+              </div>
+              <div style="font-size:1.1rem;color:var(--fg2)">÷ ${heads} คน</div>
+              <div style="background:var(--p3);border-radius:8px;padding:8px 14px;text-align:center;border:2px solid var(--teal)">
+                <div style="font-size:.65rem;color:var(--fg2)">ต่อคน</div>
+                <div class="money" style="font-size:1.2rem;font-weight:800;color:var(--teal)">${THB(perPerson)}</div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>`;
+  };
+
+  const bonusHTML = `
+    <div class="card" style="margin-top:16px">
+      <div class="card-h">
+        ${svgI('<circle cx="12" cy="8" r="4"/><path d="M4 21a8 8 0 0 1 16 0"/><path d="M9 21h6"/>')}
+        <h2>โบนัสช่าง — ตัดยอดทุก 15 วัน (10% จากกำไร)</h2>
+        <div class="flex gap6" style="margin-left:auto;align-items:center">
+          <label style="font-size:.75rem;color:var(--fg2)">หารกี่คน</label>
+          <input type="number" id="bonusHeads" min="1" max="20" value="${heads}"
+            style="width:64px;background:var(--ink);border:1px solid var(--ln2);color:var(--fg);
+                   border-radius:8px;padding:6px 10px;font-size:.9rem;outline:none;text-align:center">
+        </div>
+      </div>
+      <div class="card-b" style="padding:12px 14px">
+        <div class="flex gap12" style="flex-wrap:wrap">
+          ${bonusPeriodCard('รอบ 1 — ต้นเดือน', p1, p1From, p1To)}
+          ${bonusPeriodCard('รอบ 2 — ปลายเดือน', p2, p2From, p2To)}
+        </div>
+        <div style="margin-top:12px;padding:10px 14px;background:var(--p3);border-radius:8px">
+          <div class="flex gap16" style="flex-wrap:wrap;align-items:center">
+            <div>
+              <div style="font-size:.67rem;color:var(--fg2)">โบนัสรวมทั้งเดือน</div>
+              <div class="money" style="font-size:1.1rem;font-weight:800;color:var(--teal)">${THB(fmt((p1.profit + p2.profit) * BONUS_RATE))}</div>
+            </div>
+            <div>
+              <div style="font-size:.67rem;color:var(--fg2)">รวมต่อคน/เดือน</div>
+              <div class="money" style="font-size:1.1rem;font-weight:800;color:var(--teal)">${THB(fmt((p1.profit + p2.profit) * BONUS_RATE / heads))}</div>
+            </div>
+            <div style="font-size:.73rem;color:var(--fg2);align-self:center">
+              กำไรรวม ${THB(mGross)} × 10% = ${THB(fmt(mGross * BONUS_RATE))} ÷ ${heads} คน
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>`;
+
   /* ── Top customers (all-time) ── */
-  const custSpend = {};
   for (const inv of S.invoices) {
     const key = (inv.cust || '').trim();
     if (key) custSpend[key] = (custSpend[key] || 0) + inv.grand;
@@ -262,6 +367,9 @@ function reportHTML() {
         </table>
       </div>
     </div>
+
+    <!-- ── โบนัสช่าง ── -->
+    ${bonusHTML}
 
     <!-- ── Top Customers ── -->
     <div class="card" style="margin-top:16px">
@@ -613,6 +721,12 @@ function bindReport() {
   /* Month selector */
   sel('rMSel')?.addEventListener('input', e => {
     reportMonth = e.target.value;
+    renderPanel();
+  });
+
+  /* Bonus headcount */
+  sel('bonusHeads')?.addEventListener('input', e => {
+    _bonusHeads = parseInt(e.target.value) || 0;
     renderPanel();
   });
 
