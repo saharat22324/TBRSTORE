@@ -53,7 +53,10 @@ function getCurrentUserRole() {
   if (!session) return null;
   try {
     const data = JSON.parse(session);
-    return data.role_id || null;
+    // Support both role_id (number) and role (string) formats
+    if (data.role_id) return data.role_id;
+    const roleMap = { admin: 1, technician: 2, supervisor: 4 };
+    return roleMap[data.role?.toLowerCase()] || null;
   } catch (e) {
     return null;
   }
