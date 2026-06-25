@@ -374,6 +374,10 @@ function openJobDetail(jid) {
   ov.querySelectorAll('[data-jst]').forEach(b => {
     b.addEventListener('click', async () => {
       j.status = parseInt(b.dataset.jst);
+      // Sync status to Supabase (status_id = status + 1)
+      if (useSupabase && j.id && typeof updateJob === 'function') {
+        updateJob(j.id, { status_id: j.status + 1 }).catch(e => console.warn('[Jobs] status sync failed:', e));
+      }
       await saveData();
       renderNav();
       renderPanel();

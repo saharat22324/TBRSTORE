@@ -65,6 +65,8 @@ async function loadData() {
           useSupabase = true;
           // ALWAYS merge localStorage records not yet in Supabase (safety net)
           mergeLocalStorageIntoS();
+          // Sync seq counters so invoice/job numbers never collide between users
+          syncSeqFromState();
           // Sync seed services (prices/names) to Supabase in background
           syncSeedServicesToSupabase().catch(e => console.warn('[DB] services sync error:', e));
           console.log('[DB] ✅ โหลดจาก Supabase สำเร็จ - ข้อมูลซิงค์ระหว่างผู้ใช้');
@@ -327,6 +329,35 @@ function repairInvoiceCosts() {
   if (repaired > 0) {
     localStorage.setItem(DB_KEY, JSON.stringify(S));
     console.log(`[DB] ✅ Repaired ${repaired} item costs`);
+  }
+}
+
+/**
+ * Sync local seq counters to be higher than any existing INV-/JOB- numbers in S.
+ * Prevents invoice/job number collisions when multiple users share the same Supabase.
+ * Only affects today's date — sequence resets each day by design.
+ */
+function syncSeqFromState() {
+  const today = (() => {
+    const d = new Date();
+    return `${d.getFullYear()}${String(d.getMonth()+1).padStart(2,'0')}${String(d.getDate()).padStart(2,'0')}`;
+  })();
+
+  const extract = (str, prefix) => {
+    const m = str?.match(new RegExp(`${prefix}-${today}-(\\d+)`));
+    return m ? parseInt(m[1]) : 0;
+  };
+
+  const maxInv = Math.max(0, ...S.invoices.map(i => extract(i.no, 'INV')));
+  const maxJob = Math.max(0, ...S.jobs.map(j => extract(j.no, 'JOB')));
+  const maxQt  = Math.max(0, ...((S.quotations||[]).map(q => extract(q.no, 'QT'))));
+
+  if (maxInv >= (S.seq?.inv || 1)) S.seq.inv = maxInv + 1;
+  if (maxJob >= (S.seq?.job || 1)) S.seq.job = maxJob + 1;
+  if (maxQt  >= (S.seq?.qt  || 1)) S.seq.qt  = maxQt  + 1;
+
+  if (maxInv > 0 || maxJob > 0) {
+    console.log(`[DB] 🔢 Seq synced → INV:${S.seq.inv} JOB:${S.seq.job}`);
   }
 }
 
