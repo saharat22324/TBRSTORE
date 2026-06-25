@@ -253,6 +253,7 @@ function reportHTML() {
         </table>
       </div>
     </div>`;
+}
 
 /* ══════════════════════════════════════
    BIND
