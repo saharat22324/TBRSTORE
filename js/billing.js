@@ -583,6 +583,7 @@ async function saveInvoice() {
     Object.assign(existing, {
       cust, phone, plate, model, mileage: mile, ref, note,
       items: newItems, sub, disc: bDisc, vat, grand, totalCost,
+      _editedAt: Date.now(),   // ใช้ตรวจสอบว่าเวอร์ชัน local ใหม่กว่า Supabase
     });
 
     // 4. Sync to Supabase

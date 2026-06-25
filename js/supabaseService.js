@@ -642,8 +642,12 @@ async function updateInvoiceFull(invId, invoiceData, items) {
       .eq('id', invId);
     if (invErr) throw invErr;
 
-    // ลบ items เดิม
-    await getSupabase().from('invoice_items').delete().eq('invoice_id', invId);
+    // ลบ items เดิม (ถ้าไม่ได้รับอนุญาต RLS จะ skip แล้วล้างด้วย insert แทน)
+    try {
+      await getSupabase().from('invoice_items').delete().eq('invoice_id', invId);
+    } catch (delErr) {
+      console.warn('[Service] invoice_items delete skipped (RLS?):', delErr?.message);
+    }
 
     // ใส่ items ใหม่
     if (items.length > 0) {

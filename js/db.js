@@ -446,13 +446,22 @@ function mergeLocalStorageIntoS() {
         toSync.invoices.push(inv);
         merged++;
       } else if (inv.no && sbInvNos.has(inv.no)) {
-        // Invoice exists in Supabase but item costs may be 0 — merge costs from localStorage
         const sInv = S.invoices.find(i => i.no === inv.no);
-        if (sInv && (inv.items || []).length > 0) {
+        if (!sInv) continue;
+
+        // ถ้า local มี _editedAt ที่ใหม่กว่า → ผู้ใช้เพิ่งแก้ไข ให้ใช้ข้อมูล local
+        if (inv._editedAt && inv._editedAt > (sInv._editedAt || sInv.ts || 0)) {
+          const keepId  = sInv.id;
+          const keepPaid = sInv.paid;
+          Object.assign(sInv, inv);
+          sInv.id   = keepId;    // คง Supabase UUID ไว้
+          sInv.paid = keepPaid;  // คงสถานะชำระเงินจาก Supabase ไว้
+          merged++;
+        } else if ((inv.items || []).length > 0) {
+          // Merge costs from localStorage (กรณีเก่า)
           const localCostSum = (inv.items || []).reduce((s, it) => s + ((it.qty || 0) * (it.cost || 0)), 0);
           const sCostSum = (sInv.items || []).reduce((s, it) => s + ((it.qty || 0) * (it.cost || 0)), 0);
           if (localCostSum > 0 && sCostSum === 0) {
-            // Use localStorage items (have costs) over Supabase items (cost=0)
             sInv.items = inv.items;
             merged++;
           }
