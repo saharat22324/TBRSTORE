@@ -274,7 +274,7 @@ function convertSupabaseToState(dbData) {
       disc: i.discount || 0,
       vat: i.vat || 0,
       grand: i.grand_total,
-      totalCost: 0,
+      totalCost: (i.invoice_items || []).reduce((s, it) => s + (it.quantity || 0) * (it.cost_price > 0 ? it.cost_price : (it.stock_item_id ? (costByUuid[it.stock_item_id] || 0) : 0)), 0),
       note: i.note || '',
       paid: i.payment_status || false,
     }));

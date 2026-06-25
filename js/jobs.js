@@ -624,6 +624,14 @@ function openReqModal(jid) {
       if (m) {
         m.qty  = fmt(m.qty  - it.qty);
         m.used = fmt((m.used || 0) + it.qty);
+        // Sync stock qty to Supabase
+        if (useSupabase && typeof updateStockBySku === 'function') {
+          updateStockBySku(m.id, m.qty).catch(e => console.warn('[Req] stock sync failed:', e));
+        }
+        // Record in stock ledger
+        if (typeof addToLedger === 'function') {
+          addToLedger(m.id, 'out', it.qty, 'เบิก ' + no);
+        }
       }
     });
 

@@ -2,6 +2,8 @@
    DASHBOARD.JS — หน้าภาพรวม (สถิติ + งานล่าสุด + กราฟ)
    ============================================================ */
 
+let _dashInterval = null; // global so we can clear on re-entry
+
 function dashboardHTML() {
   const today    = new Date().toDateString();
   const ym       = nowYM();
@@ -195,9 +197,10 @@ function bindDashboard() {
     });
   });
 
-  /* Auto-refresh dashboard data every 30 seconds */
+  /* Auto-refresh dashboard data every 30 seconds — clear old interval first */
+  if (_dashInterval) { clearInterval(_dashInterval); _dashInterval = null; }
   if (useSupabase && typeof getInvoices === 'function') {
-    const dashboardRefresh = setInterval(async () => {
+    _dashInterval = setInterval(async () => {
       if (currentTab === 'dash') {
         try {
           const freshData = await getInvoices();
@@ -208,12 +211,13 @@ function bindDashboard() {
               no: i.invoice_number,
               ts: new Date(i.created_at).getTime(),
               jobId: i.job_id,
-              cust: i.customers?.name || '',
+              cust: i.customer_name || i.customers?.name || '',
               phone: i.phone || '',
-              plate: i.vehicles?.plate || '',
-              model: i.model || '',
+              plate: i.plate || i.vehicles?.plate || '',
+              model: i.car_model || i.model || '',
               mileage: i.mileage,
               ref: i.note || '',
+              paid: i.payment_status || false,
               items: (i.invoice_items || []).map(it => ({
                 _itemId: it.id,
                 name: it.description,
