@@ -27,14 +27,24 @@ async function syncRemoteData() {
     const newState = convertSupabaseToState(data);
     let changed = false;
 
-    // ── Jobs: เพิ่ม job ใหม่ + sync สถานะ ──
+    // ── Jobs: เพิ่ม job ใหม่ + sync สถานะ + sync assignTo ──
     const jobById = new Map(S.jobs.map(j => [j.id, j]));
     const jobByNo = new Map(S.jobs.map(j => [j.no,  j]));
     for (const j of newState.jobs) {
       if (jobById.has(j.id)) {
         const ex = jobById.get(j.id);
         if (ex.status !== j.status) { ex.status = j.status; changed = true; }
-      } else if (!jobByNo.has(j.no)) {
+        // Sync assignTo (fixes UUID→name when profiles join resolves)
+        if (j.assignTo && j.assignTo !== ex.assignTo) { ex.assignTo = j.assignTo; changed = true; }
+      } else if (jobByNo.has(j.no)) {
+        // Job exists by number but different id (local id vs UUID) — sync assignTo + status
+        const ex = jobByNo.get(j.no);
+        if (ex.status !== j.status) { ex.status = j.status; changed = true; }
+        if (j.assignTo && j.assignTo !== ex.assignTo) { ex.assignTo = j.assignTo; changed = true; }
+        // Update id to Supabase UUID so invoice matching works
+        const _uuidRe2 = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+        if (_uuidRe2.test(j.id) && !_uuidRe2.test(ex.id)) { ex.id = j.id; changed = true; }
+      } else {
         S.jobs.push(j); changed = true;
       }
     }
@@ -567,15 +577,53 @@ function mergeLocalStorageIntoS() {
     }
 
     // Invoices: match by invoice number
+    const _invUuidRe = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+    // Helper: resolve a non-UUID jobId to Supabase UUID via ref (job number) or local job lookup
+    const resolveJobIdToUuid = (jobId, ref, localJobs) => {
+      if (jobId && _invUuidRe.test(jobId)) return jobId; // already UUID
+      // Try ref = job number pre-filled in billing form
+      if (ref) {
+        const byRef = S.jobs.find(j => j.no === ref);
+        if (byRef && _invUuidRe.test(byRef.id)) return byRef.id;
+      }
+      // Try resolving local jobId → local job → Supabase job by job number
+      if (jobId && localJobs) {
+        const lj = localJobs.find(j => j.id === jobId);
+        if (lj?.no) {
+          const sbJ = S.jobs.find(j => j.no === lj.no);
+          if (sbJ && _invUuidRe.test(sbJ.id)) return sbJ.id;
+        }
+      }
+      return jobId;
+    };
+
     const sbInvNos = new Set(S.invoices.map(i => i.no).filter(Boolean));
     for (const inv of (local.invoices || [])) {
       if (inv.no && !sbInvNos.has(inv.no)) {
-        S.invoices.push(inv);
-        toSync.invoices.push(inv);
+        // Invoice only in localStorage — resolve jobId to UUID before pushing
+        const resolvedJobId = resolveJobIdToUuid(inv.jobId, inv.ref, local.jobs);
+        const fixedInv = resolvedJobId !== inv.jobId ? { ...inv, jobId: resolvedJobId } : inv;
+        S.invoices.push(fixedInv);
+        toSync.invoices.push(fixedInv);
         merged++;
       } else if (inv.no && sbInvNos.has(inv.no)) {
         const sInv = S.invoices.find(i => i.no === inv.no);
         if (!sInv) continue;
+
+        // ถ้า Supabase invoice ไม่มี jobId ที่ถูกต้อง → ลองแก้จาก ref หรือ local jobId
+        if (!sInv.jobId || !_invUuidRe.test(sInv.jobId)) {
+          const resolved = resolveJobIdToUuid(inv.jobId, inv.ref, local.jobs);
+          if (resolved && _invUuidRe.test(resolved)) {
+            sInv.jobId = resolved;
+            // Fix job_id in Supabase in background
+            if (typeof getSupabase === 'function' && sInv.id && _invUuidRe.test(sInv.id)) {
+              getSupabase().from('invoices').update({ job_id: resolved }).eq('id', sInv.id)
+                .then(() => console.log('[DB] ✅ Fixed job_id for', sInv.no, '→', resolved))
+                .catch(() => {});
+            }
+            merged++;
+          }
+        }
 
         // ถ้า local มี _editedAt ที่ใหม่กว่า → ผู้ใช้เพิ่งแก้ไข ให้ใช้ข้อมูล local
         if (inv._editedAt && inv._editedAt > (sInv._editedAt || sInv.ts || 0)) {
