@@ -207,7 +207,7 @@ function bindStock() {
 function addToLedger(itemId, type, qty, note) {
   const item = S.stockItems.find(i => i.id === itemId);
   if (!item) return;
-  
+
   S.stockLedger.push({
     date: new Date().toISOString().split('T')[0],
     time: new Date().toLocaleTimeString('th-TH'),
@@ -220,6 +220,13 @@ function addToLedger(itemId, type, qty, note) {
     note: note || '',
     user: (() => { try { return JSON.parse(localStorage.getItem('tbr_user_session') || '{}').username || 'unknown'; } catch { return 'unknown'; } })()
   });
+
+  // Save to Supabase in background (non-blocking)
+  if (window.useSupabase && typeof addStockLedgerEntry === 'function' && item._uuid) {
+    addStockLedgerEntry(item._uuid, type, qty, note).catch(e =>
+      console.warn('[Stock] addStockLedgerEntry failed:', e)
+    );
+  }
 }
 
 function openStockAdj(id, type) {

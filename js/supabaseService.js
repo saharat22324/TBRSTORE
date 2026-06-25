@@ -878,11 +878,17 @@ async function loadAllData() {
         const data = await getShopConfig();
         console.log('[Service] ✅ Shop config loaded');
         return data;
+      })(),
+      (async () => {
+        console.log('[Service] Loading stock ledger...');
+        const data = await getStockLedger();
+        console.log('[Service] ✅ Stock ledger loaded:', data?.length || 0);
+        return data;
       })()
     ]);
 
     // Extract successful results
-    const [customers, vehicles, jobs, stockItems, invoices, services, shopConfig] = results.map((r, i) => {
+    const [customers, vehicles, jobs, stockItems, invoices, services, shopConfig, stockLedger] = results.map((r, i) => {
       if (r.status === 'fulfilled') {
         return r.value;
       } else {
@@ -899,7 +905,8 @@ async function loadAllData() {
       stockItems: stockItems || [],
       invoices: invoices || [],
       services: services || [],
-      shopConfig: shopConfig || {}
+      shopConfig: shopConfig || {},
+      stockLedger: stockLedger || []
     };
   } catch (err) {
     console.error('[Service] loadAllData error:', err);
@@ -957,6 +964,45 @@ async function getAuditLogs(limit = 150) {
   } catch (err) {
     console.error('[Service] getAuditLogs error:', err);
     return [];
+  }
+}
+
+/* ══════════════════════════════════════
+   STOCK LEDGER
+══════════════════════════════════════ */
+async function getStockLedger(limit = 1000) {
+  try {
+    const { data, error } = await getSupabase()
+      .from('stock_ledger')
+      .select('*, stock_items(sku, name, unit)')
+      .order('created_at', { ascending: false })
+      .limit(limit);
+    if (error) throw error;
+    return data || [];
+  } catch (err) {
+    console.error('[Service] getStockLedger error:', err);
+    return [];
+  }
+}
+
+async function addStockLedgerEntry(itemUuid, type, qty, note) {
+  try {
+    const dbType = type === 'count' ? 'adjust' : (type || 'in');
+    const { data, error } = await getSupabase()
+      .from('stock_ledger')
+      .insert([{
+        stock_item_id: itemUuid || null,
+        type: dbType,
+        qty: Math.abs(qty),
+        note: note || null
+      }])
+      .select('id')
+      .single();
+    if (error) throw error;
+    return data?.id || null;
+  } catch (err) {
+    console.error('[Service] addStockLedgerEntry error:', err);
+    return null;
   }
 }
 

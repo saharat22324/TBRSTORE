@@ -347,6 +347,7 @@ function convertSupabaseToState(dbData) {
       }
       return {
         id: i.sku,
+        _uuid: i.id,   // real Supabase UUID — used for FK inserts (stock_ledger etc.)
         cat: catFromJoin || catFallback,
         name: i.name,
         unit: i.unit || 'ลิตร',
@@ -416,6 +417,31 @@ function convertSupabaseToState(dbData) {
       note: i.note || '',
       paid: i.payment_status || false,
     }));
+  }
+
+  if (dbData.stockLedger && dbData.stockLedger.length > 0) {
+    // Build SKU→name/unit map from stockItems for display
+    const skuMap = {};
+    for (const si of (dbData.stockItems || [])) {
+      skuMap[si.id] = { name: si.name, unit: si.unit, sku: si.sku };
+    }
+    state.stockLedger = dbData.stockLedger.map(e => {
+      const si = e.stock_items || skuMap[e.stock_item_id] || {};
+      const dt = new Date(e.created_at);
+      return {
+        _id: e.id,
+        date: dt.toISOString().split('T')[0],
+        time: dt.toLocaleTimeString('th-TH'),
+        itemId: si.sku || e.stock_item_id || '',
+        name: si.name || '',
+        cat: '',
+        type: e.type === 'adjust' ? 'count' : (e.type || 'in'),
+        qty: Number(e.qty),
+        unit: si.unit || '',
+        note: e.note || '',
+        user: ''
+      };
+    });
   }
 
   return state;
