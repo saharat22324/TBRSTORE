@@ -591,6 +591,7 @@ async function saveInvoice() {
           description: it.nm,
           quantity: it.qty,
           unitPrice: it.price,
+          costPrice: it.cost || 0,
           total: fmt(it.qty * it.price),
           note: ''
         })),

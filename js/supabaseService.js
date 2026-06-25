@@ -566,6 +566,7 @@ async function addInvoice(jobId, customerId, vehicleId, items, subtotal, discoun
       description: item.description,
       quantity: item.quantity,
       unit_price: item.unitPrice,
+      cost_price: item.costPrice || 0,
       total: item.total,
       note: item.note
     }));
@@ -610,6 +611,30 @@ async function getNextInvoiceNumber() {
     console.error('[Service] getNextInvoiceNumber error:', err);
     return null;
   }
+}
+
+/**
+ * Update cost_price on existing invoice_items rows.
+ * @param {Array<{id: string, cost_price: number}>} updates
+ * @returns {number} count of rows updated
+ */
+async function updateInvoiceItemCosts(updates) {
+  if (!updates || updates.length === 0) return 0;
+  let count = 0;
+  // Batch in groups of 50 to avoid request size limits
+  for (let i = 0; i < updates.length; i += 50) {
+    const batch = updates.slice(i, i + 50);
+    // Update each item individually — Supabase upsert by id
+    for (const u of batch) {
+      const { error } = await getSupabase()
+        .from('invoice_items')
+        .update({ cost_price: u.cost_price })
+        .eq('id', u.id)
+        .eq('cost_price', 0); // Only update rows that still have cost=0 (avoid overwriting good data)
+      if (!error) count++;
+    }
+  }
+  return count;
 }
 
 async function deleteInvoice(invoiceId) {
