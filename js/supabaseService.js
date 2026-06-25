@@ -340,22 +340,14 @@ async function updateJob(jobId, updates) {
 
 async function getJobs() {
   try {
-    // Try with profiles join first (requires FK constraint on assign_to → profiles.id)
-    const { data, error } = await getSupabase()
-      .from('jobs')
-      .select('*, job_statuses(name, color), vehicles(plate, brand, model), customers(name), profiles!assign_to(full_name)')
-      .order('created_at', { ascending: false });
-
-    if (error) {
-      // profiles JOIN failed (no FK constraint) — fallback without profiles join
-      console.warn('[Service] getJobs profiles join failed, retrying without:', error.message);
+    // If profiles join previously failed, skip straight to fallback
+    if (!getJobs._profilesJoinOk) {
       const { data: data2, error: error2 } = await getSupabase()
         .from('jobs')
         .select('*, job_statuses(name, color), vehicles(plate, brand, model), customers(name)')
         .order('created_at', { ascending: false });
       if (error2) throw error2;
 
-      // Enrich with employee names from profiles table
       const uuids = [...new Set((data2 || []).map(j => j.assign_to).filter(Boolean))];
       const nameMap = {};
       if (uuids.length > 0) {
@@ -370,12 +362,45 @@ async function getJobs() {
         profiles: nameMap[j.assign_to] ? { full_name: nameMap[j.assign_to] } : null,
       }));
     }
+
+    // Try with profiles join (requires FK constraint)
+    const { data, error } = await getSupabase()
+      .from('jobs')
+      .select('*, job_statuses(name, color), vehicles(plate, brand, model), customers(name), profiles!assign_to(full_name)')
+      .order('created_at', { ascending: false });
+
+    if (error) {
+      // Mark join as broken — skip it on all future calls
+      getJobs._profilesJoinOk = false;
+      console.warn('[Service] getJobs profiles join failed (will skip in future):', error.message);
+      const { data: data2, error: error2 } = await getSupabase()
+        .from('jobs')
+        .select('*, job_statuses(name, color), vehicles(plate, brand, model), customers(name)')
+        .order('created_at', { ascending: false });
+      if (error2) throw error2;
+
+      const uuids = [...new Set((data2 || []).map(j => j.assign_to).filter(Boolean))];
+      const nameMap = {};
+      if (uuids.length > 0) {
+        const { data: profiles } = await getSupabase()
+          .from('profiles')
+          .select('id, full_name')
+          .in('id', uuids);
+        (profiles || []).forEach(p => { if (p.full_name) nameMap[p.id] = p.full_name; });
+      }
+      return (data2 || []).map(j => ({
+        ...j,
+        profiles: nameMap[j.assign_to] ? { full_name: nameMap[j.assign_to] } : null,
+      }));
+    }
+    getJobs._profilesJoinOk = true;
     return data || [];
   } catch (err) {
     console.error('[Service] getJobs error:', err);
     return [];
   }
 }
+getJobs._profilesJoinOk = true; // assume ok, flip to false on first failure
 
 /**
  * === STOCK ITEMS ===
@@ -489,15 +514,26 @@ async function deleteStockItemBySku(sku) {
 
 async function getStockItems() {
   try {
-    // Try with category join first
+    // If product_categories join previously failed, skip straight to simple select
+    if (!getStockItems._catJoinOk) {
+      const { data, error } = await getSupabase()
+        .from('stock_items')
+        .select('*')
+        .order('sku', { ascending: true });
+      if (error) throw error;
+      return data || [];
+    }
+
+    // Try with category join
     const { data, error } = await getSupabase()
       .from('stock_items')
       .select('*, product_categories(name)')
       .order('sku', { ascending: true });
-    
+
     if (error) {
-      // JOIN failed (product_categories may not exist) — fall back to simple select
-      console.warn('[Service] getStockItems JOIN failed, retrying without join:', error.message);
+      // Mark join as broken
+      getStockItems._catJoinOk = false;
+      console.warn('[Service] getStockItems JOIN failed (will skip in future):', error.message);
       const { data: data2, error: error2 } = await getSupabase()
         .from('stock_items')
         .select('*')
@@ -505,12 +541,14 @@ async function getStockItems() {
       if (error2) throw error2;
       return data2 || [];
     }
+    getStockItems._catJoinOk = true;
     return data || [];
   } catch (err) {
     console.error('[Service] getStockItems error:', err);
     return [];
   }
 }
+getStockItems._catJoinOk = true; // assume ok, flip to false on first failure
 
 async function recordStockTransaction(stockItemId, type, quantity, referenceType, referenceId, note) {
   try {
