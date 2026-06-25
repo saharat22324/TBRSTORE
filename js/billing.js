@@ -100,7 +100,14 @@ function billingHTML() {
               const ed = bEditData || {};  // prefill เมื่อแก้ไขบิล
               return `
             <div class="fgrid c2 mb12">
-              <div class="fld"><label>ชื่อลูกค้า</label><input id="bCust" placeholder="ชื่อ-นามสกุล" value="${esc(ed.cust || _j?.custName||'')}"></div>
+              <div class="fld">
+                <label>ชื่อลูกค้า</label>
+                <input id="bCust" placeholder="ชื่อ-นามสกุล" value="${esc(ed.cust || _j?.custName||'')}"
+                       list="bCustList" autocomplete="off">
+                <datalist id="bCustList">
+                  ${S.customers.map(c => `<option value="${esc(c.name)}" data-cid="${c.id}"></option>`).join('')}
+                </datalist>
+              </div>
               <div class="fld"><label>เบอร์โทร</label><input id="bPhone" placeholder="08X-XXXXXXX" value="${esc(ed.phone || _c?.phone||'')}"></div>
             </div>
             <div class="fgrid c2 mb12">
@@ -219,6 +226,27 @@ function billingHTML() {
    BIND
 ══════════════════════════════════════ */
 function bindBilling() {
+
+  /* ── Customer auto-fill: เมื่อเลือกชื่อลูกค้าจาก datalist ── */
+  sel('bCust')?.addEventListener('change', () => {
+    if (bJobId) return; // มี job อยู่แล้วไม่ต้องแทนที่
+    const name = sv('bCust').trim();
+    const cust = S.customers.find(c => c.name === name);
+    if (!cust) return;
+    // เติมเบอร์โทร
+    const phoneEl = sel('bPhone');
+    if (phoneEl && !phoneEl.value) phoneEl.value = cust.phone || '';
+    // เติมทะเบียน/รุ่นจากรถคันสุดท้ายของลูกค้า (ถ้ายังว่าง)
+    const plateEl = sel('bPlate');
+    const modelEl = sel('bModel');
+    if (plateEl && !plateEl.value) {
+      const v = S.vehicles.filter(x => x.custId === cust.id).pop();
+      if (v) {
+        plateEl.value = v.plate || '';
+        if (modelEl && !modelEl.value) modelEl.value = [v.brand, v.model].filter(Boolean).join(' ');
+      }
+    }
+  });
 
   /* ── Recalculate totals ── */
   function recalc() {

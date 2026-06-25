@@ -3,6 +3,7 @@
    ============================================================ */
 
 let _jobFilter = -1; // -1 = แสดงทั้งหมด
+let _jobSearch  = ''; // ค้นหา
 
 /* ══════════════════════════════════════
    HTML
@@ -11,6 +12,19 @@ function jobsHTML() {
   const filtered = _jobFilter === -1
     ? [...S.jobs].reverse()
     : S.jobs.filter(j => j.status === _jobFilter).reverse();
+
+  // ── Search filter ──
+  const q = _jobSearch.trim().toLowerCase();
+  const displayed = q
+    ? filtered.filter(j =>
+        (j.no         || '').toLowerCase().includes(q) ||
+        (j.custName   || '').toLowerCase().includes(q) ||
+        (j.plate      || '').toLowerCase().includes(q) ||
+        (j.carModel   || '').toLowerCase().includes(q) ||
+        (j.complaint  || '').toLowerCase().includes(q) ||
+        (j.assignTo   || '').toLowerCase().includes(q)
+      )
+    : filtered;
   
   /* ── Stats ── */
   const totalJobs = S.jobs.length;
@@ -32,8 +46,8 @@ function jobsHTML() {
         ${s} (${S.jobs.filter(j=>j.status===i).length})
       </button>`).join('')}`;
 
-  const rows = filtered.length
-    ? filtered.map(j => {
+  const rows = displayed.length
+    ? displayed.map(j => {
         const inv = S.invoices.find(i => i.jobId === j.id || (j.no && i.ref === j.no));
         return `
           <tr data-oj="${j.id}">
@@ -41,7 +55,8 @@ function jobsHTML() {
             <td style="font-size:.8rem">${dateStr(j.createdAt)}</td>
             <td style="font-weight:600">${esc(j.custName || '—')}</td>
             <td style="font-size:.82rem;color:var(--fg2)">${esc(j.plate || '—')} ${j.carModel ? '· '+esc(j.carModel) : ''}</td>
-            <td style="font-size:.82rem;max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">
+            <td style="font-size:.82rem;max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap"
+                title="${esc(j.complaint || '')}">
               ${esc(j.complaint || '—')}
             </td>
             <td style="font-size:.82rem;color:var(--fg2)">${esc(j.assignTo || '—')}</td>
@@ -49,7 +64,7 @@ function jobsHTML() {
             <td class="r money fc-gold">${inv ? THB(inv.grand) : '—'}</td>
           </tr>`;
       }).join('')
-    : `<tr><td colspan="8" class="tbl-empty">ไม่มีงาน</td></tr>`;
+    : `<tr><td colspan="8" class="tbl-empty">${q ? 'ไม่พบผลลัพธ์สำหรับ "'+esc(q)+'"' : 'ไม่มีงาน'}</td></tr>`;
 
   return `
     <!-- ── Header ── -->
@@ -89,8 +104,18 @@ function jobsHTML() {
       </div>
     </div>
 
-    <!-- ── Filter and table ── -->
-    <div class="flex gap8 mb16" style="flex-wrap:wrap">${filterBtns}</div>
+    <!-- ── Filter, Search and table ── -->
+    <div class="fjb gap8 mb12" style="flex-wrap:wrap">
+      <div class="flex gap8" style="flex-wrap:wrap;flex:1">${filterBtns}</div>
+      <div style="position:relative;min-width:220px">
+        <input id="jobSearchBox" value="${esc(_jobSearch)}" placeholder="🔍 ค้นหา ชื่อ / ทะเบียน / งาน…"
+          style="width:100%;background:var(--ink);border:1px solid var(--ln2);color:var(--fg);
+                 border-radius:8px;padding:7px 32px 7px 11px;font-size:.85rem;outline:none;box-sizing:border-box">
+        ${_jobSearch ? `<button id="jobSearchClear" title="ล้าง"
+          style="position:absolute;right:8px;top:50%;transform:translateY(-50%);background:none;border:none;
+                 color:var(--fg2);cursor:pointer;font-size:.9rem;padding:0;line-height:1">✕</button>` : ''}
+      </div>
+    </div>
 
     <div class="tbl-wrap">
       <table class="tbl">
@@ -115,6 +140,13 @@ function bindJobs() {
   document.querySelectorAll('[data-jf]').forEach(b =>
     b.addEventListener('click', () => { _jobFilter = parseInt(b.dataset.jf); renderPanel(); })
   );
+
+  const sb = sel('jobSearchBox');
+  if (sb) {
+    sb.addEventListener('input', () => { _jobSearch = sb.value; renderPanel(); });
+    sb.addEventListener('keydown', e => { if (e.key === 'Escape') { _jobSearch = ''; renderPanel(); } });
+  }
+  sel('jobSearchClear')?.addEventListener('click', () => { _jobSearch = ''; renderPanel(); });
 
   document.querySelectorAll('[data-oj]').forEach(el =>
     el.addEventListener('click', () => openJobDetail(el.dataset.oj))
