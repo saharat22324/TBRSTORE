@@ -533,7 +533,7 @@ async function recordStockTransaction(stockItemId, type, quantity, referenceType
  * === INVOICES ===
  */
 
-async function addInvoice(jobId, customerId, vehicleId, items, subtotal, discount, vat, grandTotal, note, invoiceNo) {
+async function addInvoice(jobId, customerId, vehicleId, items, subtotal, discount, vat, grandTotal, note, invoiceNo, meta = {}) {
   try {
     // Use provided invoice number or generate locally
     let invNo = invoiceNo;
@@ -563,6 +563,10 @@ async function addInvoice(jobId, customerId, vehicleId, items, subtotal, discoun
         job_id: safeJobId,
         customer_id: safeCustomerId,
         vehicle_id: safeVehicleId,
+        customer_name: meta.cust || null,
+        plate: meta.plate || null,
+        phone: meta.phone || null,
+        car_model: meta.model || null,
         subtotal,
         discount,
         vat,

@@ -605,7 +605,8 @@ async function saveInvoice() {
           total: fmt(it.qty * it.price),
           note: ''
         })),
-        sub, bDisc, vat ? 0.07 : 0, grand, note, no  // Pass invoice number
+        sub, bDisc, vat ? 0.07 : 0, grand, note, no,
+        { cust, phone, plate, model: sv('bModel') }  // meta: snapshot customer/vehicle info
       );
       if (supaResult) inv.id = supaResult.id;
     }

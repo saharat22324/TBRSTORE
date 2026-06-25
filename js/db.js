@@ -254,10 +254,10 @@ function convertSupabaseToState(dbData) {
       no: i.invoice_number,
       ts: new Date(i.created_at).getTime(),
       jobId: i.job_id,
-      cust: i.customers?.name || '',
+      cust: i.customer_name || i.customers?.name || '',
       phone: i.phone || '',
-      plate: i.vehicles?.plate || '',
-      model: i.model || '',
+      plate: i.plate || i.vehicles?.plate || '',
+      model: i.car_model || i.model || '',
       mileage: i.mileage,
       ref: i.note || '',
       items: i.invoice_items?.map(it => ({
