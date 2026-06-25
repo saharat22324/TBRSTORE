@@ -199,6 +199,23 @@ async function loadData() {
         if (data && (data.customers?.length > 0 || data.vehicles?.length > 0 || data.jobs?.length > 0 || data.invoices?.length > 0 || data.services?.length > 0 || data.stockItems?.length > 0)) {
           S = convertSupabaseToState(data);
           useSupabase = true;
+
+          // ── ตรวจจับ RLS blocking invoices ──────────────────────────────
+          // ถ้า Supabase คืน invoices = 0 แต่ localStorage มีบิล → RLS อาจบล็อก
+          const localRaw = localStorage.getItem(DB_KEY);
+          if (data.invoices?.length === 0 && localRaw) {
+            try {
+              const localParsed = JSON.parse(localRaw);
+              const localInvCount = (localParsed.invoices || []).length;
+              if (localInvCount > 0) {
+                console.warn(`[DB] ⚠️  RLS อาจบล็อก invoices — Supabase คืน 0 บิล แต่ localStorage มี ${localInvCount} บิล`);
+                console.warn('[DB] แก้ไข: รัน fix-data-visibility.sql ใน Supabase SQL Editor');
+                // แสดง toast เตือน admin
+                window._rlsWarning = true;
+              }
+            } catch (_e) {}
+          }
+
           // ALWAYS merge localStorage records not yet in Supabase (safety net)
           mergeLocalStorageIntoS();
           // Sync seq counters so invoice/job numbers never collide between users
@@ -214,6 +231,7 @@ async function loadData() {
           console.warn('[DB] Supabase returned empty data (possible RLS policy issue)');
           S = convertSupabaseToState(data);
           useSupabase = true;
+          window._rlsWarning = true;
           console.log('[DB] ⚠️  Supabase accessible but returned empty (check RLS policies)');
           // Fall through to try localStorage as additional source
         } else {

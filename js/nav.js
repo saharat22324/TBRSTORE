@@ -81,4 +81,21 @@ function renderPanel() {
     case 'settings':  root.innerHTML = settingsHTML();   bindSettings();   break;
     default:          root.innerHTML = dashboardHTML();  bindDashboard();
   }
+
+  // แสดง RLS warning banner ถ้าตรวจพบว่า Supabase บล็อก invoices
+  if (window._rlsWarning && hasPermission('canManageTeam')) {
+    const banner = document.createElement('div');
+    banner.id = 'rlsBanner';
+    banner.style.cssText = 'position:fixed;top:60px;left:50%;transform:translateX(-50%);' +
+      'background:#b91c1c;color:#fff;padding:10px 20px;border-radius:8px;z-index:9999;' +
+      'font-size:.82rem;font-weight:600;box-shadow:0 4px 16px rgba(0,0,0,.4);' +
+      'display:flex;align-items:center;gap:10px;max-width:560px;text-align:center';
+    banner.innerHTML = `
+      ⚠️ Supabase RLS บล็อก invoices — ผู้ใช้บางคนเห็นยอดไม่ตรงกัน
+      <br><small>แก้ไข: รัน <b>fix-data-visibility.sql</b> ใน Supabase SQL Editor</small>
+      <button onclick="this.parentElement.remove();window._rlsWarning=false"
+        style="background:rgba(255,255,255,.25);border:none;color:#fff;padding:4px 8px;border-radius:4px;cursor:pointer;margin-left:8px">✕</button>
+    `;
+    document.body.appendChild(banner);
+  }
 }
