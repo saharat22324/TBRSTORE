@@ -17,7 +17,7 @@ let _lastSyncTs    = 0;      // debounce timestamp
 ══════════════════════════════════════ */
 async function syncRemoteData() {
   if (!useSupabase || !window.supabaseReady || typeof loadAllData !== 'function') return;
-  if (Date.now() - _lastSyncTs < 10000) return; // debounce 10 วิ
+  if (Date.now() - _lastSyncTs < 5000) return; // debounce 5 วิ
   _lastSyncTs = Date.now();
 
   try {
@@ -134,9 +134,9 @@ function startLiveSync() {
     console.warn('[DB] Realtime setup failed (will use polling):', e);
   }
 
-  // 2. Polling 60 วิ — fallback สำหรับเครื่องที่ Realtime ยังไม่ enabled
+  // 2. Polling 15 วิ — fallback สำหรับเครื่องที่ Realtime ยังไม่ enabled
   if (_liveSync) clearInterval(_liveSync);
-  _liveSync = setInterval(syncRemoteData, 60000);
+  _liveSync = setInterval(syncRemoteData, 15000);
 
   // 3. Sync เมื่อกลับมาที่แท็บ
   document.removeEventListener('visibilitychange', _onTabVisible);

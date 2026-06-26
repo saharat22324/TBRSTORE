@@ -254,6 +254,7 @@ function reportHTML() {
     </div>`;
 
   /* ── Top customers (all-time) ── */
+  const custSpend = {};
   for (const inv of S.invoices) {
     const key = (inv.cust || '').trim();
     if (key) custSpend[key] = (custSpend[key] || 0) + inv.grand;
