@@ -225,7 +225,8 @@ async function handleRegister() {
     // Clear form
     setTimeout(() => {
       showLoginForm();
-      document.getElementById('loginEmail').value = email;
+      const loginUser = document.getElementById('loginUsername');
+      if (loginUser) loginUser.value = email.replace('@tbr.local', '');
       document.getElementById('loginPassword').value = '';
     }, 2000);
 

@@ -568,7 +568,7 @@ function syncSeqFromState() {
 
   const maxInv = Math.max(0, ...S.invoices.map(i => extract(i.no, 'INV')));
   const maxJob = Math.max(0, ...S.jobs.map(j => extract(j.no, 'JOB')));
-  const maxQt  = Math.max(0, ...((S.quotations||[]).map(q => extract(q.no, 'QT'))));
+  const maxQt  = Math.max(0, ...((S.quotes||[]).map(q => extract(q.no, 'QT'))));
 
   if (maxInv >= (S.seq?.inv || 1)) S.seq.inv = maxInv + 1;
   if (maxJob >= (S.seq?.job || 1)) S.seq.job = maxJob + 1;

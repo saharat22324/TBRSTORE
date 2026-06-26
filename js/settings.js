@@ -260,6 +260,17 @@ function bindSettings() {
       tax:   sv('sTx'),
       note:  sv('sNt'),
     });
+    // Sync shop config to Supabase (map JS field names → DB column names)
+    if (useSupabase && typeof updateShopConfig === 'function') {
+      updateShopConfig({
+        name:    S.shop.name,
+        address: S.shop.addr,
+        phone:   S.shop.phone,
+        line_id: S.shop.line,
+        tax_id:  S.shop.tax,
+        note:    S.shop.note,
+      }).catch(e => console.warn('[Settings] shop config sync failed:', e));
+    }
     await saveData();
     renderNav();
     showToast('บันทึกข้อมูลร้านแล้ว');
