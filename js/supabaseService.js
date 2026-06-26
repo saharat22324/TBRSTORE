@@ -693,13 +693,13 @@ async function updateInvoiceFull(invId, invoiceData, items) {
       .update({
         subtotal:      invoiceData.sub,
         discount:      invoiceData.disc,
-        vat_rate:      invoiceData.vat > 0 ? 0.07 : 0,
+        vat:           invoiceData.vat > 0 ? 0.07 : 0,
         grand_total:   invoiceData.grand,
         customer_name: invoiceData.cust  || null,
         plate:         invoiceData.plate || null,
         phone:         invoiceData.phone || null,
         car_model:     invoiceData.model || null,
-        notes:         invoiceData.note  || null,
+        note:          invoiceData.note  || null,
       })
       .eq('id', invId);
     if (invErr) throw invErr;

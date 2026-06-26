@@ -319,10 +319,10 @@ function openJobDetail(jid) {
 
   const reqs      = S.requisitions.filter(r => r.jobId === jid);
   const inv       = S.invoices.find(i => i.jobId === jid || (j.no && i.ref === j.no));
-  /* use inv.totalCost (includes stock + order + service costs) when invoice exists;
-     fall back to requisition cost only when no invoice yet */
+  // คำนวณต้นทุนจาก items โดยตรง (ไม่ใช้ inv.totalCost ที่อาจเก่า)
+  const calcInvCostJ = i => (i.items || []).reduce((s, it) => s + ((it.qty || 0) * (it.cost || 0)), 0);
   const reqCost   = reqs.reduce((s, r) => s + r.items.reduce((ss, it) => ss + it.qty * (it.cost || 0), 0), 0);
-  const totalCost = inv ? (inv.totalCost || reqCost) : reqCost;
+  const totalCost = inv ? calcInvCostJ(inv) : reqCost;
   const ov        = sel('mOv');
 
   const statusBtns = JOB_STATUS.map((s, i) => `
@@ -908,33 +908,28 @@ function openEditReqModal(jid, reqId) {
   sel('editReqSave').addEventListener('click', async () => {
     if (!editItems.length) return showToast('ต้องมีรายการอย่างน้อย 1 รายการ', 'err');
 
-    /* Calculate stock differences and restore/deduct as needed */
-    req.items.forEach((oldIt, idx) => {
-      const newIt = editItems[idx];
-      if (!oldIt.sid || !newIt) return;
-
-      const qtyDiff = parseFloat(oldIt.qty) - parseFloat(newIt.qty);
-      if (qtyDiff !== 0) {
-        const st = S.stockItems.find(x => x.id === oldIt.sid);
-        if (st) {
-          st.qty = fmt(parseFloat(st.qty) + qtyDiff);
-          st.used = fmt((st.used || 0) - qtyDiff);
-        }
+    /* Calculate stock differences: restore old quantities first, then deduct new quantities.
+       Using restore-all + re-deduct approach (safe when items are deleted/reordered) */
+    // 1. Restore all OLD stock
+    req.items.forEach(it => {
+      if (!it.sid) return;
+      const st = S.stockItems.find(x => x.id === it.sid);
+      if (st) {
+        st.qty  = fmt(parseFloat(st.qty)  + parseFloat(it.qty));
+        st.used = fmt(Math.max(0, (st.used || 0) - parseFloat(it.qty)));
       }
     });
-
-    /* Handle deleted items (restore their stock) */
-    if (editItems.length < req.items.length) {
-      for (let i = editItems.length; i < req.items.length; i++) {
-        const oldIt = req.items[i];
-        if (!oldIt.sid) continue;
-        const st = S.stockItems.find(x => x.id === oldIt.sid);
-        if (st) {
-          st.qty = fmt(parseFloat(st.qty) + parseFloat(oldIt.qty));
-          st.used = fmt((st.used || 0) - oldIt.qty);
-        }
+    // 2. Deduct NEW stock
+    editItems.forEach(it => {
+      if (!it.sid) return;
+      const st = S.stockItems.find(x => x.id === it.sid);
+      if (st) {
+        st.qty  = fmt(parseFloat(st.qty)  - parseFloat(it.qty));
+        st.used = fmt((st.used || 0) + parseFloat(it.qty));
+        if (useSupabase && typeof updateStockBySku === 'function')
+          updateStockBySku(st.id, st.qty).catch(() => {});
       }
-    }
+    });
 
     /* Update requisition */
     req.items = editItems;
