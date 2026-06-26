@@ -415,6 +415,7 @@ window.renderPanel = function() {
     case 'jobs':      root.innerHTML = jobsHTML();       bindJobs();       break;
     case 'stock':     root.innerHTML = stockHTML();      bindStock();      break;
     case 'billing':   root.innerHTML = billingHTML();    bindBilling();    break;
+    case 'purchasing': root.innerHTML = purchasingHTML(); bindPurchasing(); break;
     case 'report':    root.innerHTML = reportHTML();     bindReport();     break;
     case 'settings':  root.innerHTML = settingsHTML();   bindSettings();   break;
     default:          root.innerHTML = dashboardHTML();  bindDashboard();
