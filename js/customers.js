@@ -21,7 +21,8 @@ function customersHTML() {
     const lastJob = S.jobs
       .filter(j => j.vehicleId === v.id)
       .sort((a,b) => (b.createdAt||0) - (a.createdAt||0))[0];
-    const lastTs = lastJob?.createdAt || v.createdAt || 0;
+    const lastTs = lastJob?.createdAt || v.createdAt || null;
+    if (!lastTs) return null; // ไม่มีข้อมูลวันที่ → ข้ามไป
     if (lastTs > now90) return null; // serviced recently
     const daysAgo = Math.floor((Date.now() - lastTs) / 86400000);
     return `

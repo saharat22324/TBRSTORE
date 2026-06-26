@@ -216,8 +216,8 @@ async function syncRemoteData() {
 
     // ── Stock Ledger: append new entries from other users ──
     if (newState.stockLedger?.length > 0) {
-      const ledgerIds = new Set((S.stockLedger || []).map(e => e.id).filter(Boolean));
-      const newEntries = newState.stockLedger.filter(e => e.id && !ledgerIds.has(e.id));
+      const ledgerIds = new Set((S.stockLedger || []).map(e => e._id).filter(Boolean));
+      const newEntries = newState.stockLedger.filter(e => e._id && !ledgerIds.has(e._id));
       if (newEntries.length > 0) {
         if (!S.stockLedger) S.stockLedger = [];
         S.stockLedger = [...S.stockLedger, ...newEntries];
