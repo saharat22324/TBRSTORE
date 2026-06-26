@@ -269,7 +269,17 @@ function openJobModal(jid, prefVid) {
       if (useSupabase) {
         const isUUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
         if (isUUID.test(j.id) && typeof updateJob === 'function') {
-          updateJob(j.id, data).catch(e => console.warn('[Jobs] updateJob Supabase error:', e));
+          // Map JS field names → DB column names (camelCase → snake_case)
+          const dbData = {
+            complaint: data.complaint || null,
+            mileage:   data.mileage   || 0,
+            note:      data.note      || null,
+            assign_to: data.assignTo  || null,
+            status_id: (data.status   || 0) + 1,
+          };
+          if (isUUID.test(data.vehicleId)) dbData.vehicle_id  = data.vehicleId;
+          if (isUUID.test(data.custId))    dbData.customer_id = data.custId;
+          updateJob(j.id, dbData).catch(e => console.warn('[Jobs] updateJob Supabase error:', e));
         } else if (typeof addJob === 'function') {
           // Local ID → create in Supabase, replace local ID
           addJob(data.vehicleId, data.custId, data.complaint, data.assignTo, data.mileage, data.note)

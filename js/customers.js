@@ -510,9 +510,17 @@ function openVehModal(vid, prefCustId) {
         // Update existing
         if (useSupabase) {
           if (isUUID(v.id)) {
-            // Real Supabase ID → update (only pass customer_id if valid UUID)
-            const vUpdates = { ...data };
-            if (safeCustId) vUpdates.customer_id = safeCustId;
+            // Real Supabase ID → update (map JS field names to DB column names)
+            const vUpdates = {
+              plate:   data.plate,
+              brand:   data.brand,
+              model:   data.model,
+              year:    data.year,
+              color:   data.color,
+              mileage: data.mileage,
+            };
+            if (safeCustId)  vUpdates.customer_id    = safeCustId;
+            if (data.vin)    vUpdates.chassis_number = data.vin;
             await updateVehicle(v.id, vUpdates);
           } else {
             // Local ID → create in Supabase and replace local ID
