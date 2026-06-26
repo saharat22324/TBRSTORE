@@ -41,9 +41,10 @@ function dashboardHTML() {
     const lastJob = S.jobs
       .filter(j => j.vehicleId === v.id)
       .sort((a,b) => (b.createdAt||0) - (a.createdAt||0))[0];
-    const lastTs  = lastJob?.createdAt || v.createdAt || 0;
+    const lastTs  = lastJob?.createdAt || v.createdAt || null;
+    if (!lastTs) return null; // ไม่มีข้อมูลวันที่ → ข้ามไป
     const daysAgo = Math.floor((now - lastTs) / 86400000);
-    return daysAgo >= 80 ? { v, c, daysAgo, lastTs } : null;
+    return daysAgo >= 80 ? { v, c, daysAgo } : null;
   }).filter(Boolean).sort((a,b) => b.daysAgo - a.daysAgo);
 
   /* ── 6-month sales chart data ── */

@@ -286,7 +286,7 @@ function reportHTML() {
         <td class="r" style="font-weight:700;color:${gp>=0?'var(--grn)':'var(--bad)'}">${THB(gp)}</td>
         <td class="r" style="font-size:.8rem;color:var(--fg2)">${gpPct}%</td>
       </tr>`;
-  }).join('') || `<tr><td colspan="5" class="tbl-empty">ยังไม่มีข้อมูล</td></tr>`;
+  }).join('') || `<tr><td colspan="${hasPermission('canViewCost') ? 5 : 4}" class="tbl-empty">ยังไม่มีข้อมูล</td></tr>`;
 
   const categoryHTML = `
     <div class="card" style="margin-top:16px">

@@ -582,7 +582,8 @@ function openVehDetail(vid) {
   const vInvs     = vJobs.map(j => S.invoices.find(i => i.jobId === j.id || (j.no && i.ref === j.no))).filter(Boolean);
   const totalSpent= vInvs.reduce((s, i) => s + i.grand, 0);
   const lastJob   = vJobs[0];
-  const daysSince = lastJob ? Math.floor((Date.now() - lastJob.createdAt) / 86400000) : null;
+  const _dsRaw  = lastJob ? Math.floor((Date.now() - lastJob.createdAt) / 86400000) : null;
+  const daysSince = (_dsRaw !== null && !isNaN(_dsRaw)) ? _dsRaw : null;
 
   /* Mileage intervals */
   const mileSorted = vJobs.filter(j => j.mileage).sort((a,b) => (a.createdAt||0)-(b.createdAt||0));
@@ -590,8 +591,8 @@ function openVehDetail(vid) {
   if (mileSorted.length >= 2) {
     const intervals = [];
     for (let i = 1; i < mileSorted.length; i++) {
-      const diff = mileSorted[i].mileage - mileSorted[i-1].mileage;
-      if (diff > 0) intervals.push(diff);
+      const diff = parseFloat(mileSorted[i].mileage) - parseFloat(mileSorted[i-1].mileage);
+      if (diff > 0 && !isNaN(diff)) intervals.push(diff);
     }
     if (intervals.length) avgMileInterval = Math.round(intervals.reduce((s,n)=>s+n,0) / intervals.length);
   }
