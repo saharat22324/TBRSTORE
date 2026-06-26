@@ -224,6 +224,8 @@ async function syncRemoteData() {
         changed = true;
       }
     }
+
+    if (changed) {
       syncSeqFromState();
       localStorage.setItem(DB_KEY, JSON.stringify(S));
 
