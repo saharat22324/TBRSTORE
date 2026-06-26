@@ -202,30 +202,68 @@ function openNewPOModal() {
       return;
     }
 
+    const inpStyle = 'background:var(--ink);border:1px solid var(--ln2);color:var(--fg);border-radius:7px;outline:none';
     box.innerHTML = poItems.map(it => `
-      <div style="display:grid;grid-template-columns:1fr 110px 80px 36px;gap:8px;
+      <div style="display:grid;grid-template-columns:1fr 120px 90px 36px;gap:8px;
                   align-items:center;padding:7px 4px;border-bottom:1px dashed var(--ln)">
-        <div style="font-size:.86rem;font-weight:600">${esc(it.nm)}</div>
+        ${it.sid
+          ? `<div style="font-size:.86rem;font-weight:600">${esc(it.nm)}</div>`
+          : `<input type="text" value="${esc(it.nm)}" data-pnm="${it.k}" placeholder="ชื่อสินค้า…"
+                   style="${inpStyle};padding:6px 8px;font-size:.84rem;font-weight:600;width:100%;box-sizing:border-box">`
+        }
         <div style="display:flex;align-items:center;gap:4px">
           <input type="number" min="1" step="1" value="${it.qty}" data-pk="${it.k}"
-                 style="width:64px;background:var(--ink);border:1px solid var(--ln2);
-                        color:var(--fg);border-radius:7px;padding:6px 7px;font-size:.84rem;
-                        outline:none;text-align:right">
-          <span style="font-size:.76rem;color:var(--fg2)">${esc(it.unit)}</span>
+                 style="${inpStyle};width:58px;padding:6px 7px;font-size:.84rem;text-align:right">
+          ${it.sid
+            ? `<span style="font-size:.76rem;color:var(--fg2)">${esc(it.unit)}</span>`
+            : `<input type="text" value="${esc(it.unit)}" data-punit="${it.k}" placeholder="หน่วย"
+                     style="${inpStyle};width:36px;padding:5px 5px;font-size:.76rem;text-align:center">`
+          }
         </div>
-        ${hasPermission('canViewCost') ? `<div style="font-size:.82rem;text-align:right;color:var(--fg2)">
-          ${THB(it.cost * it.qty)}
-        </div>` : '<div></div>'}
+        ${hasPermission('canViewCost')
+          ? it.sid
+            ? `<div style="font-size:.82rem;text-align:right;color:var(--fg2)" data-prowcost="${it.k}">${THB(it.cost * it.qty)}</div>`
+            : `<input type="number" min="0" step="0.01" value="${it.cost}" data-pcost="${it.k}" placeholder="ราคา/หน่วย"
+                     style="${inpStyle};width:90px;padding:6px 7px;font-size:.82rem;text-align:right;box-sizing:border-box">`
+          : '<div></div>'
+        }
         <button class="btn-icon" data-pdl="${it.k}">
           ${svgI('<path d="M18 6 6 18M6 6l12 12"/>',13)}
         </button>
       </div>`).join('');
 
+    function updateTotals() {
+      const tot = poItems.reduce((s, it) => s + it.qty * it.cost, 0);
+      si('poTotal', hasPermission('canViewCost') ? THB(tot) : '—');
+      sel('poSave').disabled = !poItems.length || !sv('poSupplier').trim();
+      box.querySelectorAll('[data-prowcost]').forEach(el => {
+        const it = poItems.find(x => x.k == el.dataset.prowcost);
+        if (it) el.innerHTML = THB(it.qty * it.cost);
+      });
+    }
+
     box.querySelectorAll('input[data-pk]').forEach(inp => {
       inp.addEventListener('input', () => {
         const it = poItems.find(x => x.k == inp.dataset.pk);
-        if (it) it.qty = parseFloat(inp.value) || 1;
-        renderPORows();
+        if (it) { it.qty = parseFloat(inp.value) || 1; updateTotals(); }
+      });
+    });
+    box.querySelectorAll('input[data-pnm]').forEach(inp => {
+      inp.addEventListener('input', () => {
+        const it = poItems.find(x => x.k == inp.dataset.pnm);
+        if (it) it.nm = inp.value;
+      });
+    });
+    box.querySelectorAll('input[data-punit]').forEach(inp => {
+      inp.addEventListener('input', () => {
+        const it = poItems.find(x => x.k == inp.dataset.punit);
+        if (it) it.unit = inp.value;
+      });
+    });
+    box.querySelectorAll('input[data-pcost]').forEach(inp => {
+      inp.addEventListener('input', () => {
+        const it = poItems.find(x => x.k == inp.dataset.pcost);
+        if (it) { it.cost = parseFloat(inp.value) || 0; updateTotals(); }
       });
     });
     box.querySelectorAll('[data-pdl]').forEach(b => {
@@ -235,9 +273,7 @@ function openNewPOModal() {
       });
     });
 
-    const tot = poItems.reduce((s, it) => s + it.qty * it.cost, 0);
-    si('poTotal', hasPermission('canViewCost') ? THB(tot) : '—');
-    sel('poSave').disabled = !poItems.length || !sv('poSupplier').trim();
+    updateTotals();
   }
 
   sel('poAddSt').addEventListener('click', () => {
