@@ -186,18 +186,19 @@ function reportHTML() {
           <span class="badge b-gold" style="margin-left:auto">${p.count} บิล</span>
         </div>
         <div class="card-b" style="padding:12px 14px">
-          <div class="flex gap16 mb10" style="flex-wrap:wrap">
-            <div>
-              <div style="font-size:.67rem;color:var(--fg2)">ยอดขาย</div>
-              <div class="money fc-gold" style="font-weight:700">${THB(p.sell)}</div>
+          <div class="flex gap8 mb10" style="flex-wrap:wrap">
+            <div style="background:var(--p3);border-radius:8px;padding:7px 12px;min-width:90px">
+              <div style="font-size:.65rem;color:var(--fg2);margin-bottom:2px">ยอดขาย</div>
+              <div class="money fc-gold" style="font-size:.95rem;font-weight:700">${THB(p.sell)}</div>
             </div>
-            ${hasPermission('canViewCost') ? `<div>
-              <div style="font-size:.67rem;color:var(--fg2)">ต้นทุน</div>
-              <div class="money" style="font-weight:700;color:var(--bad)">${THB(p.cost)}</div>
+            ${hasPermission('canViewCost') ? `
+            <div style="background:var(--p3);border-radius:8px;padding:7px 12px;min-width:90px">
+              <div style="font-size:.65rem;color:var(--fg2);margin-bottom:2px">ต้นทุน</div>
+              <div class="money" style="font-size:.95rem;font-weight:700;color:var(--bad)">${THB(p.cost)}</div>
             </div>` : ''}
-            <div>
-              <div style="font-size:.67rem;color:var(--fg2)">กำไร</div>
-              <div class="money" style="font-weight:700;color:${p.profit>=0?'var(--grn)':'var(--bad)'}">${THB(p.profit)}</div>
+            <div style="background:var(--p3);border-radius:8px;padding:7px 12px;min-width:90px">
+              <div style="font-size:.65rem;color:var(--fg2);margin-bottom:2px">กำไร</div>
+              <div class="money" style="font-size:.95rem;font-weight:700;color:${p.profit>=0?'var(--grn)':'var(--bad)'}">${THB(p.profit)}</div>
             </div>
           </div>
           <div style="border-top:1px dashed var(--ln);padding-top:10px">
