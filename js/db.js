@@ -60,8 +60,9 @@ async function syncRemoteData() {
         // sync jobId จาก Supabase ถ้า local มี ID ผิดรูปแบบ
         const _uuidRe = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
         if (inv.jobId && !_uuidRe.test(ex.jobId)) { ex.jobId = inv.jobId; changed = true; }
-        // sync invoice items ถ้าจำนวน item เปลี่ยน (user อื่นแก้บิล)
-        if (!ex._editedAt && inv.items?.length > 0 && inv.items.length !== ex.items?.length) {
+        // sync invoice items ถ้าจำนวน item เปลี่ยน หรือยอดรวมต่างกัน (user อื่นแก้บิล)
+        if (!ex._editedAt && inv.items?.length > 0 &&
+            (inv.items.length !== ex.items?.length || Math.abs((inv.grand || 0) - (ex.grand || 0)) > 0.01)) {
           ex.items = inv.items; ex.grand = inv.grand; ex.sub = inv.sub;
           ex.disc = inv.disc; ex.vat = inv.vat; ex.totalCost = inv.totalCost;
           changed = true;
@@ -429,8 +430,13 @@ function convertSupabaseToState(dbData) {
   if (dbData.invoices) {
     // Build cost lookup: Supabase stock UUID → cost_price
     const costByUuid = {};
+    // Build UUID→SKU map so invoice items use SKU (sid) not UUID
+    const uuidToSku = {};
     for (const si of (dbData.stockItems || [])) {
-      if (si.id) costByUuid[si.id] = si.cost_price || 0;
+      if (si.id) {
+        costByUuid[si.id] = si.cost_price || 0;
+        if (si.sku) uuidToSku[si.id] = si.sku;
+      }
     }
 
     state.invoices = dbData.invoices.map(i => ({
@@ -452,7 +458,8 @@ function convertSupabaseToState(dbData) {
         price: it.unit_price,
         cost: it.cost_price > 0 ? it.cost_price : (it.stock_item_id ? (costByUuid[it.stock_item_id] || 0) : 0),
         itemType: it.item_type,
-        sid: it.stock_item_id,
+        // แปลง UUID → SKU เพื่อให้ stock deduction logic ทำงานได้ถูกต้อง
+        sid: it.stock_item_id ? (uuidToSku[it.stock_item_id] || null) : null,
       })) || [],
       sub: i.subtotal,
       disc: i.discount || 0,

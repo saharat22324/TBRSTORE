@@ -621,7 +621,9 @@ async function saveInvoice() {
         { sub, disc: bDisc, vat, grand, cust, plate, phone, model, note },
         bItems.map(it => ({
           type: it.itemType || 'service',
-          stockItemId: it.itemType === 'stock'   ? it.sid : null,
+          stockItemId: it.itemType === 'stock'
+            ? (S.stockItems.find(s => s.id === it.sid)?._uuid || null)
+            : null,
           serviceId:   it.itemType === 'service' ? it.sid : null,
           description: it.nm, quantity: it.qty, unitPrice: it.price,
           costPrice: it.cost || 0, total: fmt(it.qty * it.price), note: '',

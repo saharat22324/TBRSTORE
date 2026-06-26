@@ -109,12 +109,12 @@ function jobsHTML() {
       <div class="stat teal" style="min-height:92px">
         <div class="sk">${svgI('<circle cx="12" cy="8" r="4"/><path d="M4 21a8 8 0 0 1 16 0"/>')} งานเปิดอยู่</div>
         <div class="sv" style="font-size:1.45rem">${openJobs}</div>
-        <div class="sd">${((openJobs/totalJobs)*100).toFixed(0)}% ของทั้งหมด</div>
+        <div class="sd">${totalJobs > 0 ? ((openJobs/totalJobs)*100).toFixed(0) : 0}% ของทั้งหมด</div>
       </div>
       <div class="stat warn" style="min-height:92px">
         <div class="sk">${svgI('<path d="M9 12l2 2 4-4m-6.5 10a9.5 9.5 0 1119 0 9.5 9.5 0 01-19 0z"/>')} งานเสร็จแล้ว</div>
         <div class="sv" style="font-size:1.45rem">${closeJobs}</div>
-        <div class="sd">${((closeJobs/totalJobs)*100).toFixed(0)}% สำเร็จ</div>
+        <div class="sd">${totalJobs > 0 ? ((closeJobs/totalJobs)*100).toFixed(0) : 0}% สำเร็จ</div>
       </div>
     </div>
 

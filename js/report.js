@@ -451,11 +451,12 @@ function dailyTransactionHTML() {
     }
   }
 
-  /* ── Grand totals — use invoice.grand (inc VAT/disc) for accuracy ── */
+  /* ── Grand totals — recalculate cost from items for accuracy ── */
+  const calcInvCostDaily = inv => (inv.items || []).reduce((s, it) => s + ((it.qty || 0) * (it.cost || 0)), 0);
   let gSell = 0, gCost = 0;
   for (const inv of filtered) {
-    gSell += inv.grand    || 0;
-    gCost += inv.totalCost || 0;
+    gSell += inv.grand || 0;
+    gCost += calcInvCostDaily(inv);
   }
   let gProfit = fmt(gSell - gCost);
 
