@@ -384,8 +384,14 @@ function openCustModal(id) {
         // Update existing
         if (useSupabase) {
           if (isUUID(m.id)) {
-            // Real Supabase ID → update
-            await updateCustomer(m.id, data);
+            // Real Supabase ID → update (map JS field names to DB column names)
+            await updateCustomer(m.id, {
+              name:    data.name,
+              phone:   data.phone,
+              email:   data.email,
+              line_id: data.line,   // local state uses 'line', DB uses 'line_id'
+              note:    data.note,
+            });
           } else {
             // Local ID → create in Supabase and replace local ID
             const result = await addCustomer(data.name, data.phone, data.email, data.line, '', data.note);

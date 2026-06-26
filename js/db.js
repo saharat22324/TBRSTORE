@@ -463,7 +463,8 @@ function convertSupabaseToState(dbData) {
       })) || [],
       sub: i.subtotal,
       disc: i.discount || 0,
-      vat: i.vat || 0,
+      // vat ใน DB เก็บเป็น rate (0.07) → แปลงกลับเป็นตัวเลข amount
+      vat: (i.vat > 0) ? fmt(Math.max(0, (i.subtotal || 0) - (i.discount || 0)) * 0.07) : 0,
       grand: i.grand_total,
       totalCost: (i.invoice_items || []).reduce((s, it) => s + (it.quantity || 0) * (it.cost_price > 0 ? it.cost_price : (it.stock_item_id ? (costByUuid[it.stock_item_id] || 0) : 0)), 0),
       note: i.note || '',
