@@ -427,6 +427,14 @@ function bindDocActions(type, data, dc) {
 
     q.converted = true;
 
+    // Update converted status in Supabase
+    if (useSupabase && q.id && typeof updateQuote === 'function') {
+      const _uuidRe = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+      if (_uuidRe.test(q.id)) {
+        updateQuote(q.id, { converted: true }).catch(e => console.warn('[Quote] Supabase convert failed:', e));
+      }
+    }
+
     /* Load QT items into billing */
     bItems = data.items.map(it => ({
       k: ++bKey, sid: null, nm: it.name, unit: it.unit,

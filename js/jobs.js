@@ -605,7 +605,15 @@ function openJobDetail(jid) {
       /* Remove requisition */
       S.requisitions = S.requisitions.filter(r => r.id !== reqId);
       j.requisitions = (j.requisitions || []).filter(rid => rid !== reqId);
-      
+
+      // Delete from Supabase
+      if (useSupabase && typeof deleteRequisition === 'function') {
+        const _uuidRe = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+        if (_uuidRe.test(reqId)) {
+          deleteRequisition(reqId).catch(e => console.warn('[Req] Supabase delete failed:', e));
+        }
+      }
+
       await saveData();
       renderNav();
       openJobDetail(jid);
@@ -824,6 +832,18 @@ function openReqModal(jid) {
     if (!j.requisitions) j.requisitions = [];
     j.requisitions.push(req.id);
 
+    // Save to Supabase
+    if (useSupabase && typeof addRequisition === 'function') {
+      addRequisition(jid, no, req.items, req.note)
+        .then(result => {
+          if (result?.id) {
+            req.id = result.id;
+            localStorage.setItem(DB_KEY, JSON.stringify(S));
+          }
+        })
+        .catch(e => console.warn('[Req] Supabase save failed:', e));
+    }
+
     await saveData();
     closeMod();
     renderNav();
@@ -943,6 +963,14 @@ function openEditReqModal(jid, reqId) {
 
     /* Update requisition */
     req.items = editItems;
+
+    // Update in Supabase
+    if (useSupabase && typeof updateRequisition === 'function') {
+      const _uuidRe = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+      if (_uuidRe.test(req.id)) {
+        updateRequisition(req.id, { items: req.items }).catch(e => console.warn('[Req] Supabase update failed:', e));
+      }
+    }
 
     await saveData();
     closeMod();

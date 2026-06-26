@@ -755,6 +755,19 @@ async function saveQuote() {
   };
 
   S.quotes.push(qt);
+
+  // Save to Supabase
+  if (useSupabase && typeof addQuote === 'function') {
+    addQuote(qt)
+      .then(result => {
+        if (result?.id) {
+          qt.id = result.id;
+          localStorage.setItem(DB_KEY, JSON.stringify(S));
+        }
+      })
+      .catch(e => console.warn('[Quote] Supabase save failed:', e));
+  }
+
   await saveData();
   showToast(`ออกใบเสนอราคา ${no} แล้ว`);
 

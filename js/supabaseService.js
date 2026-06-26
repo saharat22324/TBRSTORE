@@ -865,6 +865,197 @@ async function getNextJobNumber() {
   }
 }
 
+/* ══════════════════════════════════════
+   REQUISITIONS
+══════════════════════════════════════ */
+async function addRequisition(jobId, no, items, note) {
+  try {
+    const sb = getSupabase();
+    const row = {
+      no,
+      job_id:     jobId || null,
+      items:      items || [],
+      note:       note  || null,
+      created_by: currentUser?.id || null,
+    };
+    const { data, error } = await sb.from('requisitions').insert([row]).select().single();
+    if (error) throw error;
+    return data;
+  } catch (err) {
+    console.error('[Service] addRequisition error:', err);
+    return null;
+  }
+}
+
+async function updateRequisition(reqId, updates) {
+  try {
+    const { data, error } = await getSupabase()
+      .from('requisitions')
+      .update(updates)
+      .eq('id', reqId)
+      .select()
+      .single();
+    if (error) throw error;
+    return data;
+  } catch (err) {
+    console.error('[Service] updateRequisition error:', err);
+    return null;
+  }
+}
+
+async function deleteRequisition(reqId) {
+  try {
+    const { error } = await getSupabase()
+      .from('requisitions')
+      .delete()
+      .eq('id', reqId);
+    if (error) throw error;
+    return true;
+  } catch (err) {
+    console.error('[Service] deleteRequisition error:', err);
+    return false;
+  }
+}
+
+async function getRequisitions() {
+  try {
+    const { data, error } = await getSupabase()
+      .from('requisitions')
+      .select('*')
+      .order('created_at', { ascending: false });
+    if (error) throw error;
+    return data || [];
+  } catch (err) {
+    console.error('[Service] getRequisitions error:', err);
+    return [];
+  }
+}
+
+/* ══════════════════════════════════════
+   EXPENSES
+══════════════════════════════════════ */
+async function addExpense(label, amount, date, note) {
+  try {
+    const sb = getSupabase();
+    const row = {
+      label,
+      amount:     parseFloat(amount) || 0,
+      date:       date || new Date().toISOString().slice(0, 10),
+      note:       note || null,
+      created_by: currentUser?.id || null,
+    };
+    const { data, error } = await sb.from('expenses').insert([row]).select().single();
+    if (error) throw error;
+    return data;
+  } catch (err) {
+    console.error('[Service] addExpense error:', err);
+    return null;
+  }
+}
+
+async function deleteExpense(expId) {
+  try {
+    const { error } = await getSupabase()
+      .from('expenses')
+      .delete()
+      .eq('id', expId);
+    if (error) throw error;
+    return true;
+  } catch (err) {
+    console.error('[Service] deleteExpense error:', err);
+    return false;
+  }
+}
+
+async function getExpenses() {
+  try {
+    const { data, error } = await getSupabase()
+      .from('expenses')
+      .select('*')
+      .order('date', { ascending: false });
+    if (error) throw error;
+    return data || [];
+  } catch (err) {
+    console.error('[Service] getExpenses error:', err);
+    return [];
+  }
+}
+
+/* ══════════════════════════════════════
+   QUOTES
+══════════════════════════════════════ */
+async function addQuote(quoteData) {
+  try {
+    const sb = getSupabase();
+    const row = {
+      no:         quoteData.no       || null,
+      cust_name:  quoteData.cust     || null,
+      phone:      quoteData.phone    || null,
+      plate:      quoteData.plate    || null,
+      car_model:  quoteData.model    || null,
+      items:      quoteData.items    || [],
+      sub:        parseFloat(quoteData.sub)   || 0,
+      disc:       parseFloat(quoteData.disc)  || 0,
+      vat:        parseFloat(quoteData.vat)   || 0,
+      grand:      parseFloat(quoteData.grand) || 0,
+      note:       quoteData.note     || null,
+      ref:        quoteData.ref      || null,
+      converted:  quoteData.converted || false,
+      created_by: currentUser?.id    || null,
+    };
+    const { data, error } = await sb.from('quotes').insert([row]).select().single();
+    if (error) throw error;
+    return data;
+  } catch (err) {
+    console.error('[Service] addQuote error:', err);
+    return null;
+  }
+}
+
+async function updateQuote(quoteId, updates) {
+  try {
+    const { data, error } = await getSupabase()
+      .from('quotes')
+      .update(updates)
+      .eq('id', quoteId)
+      .select()
+      .single();
+    if (error) throw error;
+    return data;
+  } catch (err) {
+    console.error('[Service] updateQuote error:', err);
+    return null;
+  }
+}
+
+async function deleteQuote(quoteId) {
+  try {
+    const { error } = await getSupabase()
+      .from('quotes')
+      .delete()
+      .eq('id', quoteId);
+    if (error) throw error;
+    return true;
+  } catch (err) {
+    console.error('[Service] deleteQuote error:', err);
+    return false;
+  }
+}
+
+async function getQuotes() {
+  try {
+    const { data, error } = await getSupabase()
+      .from('quotes')
+      .select('*')
+      .order('created_at', { ascending: false });
+    if (error) throw error;
+    return data || [];
+  } catch (err) {
+    console.error('[Service] getQuotes error:', err);
+    return [];
+  }
+}
+
 /**
  * === BULK DATA LOADING ===
  */
@@ -922,11 +1113,30 @@ async function loadAllData() {
         const data = await getStockLedger();
         console.log('[Service] ✅ Stock ledger loaded:', data?.length || 0);
         return data;
+      })(),
+      (async () => {
+        console.log('[Service] Loading requisitions...');
+        const data = await getRequisitions();
+        console.log('[Service] ✅ Requisitions loaded:', data?.length || 0);
+        return data;
+      })(),
+      (async () => {
+        console.log('[Service] Loading expenses...');
+        const data = await getExpenses();
+        console.log('[Service] ✅ Expenses loaded:', data?.length || 0);
+        return data;
+      })(),
+      (async () => {
+        console.log('[Service] Loading quotes...');
+        const data = await getQuotes();
+        console.log('[Service] ✅ Quotes loaded:', data?.length || 0);
+        return data;
       })()
     ]);
 
     // Extract successful results
-    const [customers, vehicles, jobs, stockItems, invoices, services, shopConfig, stockLedger] = results.map((r, i) => {
+    const [customers, vehicles, jobs, stockItems, invoices, services, shopConfig, stockLedger,
+           requisitions, expenses, quotes] = results.map((r, i) => {
       if (r.status === 'fulfilled') {
         return r.value;
       } else {
@@ -937,14 +1147,17 @@ async function loadAllData() {
 
     console.log('[Service] ✅ Bulk data load complete - Customers:', customers?.length || 0);
     return {
-      customers: customers || [],
-      vehicles: vehicles || [],
-      jobs: jobs || [],
-      stockItems: stockItems || [],
-      invoices: invoices || [],
-      services: services || [],
-      shopConfig: shopConfig || {},
-      stockLedger: stockLedger || []
+      customers:    customers     || [],
+      vehicles:     vehicles      || [],
+      jobs:         jobs          || [],
+      stockItems:   stockItems    || [],
+      invoices:     invoices      || [],
+      services:     services      || [],
+      shopConfig:   shopConfig    || {},
+      stockLedger:  stockLedger   || [],
+      requisitions: requisitions  || [],
+      expenses:     expenses      || [],
+      quotes:       quotes        || [],
     };
   } catch (err) {
     console.error('[Service] loadAllData error:', err);

@@ -773,7 +773,15 @@ function bindReport() {
   /* Delete expense */
   document.querySelectorAll('[data-dex]').forEach(b =>
     b.addEventListener('click', async () => {
-      S.expenses = S.expenses.filter(e => e.id !== b.dataset.dex);
+      const expId = b.dataset.dex;
+      S.expenses = S.expenses.filter(e => e.id !== expId);
+      // Delete from Supabase
+      if (useSupabase && typeof deleteExpense === 'function') {
+        const _uuidRe = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+        if (_uuidRe.test(expId)) {
+          deleteExpense(expId).catch(e => console.warn('[Exp] Supabase delete failed:', e));
+        }
+      }
       await saveData();
       renderPanel();
     })
@@ -875,12 +883,25 @@ function openExpModal() {
     const amt   = parseFloat(sv('eAmt')) || 0;
     if (!label || amt <= 0) return showToast('กรุณากรอกรายการและจำนวนเงิน', 'err');
 
-    S.expenses.push({
+    const exp = {
       id:     'EX-' + Date.now(),
       label,
       amount: amt,
       date:   sv('eDt'),
-    });
+    };
+    S.expenses.push(exp);
+
+    // Save to Supabase
+    if (useSupabase && typeof addExpense === 'function') {
+      addExpense(label, amt, exp.date)
+        .then(result => {
+          if (result?.id) {
+            exp.id = result.id;
+            localStorage.setItem(DB_KEY, JSON.stringify(S));
+          }
+        })
+        .catch(e => console.warn('[Exp] Supabase save failed:', e));
+    }
 
     await saveData();
     closeMod();

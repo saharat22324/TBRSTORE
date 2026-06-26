@@ -146,6 +146,41 @@ async function syncRemoteData() {
       if (S.stockItems.length !== prevStockLen) { changed = true; console.log(`[DB] 🗑 Removed ${prevStockLen - S.stockItems.length} deleted stock item(s)`); }
     }
 
+    // ── Requisitions ──
+    const reqById = new Map(S.requisitions.map(r => [r.id, r]));
+    for (const r of newState.requisitions) {
+      if (!reqById.has(r.id)) { S.requisitions.push(r); changed = true; }
+    }
+    const sbReqIds   = new Set(newState.requisitions.map(r => r.id).filter(Boolean));
+    const prevReqLen = S.requisitions.length;
+    S.requisitions = S.requisitions.filter(r => !r.id || !_delUuidRx.test(r.id) || sbReqIds.has(r.id));
+    if (S.requisitions.length !== prevReqLen) { changed = true; console.log(`[DB] 🗑 Removed ${prevReqLen - S.requisitions.length} deleted requisition(s)`); }
+
+    // ── Expenses ──
+    const expById = new Map(S.expenses.map(e => [e.id, e]));
+    for (const e of newState.expenses) {
+      if (!expById.has(e.id)) { S.expenses.push(e); changed = true; }
+    }
+    const sbExpIds   = new Set(newState.expenses.map(e => e.id).filter(Boolean));
+    const prevExpLen = S.expenses.length;
+    S.expenses = S.expenses.filter(e => !e.id || !_delUuidRx.test(e.id) || sbExpIds.has(e.id));
+    if (S.expenses.length !== prevExpLen) { changed = true; console.log(`[DB] 🗑 Removed ${prevExpLen - S.expenses.length} deleted expense(s)`); }
+
+    // ── Quotes ──
+    const qtById = new Map(S.quotes.map(q => [q.id, q]));
+    for (const q of newState.quotes) {
+      if (qtById.has(q.id)) {
+        const ex = qtById.get(q.id);
+        if (!ex.converted && q.converted) { ex.converted = true; changed = true; }
+      } else {
+        S.quotes.push(q); changed = true;
+      }
+    }
+    const sbQtIds   = new Set(newState.quotes.map(q => q.id).filter(Boolean));
+    const prevQtLen = S.quotes.length;
+    S.quotes = S.quotes.filter(q => !q.id || !_delUuidRx.test(q.id) || sbQtIds.has(q.id));
+    if (S.quotes.length !== prevQtLen) { changed = true; console.log(`[DB] 🗑 Removed ${prevQtLen - S.quotes.length} deleted quote(s)`); }
+
     if (changed) {
       syncSeqFromState();
       localStorage.setItem(DB_KEY, JSON.stringify(S));
@@ -180,11 +215,14 @@ function startLiveSync() {
     if (sbClient?.channel) {
       sbClient
         .channel('tbr-live-' + Date.now())
-        .on('postgres_changes', { event: '*', schema: 'public', table: 'jobs'        }, syncRemoteData)
-        .on('postgres_changes', { event: '*', schema: 'public', table: 'invoices'    }, syncRemoteData)
-        .on('postgres_changes', { event: '*', schema: 'public', table: 'stock_items' }, syncRemoteData)
-        .on('postgres_changes', { event: '*', schema: 'public', table: 'customers'   }, syncRemoteData)
-        .on('postgres_changes', { event: '*', schema: 'public', table: 'vehicles'    }, syncRemoteData)
+        .on('postgres_changes', { event: '*', schema: 'public', table: 'jobs'          }, syncRemoteData)
+        .on('postgres_changes', { event: '*', schema: 'public', table: 'invoices'      }, syncRemoteData)
+        .on('postgres_changes', { event: '*', schema: 'public', table: 'stock_items'   }, syncRemoteData)
+        .on('postgres_changes', { event: '*', schema: 'public', table: 'customers'     }, syncRemoteData)
+        .on('postgres_changes', { event: '*', schema: 'public', table: 'vehicles'      }, syncRemoteData)
+        .on('postgres_changes', { event: '*', schema: 'public', table: 'requisitions'  }, syncRemoteData)
+        .on('postgres_changes', { event: '*', schema: 'public', table: 'expenses'      }, syncRemoteData)
+        .on('postgres_changes', { event: '*', schema: 'public', table: 'quotes'        }, syncRemoteData)
         .subscribe(status => {
           if (status === 'SUBSCRIBED')
             console.log('[DB] ✅ Supabase Realtime เชื่อมต่อแล้ว — sync อัตโนมัติทุก operation');
@@ -527,6 +565,46 @@ function convertSupabaseToState(dbData) {
         user: ''
       };
     });
+  }
+
+  if (dbData.requisitions && dbData.requisitions.length > 0) {
+    state.requisitions = dbData.requisitions.map(r => ({
+      id:     r.id,
+      no:     r.no     || '',
+      ts:     new Date(r.created_at).getTime(),
+      jobId:  r.job_id || null,
+      note:   r.note   || '',
+      items:  Array.isArray(r.items) ? r.items : [],
+    }));
+  }
+
+  if (dbData.expenses && dbData.expenses.length > 0) {
+    state.expenses = dbData.expenses.map(e => ({
+      id:     e.id,
+      label:  e.label  || '',
+      amount: parseFloat(e.amount) || 0,
+      date:   e.date   || '',
+    }));
+  }
+
+  if (dbData.quotes && dbData.quotes.length > 0) {
+    state.quotes = dbData.quotes.map(q => ({
+      id:        q.id,
+      no:        q.no         || '',
+      ts:        new Date(q.created_at).getTime(),
+      cust:      q.cust_name  || '',
+      phone:     q.phone      || '',
+      plate:     q.plate      || '',
+      model:     q.car_model  || '',
+      ref:       q.ref        || '',
+      note:      q.note       || '',
+      items:     Array.isArray(q.items) ? q.items : [],
+      sub:       parseFloat(q.sub)   || 0,
+      disc:      parseFloat(q.disc)  || 0,
+      vat:       parseFloat(q.vat)   || 0,
+      grand:     parseFloat(q.grand) || 0,
+      converted: q.converted  || false,
+    }));
   }
 
   return state;
