@@ -259,7 +259,7 @@ function reportHTML() {
   const custSpend = {};
   for (const inv of S.invoices) {
     const key = (inv.cust || '').trim();
-    if (key) custSpend[key] = (custSpend[key] || 0) + inv.grand;
+    if (key) custSpend[key] = (custSpend[key] || 0) + inv.grand - (inv.vat || 0); // ex-VAT
   }
   const topCusts = Object.entries(custSpend).sort((a,b)=>b[1]-a[1]).slice(0, 10);
   const topMax   = topCusts[0]?.[1] || 1;

@@ -289,6 +289,7 @@
 .b-purple { background: rgba(155,89,182,.13);  color: var(--purple); border: 1px solid rgba(155,89,182,.28);  }
 .b-grn    { background: rgba(46,204,113,.15);  color: var(--grn);    border: 1px solid rgba(46,204,113,.3);   }
 .b-gray   { background: var(--p3);             color: var(--fg2);    border: 1px solid var(--ln2);            }
+.b-blue   { background: rgba(59,130,246,.13);  color: #60a5fa;       border: 1px solid rgba(59,130,246,.28);  }
 
 /* ── Item type tags ── */
 .tag-stock {

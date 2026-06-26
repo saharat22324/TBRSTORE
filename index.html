@@ -367,8 +367,10 @@ window.renderNav = function() {
 
   document.getElementById('NT').innerHTML = TABS.map(t => {
     let pip = '';
-    if (t.id === 'stock' && lowStock) pip = `<span class="pip">${lowStock}</span>`;
-    if (t.id === 'jobs'  && openJobs) pip = `<span class="pip">${openJobs}</span>`;
+    if (t.id === 'stock'     && lowStock) pip = `<span class="pip">${lowStock}</span>`;
+    if (t.id === 'jobs'      && openJobs) pip = `<span class="pip">${openJobs}</span>`;
+    if (t.id === 'purchasing' && (S.purchaseOrders||[]).filter(p=>p.status==='pending').length)
+      pip = `<span class="pip">${(S.purchaseOrders||[]).filter(p=>p.status==='pending').length}</span>`;
     return `<button class="nt ${currentTab === t.id ? 'on' : ''}" data-tab="${t.id}">${svgI(t.icon)}<span>${t.label}</span>${pip}</button>`;
   }).join('');
 
