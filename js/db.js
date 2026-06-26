@@ -114,6 +114,38 @@ async function syncRemoteData() {
       }
     }
 
+    // ── Deletions: ลบรายการที่คนอื่น delete ออกจาก Supabase แล้ว ──
+    // เฉพาะรายการที่มี Supabase UUID เท่านั้น (local-ID items ข้าม)
+    const _delUuidRx = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+    const sbInvIds   = new Set(newState.invoices.map(i => i.id).filter(Boolean));
+    const prevInvLen = S.invoices.length;
+    S.invoices = S.invoices.filter(i => !i.id || !_delUuidRx.test(i.id) || sbInvIds.has(i.id));
+    if (S.invoices.length !== prevInvLen) { changed = true; console.log(`[DB] 🗑 Removed ${prevInvLen - S.invoices.length} deleted invoice(s)`); }
+
+    const sbJobIds   = new Set(newState.jobs.map(j => j.id).filter(Boolean));
+    const prevJobLen = S.jobs.length;
+    S.jobs = S.jobs.filter(j => !j.id || !_delUuidRx.test(j.id) || sbJobIds.has(j.id));
+    if (S.jobs.length !== prevJobLen) { changed = true; console.log(`[DB] 🗑 Removed ${prevJobLen - S.jobs.length} deleted job(s)`); }
+
+    const sbCustIds   = new Set(newState.customers.map(c => c.id).filter(Boolean));
+    const prevCustLen = S.customers.length;
+    S.customers = S.customers.filter(c => !c.id || !_delUuidRx.test(c.id) || sbCustIds.has(c.id));
+    if (S.customers.length !== prevCustLen) { changed = true; console.log(`[DB] 🗑 Removed ${prevCustLen - S.customers.length} deleted customer(s)`); }
+
+    const sbVehIds   = new Set(newState.vehicles.map(v => v.id).filter(Boolean));
+    const prevVehLen = S.vehicles.length;
+    S.vehicles = S.vehicles.filter(v => !v.id || !_delUuidRx.test(v.id) || sbVehIds.has(v.id));
+    if (S.vehicles.length !== prevVehLen) { changed = true; console.log(`[DB] 🗑 Removed ${prevVehLen - S.vehicles.length} deleted vehicle(s)`); }
+
+    // Stock: match by _uuid (Supabase UUID stored alongside SKU)
+    if (newState.stockItems.length > 0) {
+      const sbStockUuids  = new Set(newState.stockItems.map(i => i._uuid).filter(Boolean));
+      const prevStockLen  = S.stockItems.length;
+      S.stockItems = S.stockItems.filter(i => !i._uuid || sbStockUuids.has(i._uuid));
+      if (S.stockItems.length !== prevStockLen) { changed = true; console.log(`[DB] 🗑 Removed ${prevStockLen - S.stockItems.length} deleted stock item(s)`); }
+    }
+
     if (changed) {
       syncSeqFromState();
       localStorage.setItem(DB_KEY, JSON.stringify(S));
