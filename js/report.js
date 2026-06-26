@@ -453,13 +453,23 @@ function dailyTransactionHTML() {
     }
   }
 
-  /* ── Grand totals — sum from dayMap rows (consistent with visible rows) ── */
-  let gSell = 0, gCost = 0;
+  /* ── Grand totals — group by invoice, apply proportional discount, then ex-VAT ── */
+  const invDisplayMap = {};
   for (const day of Object.values(dayMap)) {
     for (const row of [...day.oil, ...day.parts]) {
-      gSell += row.tSell;
-      gCost += row.tCost;
+      if (!invDisplayMap[row.invNo]) invDisplayMap[row.invNo] = { displayedSell: 0, displayedCost: 0 };
+      invDisplayMap[row.invNo].displayedSell += row.tSell;
+      invDisplayMap[row.invNo].displayedCost += row.tCost;
     }
+  }
+  let gSell = 0, gCost = 0;
+  for (const [invNo, { displayedSell, displayedCost }] of Object.entries(invDisplayMap)) {
+    const inv = filtered.find(i => i.no === invNo);
+    const invSub = inv?.sub || displayedSell;
+    const disc    = inv?.disc || 0;
+    const discRatio = invSub > 0 ? disc / invSub : 0;
+    gSell += displayedSell * (1 - discRatio); // after proportional discount
+    gCost += displayedCost;
   }
   gSell = fmt(gSell);
   gCost = fmt(gCost);
