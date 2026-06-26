@@ -451,13 +451,16 @@ function dailyTransactionHTML() {
     }
   }
 
-  /* ── Grand totals — recalculate cost from items for accuracy ── */
-  const calcInvCostDaily = inv => (inv.items || []).reduce((s, it) => s + ((it.qty || 0) * (it.cost || 0)), 0);
+  /* ── Grand totals — sum from dayMap rows (consistent with visible rows) ── */
   let gSell = 0, gCost = 0;
-  for (const inv of filtered) {
-    gSell += inv.grand || 0;
-    gCost += calcInvCostDaily(inv);
+  for (const day of Object.values(dayMap)) {
+    for (const row of [...day.oil, ...day.parts]) {
+      gSell += row.tSell;
+      gCost += row.tCost;
+    }
   }
+  gSell = fmt(gSell);
+  gCost = fmt(gCost);
   let gProfit = fmt(gSell - gCost);
 
   // Row count from dayMap
