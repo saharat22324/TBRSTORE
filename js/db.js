@@ -60,30 +60,57 @@ async function syncRemoteData() {
         // sync jobId จาก Supabase ถ้า local มี ID ผิดรูปแบบ
         const _uuidRe = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
         if (inv.jobId && !_uuidRe.test(ex.jobId)) { ex.jobId = inv.jobId; changed = true; }
+        // sync invoice items ถ้าจำนวน item เปลี่ยน (user อื่นแก้บิล)
+        if (!ex._editedAt && inv.items?.length > 0 && inv.items.length !== ex.items?.length) {
+          ex.items = inv.items; ex.grand = inv.grand; ex.sub = inv.sub;
+          ex.disc = inv.disc; ex.vat = inv.vat; ex.totalCost = inv.totalCost;
+          changed = true;
+        }
       } else if (!invByNo.has(inv.no)) {
         S.invoices.push(inv); changed = true;
       }
     }
 
-    // ── Stock: sync quantity ──
+    // ── Stock: sync quantity + เพิ่มสินค้าใหม่ ──
     const stockById = new Map(S.stockItems.map(i => [i.id, i]));
     for (const item of newState.stockItems) {
       if (stockById.has(item.id)) {
         const ex = stockById.get(item.id);
         if (ex.qty !== item.qty) { ex.qty = item.qty; changed = true; }
+        if (item.sell && ex.sell !== item.sell) { ex.sell = item.sell; changed = true; }
+        if (item.cost && ex.cost !== item.cost) { ex.cost = item.cost; changed = true; }
+      } else {
+        // สินค้าใหม่จาก Supabase
+        S.stockItems.push(item); changed = true;
       }
     }
 
-    // ── Customers: เพิ่มลูกค้าใหม่ ──
-    const custById = new Set(S.customers.map(c => c.id));
+    // ── Customers: เพิ่มใหม่ + อัปเดตที่มีการแก้ไข ──
+    const custById = new Map(S.customers.map(c => [c.id, c]));
     for (const c of newState.customers) {
-      if (!custById.has(c.id)) { S.customers.push(c); custById.add(c.id); changed = true; }
+      if (custById.has(c.id)) {
+        const ex = custById.get(c.id);
+        if (ex.name !== c.name || ex.phone !== c.phone || ex.email !== c.email || ex.address !== c.address) {
+          Object.assign(ex, { name: c.name, phone: c.phone, email: c.email, address: c.address, note: c.note });
+          changed = true;
+        }
+      } else {
+        S.customers.push(c); changed = true;
+      }
     }
 
-    // ── Vehicles: เพิ่มรถใหม่ ──
-    const vehById = new Set(S.vehicles.map(v => v.id));
+    // ── Vehicles: เพิ่มใหม่ + อัปเดตที่มีการแก้ไข ──
+    const vehById = new Map(S.vehicles.map(v => [v.id, v]));
     for (const v of newState.vehicles) {
-      if (!vehById.has(v.id)) { S.vehicles.push(v); vehById.add(v.id); changed = true; }
+      if (vehById.has(v.id)) {
+        const ex = vehById.get(v.id);
+        if (ex.plate !== v.plate || ex.mileage !== v.mileage || ex.brand !== v.brand || ex.model !== v.model) {
+          Object.assign(ex, { plate: v.plate, brand: v.brand, model: v.model, year: v.year, color: v.color, mileage: v.mileage, note: v.note });
+          changed = true;
+        }
+      } else {
+        S.vehicles.push(v); changed = true;
+      }
     }
 
     if (changed) {

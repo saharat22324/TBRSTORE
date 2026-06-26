@@ -47,7 +47,7 @@ function renderNav() {
       <div class="nav-info">
         <span class="nav-username">${username}</span>
         <button class="nav-logout" id="logoutBtn" title="ออกจากระบบ">
-          ${svgI('<path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4M16 3l4 4m-4 0l4-4M16 17l-4 4m4 0l-4-4M9 12h12"/>)}
+          ${svgI('<path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4M16 3l4 4m-4 0l4-4M16 17l-4 4m4 0l-4-4M9 12h12"/>')}
           logout
         </button>
       </div>

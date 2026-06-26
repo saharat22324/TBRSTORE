@@ -691,13 +691,16 @@ async function saveInvoice() {
   try {
     // Try to save to Supabase
     if (useSupabase && typeof addInvoice === 'function') {
+      // ดึง UUID จริงจาก stock item (_uuid) เพื่อส่งเป็น FK ใน invoice_items
       const supaResult = await addInvoice(
         bJobId,
         null, // customerId - can be null for now
         null, // vehicleId - can be null for now
         bItems.map(it => ({
           type: it.itemType || 'stock',
-          stockItemId: it.itemType === 'stock' ? it.sid : null,
+          stockItemId: it.itemType === 'stock'
+            ? (S.stockItems.find(s => s.id === it.sid)?._uuid || null)
+            : null,
           serviceId: it.itemType === 'service' ? it.sid : null,
           description: it.nm,
           quantity: it.qty,
