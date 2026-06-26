@@ -148,8 +148,15 @@ async function syncRemoteData() {
 
     // ── Requisitions ──
     const reqById = new Map(S.requisitions.map(r => [r.id, r]));
+    const reqByNo = new Map(S.requisitions.map(r => [r.no, r]));
     for (const r of newState.requisitions) {
-      if (!reqById.has(r.id)) { S.requisitions.push(r); changed = true; }
+      if (!reqById.has(r.id) && !reqByNo.has(r.no)) {
+        S.requisitions.push(r); changed = true;
+      } else if (!reqById.has(r.id) && reqByNo.has(r.no)) {
+        // Local has it by number (local ID) — update to Supabase UUID
+        const ex = reqByNo.get(r.no);
+        if (ex && ex.id !== r.id) { ex.id = r.id; changed = true; }
+      }
     }
     const sbReqIds   = new Set(newState.requisitions.map(r => r.id).filter(Boolean));
     const prevReqLen = S.requisitions.length;
@@ -168,9 +175,15 @@ async function syncRemoteData() {
 
     // ── Quotes ──
     const qtById = new Map(S.quotes.map(q => [q.id, q]));
+    const qtByNo = new Map(S.quotes.map(q => [q.no, q]));
     for (const q of newState.quotes) {
       if (qtById.has(q.id)) {
         const ex = qtById.get(q.id);
+        if (!ex.converted && q.converted) { ex.converted = true; changed = true; }
+      } else if (qtByNo.has(q.no)) {
+        // Same quote by number — update UUID and converted flag
+        const ex = qtByNo.get(q.no);
+        if (ex.id !== q.id) { ex.id = q.id; changed = true; }
         if (!ex.converted && q.converted) { ex.converted = true; changed = true; }
       } else {
         S.quotes.push(q); changed = true;
@@ -876,6 +889,33 @@ function mergeLocalStorageIntoS() {
           S.stockItems.push(item);
           merged++;
         }
+      }
+    }
+
+    // Requisitions: merge local ones not yet in Supabase (by no)
+    const sbReqNos = new Set(S.requisitions.map(r => r.no).filter(Boolean));
+    for (const r of (local.requisitions || [])) {
+      if (r.no && !sbReqNos.has(r.no)) {
+        S.requisitions.push(r);
+        merged++;
+      }
+    }
+
+    // Expenses: merge local ones not yet in Supabase (by id — local ids like 'EX-...')
+    const sbExpIds2 = new Set(S.expenses.map(e => e.id).filter(Boolean));
+    for (const e of (local.expenses || [])) {
+      if (e.id && !sbExpIds2.has(e.id)) {
+        S.expenses.push(e);
+        merged++;
+      }
+    }
+
+    // Quotes: merge local ones not yet in Supabase (by no)
+    const sbQtNos = new Set(S.quotes.map(q => q.no).filter(Boolean));
+    for (const q of (local.quotes || [])) {
+      if (q.no && !sbQtNos.has(q.no)) {
+        S.quotes.push(q);
+        merged++;
       }
     }
 
