@@ -35,7 +35,7 @@ function purchasingHTML() {
                 </div>
                 <div style="text-align:right">
                   ${hasPermission('canViewCost') ? `<div class="fc-gold" style="font-size:1.05rem;font-weight:700">${THB(total)}</div>` : ''}
-                  ${p.status === 'pending' ? `<button class="btn btn-teal btn-sm mt6 btn-recv-po" data-poid="${p.id}" style="font-size:.76rem">
+                  ${p.status === 'pending' ? `<button class="btn btn-teal btn-sm mt8 btn-recv-po" data-poid="${p.id}" style="font-size:.76rem">
                     ${svgI('<path d="M5 12h14M12 5l7 7-7 7"/>',13)} รับสินค้า
                   </button>` : ''}
                   ${p.status === 'received' ? `<div style="font-size:.72rem;color:var(--grn);margin-top:6px">
@@ -492,6 +492,7 @@ function openReceivePOModal(poId) {
   sel('recvSave').addEventListener('click', async () => {
     const toReceive = recvItems.filter(it => it.recvQty > 0);
     if (!toReceive.length) return showToast('กรุณาระบุจำนวนที่รับอย่างน้อย 1 รายการ', 'err');
+    const recvNote = sv('recvNote').trim();
 
     /* Add qty to stock */
     for (const it of toReceive) {
@@ -507,7 +508,7 @@ function openReceivePOModal(poId) {
       }
       // Record in ledger
       if (typeof addToLedger === 'function') {
-        addToLedger(st.id, 'in', it.recvQty, `รับตาม PO ${po.no}`);
+        addToLedger(st.id, 'in', it.recvQty, `รับตาม PO ${po.no}${recvNote ? ' — ' + recvNote : ''}`);
       }
     }
 
@@ -527,6 +528,7 @@ function openReceivePOModal(poId) {
           status:      'received',
           received_at: new Date().toISOString(),
           items:       po.items,
+          note:        recvNote || po.note || null,
         }).catch(e => console.warn('[PO] receive sync failed:', e));
       }
     }
