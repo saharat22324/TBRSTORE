@@ -598,7 +598,7 @@ function openJobDetail(jid) {
         const st = S.stockItems.find(x => x.id === it.sid);
         if (st) {
           st.qty = fmt(parseFloat(st.qty) + parseFloat(it.qty));
-          st.used = fmt((st.used || 0) - it.qty);
+          st.used = fmt(Math.max(0, (st.used || 0) - it.qty));
         }
       });
       

@@ -276,7 +276,7 @@ function openStockAdj(id, type) {
       const diff = q - m.qty;
       if (diff > 0) {
         m.recv = fmt((m.recv || 0) + diff);
-        addToLedger(m.id, 'out', diff, note);
+        addToLedger(m.id, 'in', diff, note);  // found MORE stock → ledger 'in'
       } else if (diff < 0) {
         m.used = fmt((m.used || 0) + Math.abs(diff));
         addToLedger(m.id, 'out', Math.abs(diff), note);
