@@ -896,7 +896,7 @@ async function syncLocalToSupabase() {
           }));
           const result = await addInvoice(
             inv.jobId || null, inv.custId, inv.vehicleId || null,
-            items, inv.sub || 0, inv.disc || 0, inv.vat || 0, inv.grand || 0,
+            items, inv.sub || 0, inv.disc || 0, (inv.vat > 0 ? 0.07 : 0), inv.grand || 0,
             inv.note || '', inv.no || ''
           );
           if (result?.id) {

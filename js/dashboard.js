@@ -232,7 +232,7 @@ function bindDashboard() {
               })),
               sub: i.subtotal,
               disc: i.discount || 0,
-              vat: i.vat || 0,
+              vat: (i.vat > 0) ? fmt(Math.max(0, (i.subtotal || 0) - (i.discount || 0)) * 0.07) : 0,
               grand: i.grand_total,
               totalCost: 0,
               note: i.note || ''
