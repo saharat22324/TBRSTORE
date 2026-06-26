@@ -79,7 +79,7 @@ function reportHTML() {
         const d = new Date(i.ts);
         return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}` === m;
       })
-      .reduce((s, i) => s + i.grand, 0)
+      .reduce((s, i) => s + i.grand - (i.vat || 0), 0) // ex-VAT
   );
   const maxS    = Math.max(...mSales, 1);
 
@@ -118,7 +118,7 @@ function reportHTML() {
   const invRows = mInvs.length
     ? [...mInvs].reverse().map(i => {
         const invCost = (i.items || []).reduce((s, it) => s + ((it.qty || 0) * (it.cost || 0)), 0);
-        const gp = fmt(i.grand - invCost);
+        const gp = fmt(i.grand - (i.vat || 0) - invCost); // ex-VAT gross profit
         return `
           <tr>
             <td class="mono" style="font-size:.75rem;color:var(--teal);cursor:pointer"
