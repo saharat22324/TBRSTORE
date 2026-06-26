@@ -575,17 +575,40 @@ function openVehDetail(vid) {
   if (!v) return;
 
   const c     = S.customers.find(x => x.id === v.custId);
-  const vJobs = S.jobs.filter(j => j.vehicleId === vid).slice().reverse();
+  const vJobs = S.jobs.filter(j => j.vehicleId === vid).slice().sort((a,b) => (b.createdAt||0)-(a.createdAt||0));
   const ov    = sel('mOv');
+
+  /* Stats */
+  const vInvs     = vJobs.map(j => S.invoices.find(i => i.jobId === j.id || (j.no && i.ref === j.no))).filter(Boolean);
+  const totalSpent= vInvs.reduce((s, i) => s + i.grand, 0);
+  const lastJob   = vJobs[0];
+  const daysSince = lastJob ? Math.floor((Date.now() - lastJob.createdAt) / 86400000) : null;
+
+  /* Mileage intervals */
+  const mileSorted = vJobs.filter(j => j.mileage).sort((a,b) => (a.createdAt||0)-(b.createdAt||0));
+  let avgMileInterval = null;
+  if (mileSorted.length >= 2) {
+    const intervals = [];
+    for (let i = 1; i < mileSorted.length; i++) {
+      const diff = mileSorted[i].mileage - mileSorted[i-1].mileage;
+      if (diff > 0) intervals.push(diff);
+    }
+    if (intervals.length) avgMileInterval = Math.round(intervals.reduce((s,n)=>s+n,0) / intervals.length);
+  }
+  const nextMileSuggested = (v.mileage && avgMileInterval) ? v.mileage + avgMileInterval : null;
 
   const histRows = vJobs.length
     ? vJobs.map(j => {
         const inv = S.invoices.find(i => i.jobId === j.id || (j.no && i.ref === j.no));
+        const itemSummary = inv ? (inv.items||[]).slice(0,3).map(it => esc(it.name)).join(', ') : '';
         return `
           <tr>
             <td class="mono" style="font-size:.75rem;color:var(--teal)">${j.no}</td>
             <td style="font-size:.8rem">${dateStr(j.createdAt)}</td>
-            <td style="font-size:.84rem">${esc((j.complaint || '—').slice(0, 30))}</td>
+            <td style="font-size:.84rem">
+              <div>${esc((j.complaint || '—').slice(0, 30))}</div>
+              ${itemSummary ? `<div style="font-size:.72rem;color:var(--fg2)">${itemSummary}${(inv?.items||[]).length>3?'...':''}</div>` : ''}
+            </td>
             <td style="font-size:.78rem;color:var(--fg2)">${j.mileage ? numFmt(j.mileage)+' กม.' : '—'}</td>
             <td><span class="badge b-${JOB_COLOR[j.status]}">${JOB_STATUS[j.status]}</span></td>
             <td class="r money fc-gold">${inv ? THB(inv.grand) : '—'}</td>
@@ -606,7 +629,28 @@ function openVehDetail(vid) {
         </div>
       </div>
       <div class="modal-b">
-        <div class="g2 mb16">
+        <!-- Stats row -->
+        <div class="g4 mb14">
+          <div class="stat teal" style="min-height:76px">
+            <div class="sk">บริการทั้งหมด</div>
+            <div class="sv">${vJobs.length}<small style="font-size:.8rem;font-weight:500;color:var(--fg2)"> งาน</small></div>
+          </div>
+          <div class="stat gold" style="min-height:76px">
+            <div class="sk">ยอดรวมทั้งหมด</div>
+            <div class="sv" style="font-size:1.1rem">${THB(totalSpent)}</div>
+          </div>
+          <div class="stat ${daysSince !== null && daysSince > 90 ? 'bad' : 'grn'}" style="min-height:76px">
+            <div class="sk">ซ่อมครั้งล่าสุด</div>
+            <div class="sv">${daysSince !== null ? daysSince+'<small style="font-size:.75rem;font-weight:500"> วันที่แล้ว</small>' : '—'}</div>
+          </div>
+          <div class="stat warn" style="min-height:76px">
+            <div class="sk">นัดครั้งต่อไป ~</div>
+            <div class="sv" style="font-size:.95rem">${nextMileSuggested ? numFmt(nextMileSuggested)+' <small style="font-size:.7rem">กม.</small>' : '—'}</div>
+            ${avgMileInterval ? `<div class="sd">ทุก ~${numFmt(avgMileInterval)} กม.</div>` : ''}
+          </div>
+        </div>
+
+        <div class="g2 mb14">
           <div class="card"><div class="card-b">
             <div style="font-size:.72rem;color:var(--fg2);font-family:'JetBrains Mono',monospace;margin-bottom:4px">ข้อมูลรถ</div>
             <div style="font-size:.9rem;line-height:1.8">
@@ -634,7 +678,7 @@ function openVehDetail(vid) {
           </div>
           <div class="tbl-wrap">
             <table class="tbl">
-              <thead><tr><th>เลขที่</th><th>วันที่เข้า</th><th>แจ้งซ่อม</th><th>ไมล์</th><th>สถานะ</th><th class="r">ยอด</th></tr></thead>
+              <thead><tr><th>เลขที่</th><th>วันที่เข้า</th><th>แจ้งซ่อม / รายการ</th><th>ไมล์</th><th>สถานะ</th><th class="r">ยอด</th></tr></thead>
               <tbody>${histRows}</tbody>
             </table>
           </div>

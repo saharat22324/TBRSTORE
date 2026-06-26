@@ -30,6 +30,22 @@ function dashboardHTML() {
   const openJobs  = S.jobs.filter(j => j.status < 5);
   const recent    = S.jobs.slice(-6).reverse();
 
+  /* ── Unpaid invoices ── */
+  const unpaidInvs  = S.invoices.filter(i => !i.paid).sort((a,b) => (b.ts||0)-(a.ts||0));
+  const unpaidTotal = unpaidInvs.reduce((s, i) => s + i.grand, 0);
+
+  /* ── Service due this week (no service > 80 days) ── */
+  const now = Date.now();
+  const svcDue = S.vehicles.map(v => {
+    const c = S.customers.find(x => x.id === v.custId);
+    const lastJob = S.jobs
+      .filter(j => j.vehicleId === v.id)
+      .sort((a,b) => (b.createdAt||0) - (a.createdAt||0))[0];
+    const lastTs  = lastJob?.createdAt || v.createdAt || 0;
+    const daysAgo = Math.floor((now - lastTs) / 86400000);
+    return daysAgo >= 80 ? { v, c, daysAgo, lastTs } : null;
+  }).filter(Boolean).sort((a,b) => b.daysAgo - a.daysAgo);
+
   /* ── 6-month sales chart data ── */
   const months = [];
   for (let i = 5; i >= 0; i--) {
@@ -168,8 +184,57 @@ function dashboardHTML() {
         </div>
       </div>
 
-      <!-- Right column: Stock alerts + Monthly breakdown -->
+      <!-- Right column: Unpaid + Service due + Stock alerts + Monthly breakdown -->
       <div>
+        <!-- Unpaid invoices -->
+        <div class="card mb12" style="border-left:3px solid ${unpaidInvs.length ? 'var(--bad)' : 'var(--grn)'}">
+          <div class="card-h">
+            ${svgI('<path d="M12 1v22M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/>')}
+            <h2>ยอดค้างชำระ</h2>
+            <span class="money ${unpaidInvs.length ? 'fc-bad' : 'fc-grn'}"
+                  style="margin-left:auto;font-weight:800;font-size:1rem">${THB(unpaidTotal)}</span>
+          </div>
+          ${unpaidInvs.length ? `
+          <div class="card-b" style="padding:6px 14px 10px">
+            ${unpaidInvs.slice(0, 6).map(i => `
+              <div class="fjb" style="padding:7px 0;border-bottom:1px solid var(--ln)">
+                <div>
+                  <span class="mono" style="font-size:.73rem;color:var(--teal)">${i.no}</span>
+                  <span style="font-size:.82rem;margin-left:6px">${esc(i.cust || '—')}</span>
+                </div>
+                <div class="flex gap8" style="align-items:center">
+                  <span style="font-size:.7rem;color:var(--fg2)">${dateStr(i.ts)}</span>
+                  <span class="money fc-bad" style="font-size:.87rem">${THB(i.grand)}</span>
+                </div>
+              </div>`).join('')}
+            ${unpaidInvs.length > 6 ? `<div style="font-size:.76rem;color:var(--fg2);padding-top:6px">
+              และอีก ${unpaidInvs.length - 6} บิล · รวม ${THB(unpaidTotal)}
+            </div>` : ''}
+          </div>` : `
+          <div class="card-b" style="padding:8px 14px;font-size:.84rem;color:var(--grn)">
+            ✓ ชำระครบทุกบิลแล้ว
+          </div>`}
+        </div>
+
+        <!-- Service due reminders -->
+        ${svcDue.length ? `
+        <div class="card mb12" style="border-left:3px solid var(--warn)">
+          <div class="card-h">
+            ${svgI('<path d="M18 8h1a4 4 0 0 1 0 8h-1M2 8h16v9a4 4 0 0 1-4 4H6a4 4 0 0 1-4-4V8zM6 1v3M10 1v3M14 1v3"/>')}
+            <h2>แจ้งเตือนนัดบริการ (${svcDue.length} คัน)</h2>
+          </div>
+          <div class="card-b" style="padding:6px 14px 10px">
+            ${svcDue.slice(0, 5).map(({ v, c, daysAgo }) => `
+              <div class="fjb" style="padding:7px 0;border-bottom:1px solid var(--ln)">
+                <div>
+                  <span style="font-weight:700;color:var(--teal);font-family:'JetBrains Mono',monospace;font-size:.84rem">${esc(v.plate)}</span>
+                  <span style="font-size:.8rem;color:var(--fg2);margin-left:6px">${esc(c?.name || '—')}</span>
+                </div>
+                <span class="badge b-warn" style="font-size:.68rem">${daysAgo} วันที่แล้ว</span>
+              </div>`).join('')}
+          </div>
+        </div>` : ''}
+
         ${stockAlert}
         
         <!-- Monthly breakdown table -->

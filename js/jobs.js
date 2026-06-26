@@ -476,6 +476,11 @@ function openJobDetail(jid) {
       </div>
       <div class="modal-f">
         <button class="btn btn-ghost" id="mCl2">ปิด</button>
+        <button class="btn btn-ghost btn-sm" id="printJobBtn"
+          style="margin-left:auto">
+          ${svgI('<path d="M6 9V2h12v7M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2M6 14h12v8H6z"/>',14)}
+          พิมพ์ใบงาน
+        </button>
       </div>
     </div>`;
 
@@ -622,11 +627,69 @@ function openJobDetail(jid) {
   });
 
   bindModalClose(ov, '#mCl', '#mCl2');
-}
 
-/* ══════════════════════════════════════
-   REQUISITION MODAL (ใบเบิกสต๊อก)
-══════════════════════════════════════ */
+  /* Print job card */
+  ov.querySelector('#printJobBtn')?.addEventListener('click', () => {
+    const s = S.shop || {};
+    const reqRows = reqs.flatMap(r => r.items.map(it =>
+      `<tr><td>${esc(it.name)}</td><td class="c">${numFmt(it.qty)} ${esc(it.unit||'')}</td></tr>`
+    )).join('') || '<tr><td colspan="2" style="color:#888;text-align:center">—</td></tr>';
+
+    const dc = `
+      <div class="doc" style="max-width:680px;margin:0 auto;font-family:sans-serif">
+        <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:8px">
+          <div>
+            <div style="font-weight:900;font-size:1.2rem">${esc(s.name||'TBR Performance')}</div>
+            <div style="font-size:.75rem;color:#555">${esc(s.addr||'')}${s.phone?' · โทร '+esc(s.phone):''}</div>
+          </div>
+          <div style="text-align:right">
+            <div style="font-size:1.05rem;font-weight:800">ใบงาน / Work Order</div>
+            <div style="font-size:.78rem;color:#555">วันที่ ${dateStr(j.createdAt)}</div>
+          </div>
+        </div>
+        <div style="border-top:2px solid #222;border-bottom:1px solid #ccc;padding:8px 0;
+                    display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-bottom:10px;font-size:.84rem">
+          <div><b>เลขที่งาน:</b> ${j.no}</div>
+          <div><b>ทะเบียน:</b> ${esc(j.plate||'—')}</div>
+          <div><b>ลูกค้า:</b> ${esc(j.custName||'—')}</div>
+          <div><b>รุ่นรถ:</b> ${esc(j.carModel||'—')}</div>
+          <div><b>ช่าง:</b> ${esc(j.assignTo||'—')}</div>
+          <div><b>เลขไมล์:</b> ${j.mileage ? numFmt(j.mileage)+' กม.' : '—'}</div>
+          <div><b>สถานะ:</b> ${JOB_STATUS[j.status]||'—'}</div>
+        </div>
+        ${j.complaint ? `<div style="background:#f5f5f5;border-radius:6px;padding:8px 12px;
+                                    font-size:.84rem;margin-bottom:10px">
+          <b>แจ้งซ่อม:</b> ${esc(j.complaint)}</div>` : ''}
+        <table style="width:100%;border-collapse:collapse;font-size:.83rem;margin-bottom:12px">
+          <thead>
+            <tr style="background:#222;color:#fff">
+              <th style="padding:6px 10px;text-align:left">รายการเบิกสต๊อก</th>
+              <th style="padding:6px 10px;text-align:center;width:80px">จำนวน</th>
+            </tr>
+          </thead>
+          <tbody>${reqRows}</tbody>
+        </table>
+        <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:16px;
+                    border-top:1px solid #ccc;padding-top:14px;margin-top:8px;font-size:.82rem">
+          <div style="text-align:center">
+            <div style="border-bottom:1px solid #555;height:36px"></div>
+            <div style="color:#666;margin-top:4px">ช่างผู้รับผิดชอบ</div>
+          </div>
+          <div style="text-align:center">
+            <div style="border-bottom:1px solid #555;height:36px"></div>
+            <div style="color:#666;margin-top:4px">ผู้ตรวจสอบ</div>
+          </div>
+          <div style="text-align:center">
+            <div style="border-bottom:1px solid #555;height:36px"></div>
+            <div style="color:#666;margin-top:4px">ลูกค้ารับทราบ</div>
+          </div>
+        </div>
+      </div>`;
+    document.getElementById('pz').innerHTML = dc;
+    window.print();
+    setTimeout(() => { document.getElementById('pz').innerHTML = ''; }, 600);
+  });
+}
 function openReqModal(jid) {
   const j = S.jobs.find(x => x.id === jid);
   if (!j) return;

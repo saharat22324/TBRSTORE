@@ -256,6 +256,60 @@ function reportHTML() {
       </div>
     </div>`;
 
+  /* ── กำไรแยกตามประเภทสินค้า (เดือนนี้) ── */
+  const TYPE_LABEL = { stock: 'น้ำมัน / สต๊อก', order: 'อะไหล่สั่ง', service: 'ค่าแรง / บริการ', other: 'อื่นๆ' };
+  const TYPE_COLOR = { stock: 'var(--teal)', order: 'var(--gold)', service: 'var(--grn)', other: 'var(--fg2)' };
+  const typeMap = {};
+  for (const inv of mInvs) {
+    for (const it of (inv.items || [])) {
+      const t = it.itemType || 'other';
+      if (!typeMap[t]) typeMap[t] = { rev: 0, cost: 0, qty: 0 };
+      typeMap[t].rev  += (it.qty || 0) * (it.price || 0);
+      typeMap[t].cost += (it.qty || 0) * (it.cost  || 0);
+      typeMap[t].qty  += (it.qty || 0);
+    }
+  }
+  const typeOrder = ['stock', 'order', 'service', 'other'];
+  const typeRows = typeOrder.filter(t => typeMap[t]).map(t => {
+    const d = typeMap[t];
+    const gp = fmt(d.rev - d.cost);
+    const gpPct = d.rev > 0 ? Math.round((d.rev - d.cost) / d.rev * 100) : 0;
+    return `
+      <tr>
+        <td>
+          <span style="display:inline-block;width:8px;height:8px;border-radius:50%;
+                       background:${TYPE_COLOR[t]};margin-right:5px"></span>
+          <b>${TYPE_LABEL[t] || t}</b>
+        </td>
+        <td class="r money fc-gold">${THB(d.rev)}</td>
+        ${hasPermission('canViewCost') ? `<td class="r" style="color:var(--bad)">${THB(d.cost)}</td>` : ''}
+        <td class="r" style="font-weight:700;color:${gp>=0?'var(--grn)':'var(--bad)'}">${THB(gp)}</td>
+        <td class="r" style="font-size:.8rem;color:var(--fg2)">${gpPct}%</td>
+      </tr>`;
+  }).join('') || `<tr><td colspan="5" class="tbl-empty">ยังไม่มีข้อมูล</td></tr>`;
+
+  const categoryHTML = `
+    <div class="card" style="margin-top:16px">
+      <div class="card-h">
+        ${svgI('<path d="M21.21 15.89A10 10 0 1 1 8 2.83"/><path d="M22 12A10 10 0 0 0 12 2v10z"/>')}
+        <h2>กำไรแยกตามประเภท — เดือนนี้</h2>
+      </div>
+      <div class="tbl-wrap">
+        <table class="tbl">
+          <thead>
+            <tr>
+              <th>ประเภท</th>
+              <th class="r">ยอดขาย</th>
+              ${hasPermission('canViewCost') ? '<th class="r">ต้นทุน</th>' : ''}
+              <th class="r">กำไร</th>
+              <th class="r">%GP</th>
+            </tr>
+          </thead>
+          <tbody>${typeRows}</tbody>
+        </table>
+      </div>
+    </div>`;
+
   /* ── Top customers (all-time) ── */
   const custSpend = {};
   for (const inv of S.invoices) {
@@ -380,6 +434,9 @@ function reportHTML() {
 
     <!-- ── โบนัสช่าง ── -->
     ${bonusHTML}
+
+    <!-- ── กำไรแยกตามประเภท ── -->
+    ${categoryHTML}
 
     <!-- ── Top Customers ── -->
     <div class="card" style="margin-top:16px">
