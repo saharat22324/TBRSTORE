@@ -214,7 +214,16 @@ async function syncRemoteData() {
     S.purchaseOrders = S.purchaseOrders.filter(p => !p.id || !_delUuidRx.test(p.id) || sbPoIds.has(p.id));
     if (S.purchaseOrders.length !== prevPoLen) { changed = true; console.log(`[DB] 🗑 Removed ${prevPoLen - S.purchaseOrders.length} deleted PO(s)`); }
 
-    if (changed) {
+    // ── Stock Ledger: append new entries from other users ──
+    if (newState.stockLedger?.length > 0) {
+      const ledgerIds = new Set((S.stockLedger || []).map(e => e.id).filter(Boolean));
+      const newEntries = newState.stockLedger.filter(e => e.id && !ledgerIds.has(e.id));
+      if (newEntries.length > 0) {
+        if (!S.stockLedger) S.stockLedger = [];
+        S.stockLedger = [...S.stockLedger, ...newEntries];
+        changed = true;
+      }
+    }
       syncSeqFromState();
       localStorage.setItem(DB_KEY, JSON.stringify(S));
 
@@ -274,7 +283,7 @@ function startLiveSync() {
   document.removeEventListener('visibilitychange', _onTabVisible);
   document.addEventListener('visibilitychange', _onTabVisible);
 
-  console.log('[DB] 🔁 Live sync started (Realtime + polling 60s + visibilitychange)');
+  console.log('[DB] 🔁 Live sync started (Realtime + polling 15s + visibilitychange)');
 }
 
 /**
