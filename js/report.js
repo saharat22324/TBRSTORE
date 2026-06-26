@@ -838,6 +838,14 @@ function bindReport() {
           if (m) {
             m.qty  = fmt(m.qty  + it.qty);
             m.used = fmt(Math.max(0, (m.used || 0) - it.qty));
+            // Sync restored qty to Supabase
+            if (useSupabase && typeof updateStockBySku === 'function') {
+              updateStockBySku(m.id, m.qty).catch(e => console.warn('[Report] stock restore sync:', e));
+            }
+            // Record reversal in ledger
+            if (typeof addToLedger === 'function') {
+              addToLedger(m.id, 'in', it.qty, `ลบบิล ${inv.no}`);
+            }
           }
         }
       });

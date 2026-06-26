@@ -15,10 +15,10 @@ function billingHTML() {
   
   /* ── Stats ── */
   const totalInv = S.invoices.length;
-  const totalRev = S.invoices.reduce((s, i) => s + i.grand, 0);
+  const totalRev = S.invoices.reduce((s, i) => s + i.grand - (i.vat || 0), 0); // ex-VAT
   const avgBill  = totalInv > 0 ? totalRev / totalInv : 0;
   const todayInv = S.invoices.filter(i => new Date(i.ts).toDateString() === new Date().toDateString());
-  const todayRev = todayInv.reduce((s, i) => s + i.grand, 0);
+  const todayRev = todayInv.reduce((s, i) => s + i.grand - (i.vat || 0), 0); // ex-VAT
 
   const stOpts  = S.stockItems.map(i =>
     `<option value="stock:${i.id}">[สต๊อก] ${esc(i.name)} [${i.unit}] — ${THB(i.sell)}</option>`
