@@ -349,10 +349,16 @@ function reportHTML() {
       <div class="card-h">
         ${svgI('<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/>')}
         <h2>บิลเดือนนี้ (${mInvs.length} บิล)</h2>
-        <button class="btn btn-ghost btn-xs" id="rExportCSV" style="margin-left:auto">
-          ${svgI('<path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M7 10l5 5 5-5M12 15V3"/>',13)}
-          ดาวน์โหลด CSV
-        </button>
+        <div class="flex gap8" style="margin-left:auto">
+          <button class="btn btn-ghost btn-xs" id="rPrintVAT">
+            ${svgI('<path d="M6 9V2h12v7M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2M6 14h12v8H6z"/>',13)}
+            พิมพ์รายงาน VAT
+          </button>
+          <button class="btn btn-ghost btn-xs" id="rExportCSV">
+            ${svgI('<path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M7 10l5 5 5-5M12 15V3"/>',13)}
+            ดาวน์โหลด CSV
+          </button>
+        </div>
       </div>
       <div class="tbl-wrap">
         <table class="tbl">
@@ -749,6 +755,114 @@ function bindReport() {
 
   /* Add expense button */
   sel('addExpBtn')?.addEventListener('click', openExpModal);
+
+  /* Print VAT Report */
+  sel('rPrintVAT')?.addEventListener('click', () => {
+    const mInvs2 = S.invoices.filter(i => {
+      const d = new Date(i.ts);
+      return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}` === reportMonth;
+    });
+    if (!mInvs2.length) return showToast('ไม่มีบิลในเดือนนี้', 'err');
+
+    const s      = S.shop;
+    const totalEx  = mInvs2.reduce((a, i) => a + i.grand - (i.vat || 0), 0);
+    const totalVat = mInvs2.reduce((a, i) => a + (i.vat || 0), 0);
+    const totalAll = mInvs2.reduce((a, i) => a + i.grand, 0);
+
+    const [ymY, ymM] = reportMonth.split('-');
+    const thMonth = ['มกราคม','กุมภาพันธ์','มีนาคม','เมษายน','พฤษภาคม','มิถุนายน',
+                     'กรกฎาคม','สิงหาคม','กันยายน','ตุลาคม','พฤศจิกายน','ธันวาคม'][+ymM-1];
+    const periodLabel = `${thMonth} ${+ymY + 543}`;
+
+    const invRowsHTML = [...mInvs2].reverse().map((i, idx) => {
+      const exVat = i.grand - (i.vat || 0);
+      const vat   = i.vat || 0;
+      return `<tr style="border-bottom:1px solid #e5e5e5">
+        <td style="padding:5px 8px;text-align:center;font-size:.82rem;color:#888">${idx+1}</td>
+        <td style="padding:5px 8px;font-family:monospace;font-size:.78rem;color:#0077aa">${esc(i.no)}</td>
+        <td style="padding:5px 8px;font-size:.82rem">${dateStr(i.ts)}</td>
+        <td style="padding:5px 8px;font-size:.82rem">${esc(i.cust || '—')}</td>
+        <td style="padding:5px 8px;font-size:.78rem;color:#666">${esc(i.plate || '—')}</td>
+        <td style="padding:5px 8px;text-align:right;font-size:.82rem">${exVat.toLocaleString('th-TH',{minimumFractionDigits:2,maximumFractionDigits:2})}</td>
+        <td style="padding:5px 8px;text-align:right;font-size:.82rem;color:${vat>0?'#c0392b':'#999'}">${vat>0?vat.toLocaleString('th-TH',{minimumFractionDigits:2,maximumFractionDigits:2}):'—'}</td>
+        <td style="padding:5px 8px;text-align:right;font-size:.82rem;font-weight:600">${i.grand.toLocaleString('th-TH',{minimumFractionDigits:2,maximumFractionDigits:2})}</td>
+      </tr>`;
+    }).join('');
+
+    const printHTML = `
+      <div style="font-family:'Noto Sans Thai',sans-serif;color:#1a1a1a;padding:20px 24px;max-width:800px;margin:0 auto">
+        <!-- Header -->
+        <div style="border-bottom:3px solid #1a1a1a;padding-bottom:12px;margin-bottom:16px">
+          <div style="display:flex;justify-content:space-between;align-items:flex-start">
+            <div>
+              <div style="font-size:1.3rem;font-weight:900;letter-spacing:.5px">${esc(s.name || 'TBR Performance')}</div>
+              <div style="font-size:.78rem;color:#555;margin-top:2px">${esc(s.addr || '')}</div>
+              ${s.phone ? `<div style="font-size:.78rem;color:#555">โทร ${esc(s.phone)}</div>` : ''}
+              ${s.tax   ? `<div style="font-size:.78rem;color:#555">เลขประจำตัวผู้เสียภาษี: ${esc(s.tax)}</div>` : ''}
+            </div>
+            <div style="text-align:right">
+              <div style="font-size:1.05rem;font-weight:800;color:#c0392b">รายงานภาษีขาย (ภ.พ.30)</div>
+              <div style="font-size:.85rem;margin-top:3px">ประจำเดือน <strong>${periodLabel}</strong></div>
+              <div style="font-size:.75rem;color:#666;margin-top:2px">พิมพ์วันที่ ${new Date().toLocaleDateString('th-TH',{year:'numeric',month:'long',day:'numeric'})}</div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Summary boxes -->
+        <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-bottom:18px">
+          <div style="border:1px solid #ddd;border-radius:8px;padding:12px 14px">
+            <div style="font-size:.72rem;color:#666;margin-bottom:4px">ฐานภาษีขาย (ex-VAT)</div>
+            <div style="font-size:1.15rem;font-weight:700">${totalEx.toLocaleString('th-TH',{minimumFractionDigits:2,maximumFractionDigits:2})} บาท</div>
+          </div>
+          <div style="border:2px solid #c0392b;border-radius:8px;padding:12px 14px;background:#fff5f5">
+            <div style="font-size:.72rem;color:#c0392b;margin-bottom:4px">ภาษีขาย (Output VAT 7%)</div>
+            <div style="font-size:1.15rem;font-weight:700;color:#c0392b">${totalVat.toLocaleString('th-TH',{minimumFractionDigits:2,maximumFractionDigits:2})} บาท</div>
+          </div>
+          <div style="border:1px solid #ddd;border-radius:8px;padding:12px 14px;background:#f9f9f9">
+            <div style="font-size:.72rem;color:#666;margin-bottom:4px">ยอดรวมทั้งสิ้น (incl. VAT)</div>
+            <div style="font-size:1.15rem;font-weight:700">${totalAll.toLocaleString('th-TH',{minimumFractionDigits:2,maximumFractionDigits:2})} บาท</div>
+          </div>
+        </div>
+
+        <!-- Invoice table -->
+        <table style="width:100%;border-collapse:collapse;font-size:.83rem">
+          <thead>
+            <tr style="background:#1a1a1a;color:#fff">
+              <th style="padding:8px;text-align:center;width:36px">#</th>
+              <th style="padding:8px;text-align:left">เลขที่บิล</th>
+              <th style="padding:8px;text-align:left">วันที่</th>
+              <th style="padding:8px;text-align:left">ลูกค้า</th>
+              <th style="padding:8px;text-align:left">ทะเบียน</th>
+              <th style="padding:8px;text-align:right">ฐานภาษี</th>
+              <th style="padding:8px;text-align:right">VAT 7%</th>
+              <th style="padding:8px;text-align:right">ยอดรวม</th>
+            </tr>
+          </thead>
+          <tbody>${invRowsHTML}</tbody>
+          <tfoot>
+            <tr style="background:#f3f3f3;font-weight:700;border-top:2px solid #1a1a1a">
+              <td colspan="5" style="padding:8px 8px;text-align:right">รวมทั้งหมด (${mInvs2.length} บิล)</td>
+              <td style="padding:8px;text-align:right">${totalEx.toLocaleString('th-TH',{minimumFractionDigits:2,maximumFractionDigits:2})}</td>
+              <td style="padding:8px;text-align:right;color:#c0392b">${totalVat.toLocaleString('th-TH',{minimumFractionDigits:2,maximumFractionDigits:2})}</td>
+              <td style="padding:8px;text-align:right">${totalAll.toLocaleString('th-TH',{minimumFractionDigits:2,maximumFractionDigits:2})}</td>
+            </tr>
+          </tfoot>
+        </table>
+
+        <div style="margin-top:32px;display:grid;grid-template-columns:repeat(2,1fr);gap:40px">
+          <div style="text-align:center">
+            <div style="border-top:1px solid #999;padding-top:6px;font-size:.78rem;color:#666">ผู้จัดทำ / Prepared by</div>
+          </div>
+          <div style="text-align:center">
+            <div style="border-top:1px solid #999;padding-top:6px;font-size:.78rem;color:#666">ผู้ตรวจสอบ / Approved by</div>
+          </div>
+        </div>
+      </div>`;
+
+    document.getElementById('pz').innerHTML = printHTML;
+    window.print();
+    setTimeout(() => { document.getElementById('pz').innerHTML = ''; }, 800);
+  });
 
   /* Export CSV */
   sel('rExportCSV')?.addEventListener('click', () => {
