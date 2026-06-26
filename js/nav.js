@@ -82,8 +82,8 @@ function renderPanel() {
     default:          root.innerHTML = dashboardHTML();  bindDashboard();
   }
 
-  // แสดง RLS warning banner ถ้าตรวจพบว่า Supabase บล็อก invoices
-  if (window._rlsWarning && hasPermission('canManageTeam')) {
+  // แสดง RLS warning banner ถ้าตรวจพบว่า Supabase บล็อก invoices (เพิ่มได้ครั้งเดียว)
+  if (window._rlsWarning && hasPermission('canManageTeam') && !document.getElementById('rlsBanner')) {
     const banner = document.createElement('div');
     banner.id = 'rlsBanner';
     banner.style.cssText = 'position:fixed;top:60px;left:50%;transform:translateX(-50%);' +

@@ -386,6 +386,15 @@ function bindDocActions(type, data, dc) {
     if (type !== 'inv') return;
     if (!confirm(`ลบใบเสร็จ ${data.no}?\n\n⚠ สต๊อกที่ตัดไปแล้วจะถูกคืนกลับ`)) return;
 
+    /* Delete from Supabase first */
+    try {
+      if (useSupabase && data.id && typeof deleteInvoice === 'function') {
+        await deleteInvoice(data.id);
+      }
+    } catch (err) {
+      console.warn('[Docs] Supabase deleteInvoice failed:', err);
+    }
+
     /* Restore stock */
     data.items.forEach(it => {
       if (it.sid && it.itemType === 'stock') {
