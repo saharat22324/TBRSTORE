@@ -130,9 +130,146 @@ DO $$ BEGIN
 END $$;
 
 -- ─────────────────────────────────────────────────────────────────
--- 2. ยืนยันผล — ดู policies ที่มีอยู่
+-- 2. ตารางที่เหลือ (expenses, quotes, purchase_orders, shop_config, audit_logs, requisitions)
 -- ─────────────────────────────────────────────────────────────────
-SELECT tablename, policyname, cmd, qual
+
+-- requisitions ─── ใบเบิก
+ALTER TABLE requisitions ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS "team_read_req"    ON requisitions;
+DROP POLICY IF EXISTS "team_write_req"   ON requisitions;
+DROP POLICY IF EXISTS "team_update_req"  ON requisitions;
+DROP POLICY IF EXISTS "team_delete_req"  ON requisitions;
+CREATE POLICY "team_read_req"   ON requisitions FOR SELECT TO authenticated USING (true);
+CREATE POLICY "team_write_req"  ON requisitions FOR INSERT TO authenticated WITH CHECK (true);
+CREATE POLICY "team_update_req" ON requisitions FOR UPDATE TO authenticated USING (true) WITH CHECK (true);
+CREATE POLICY "team_delete_req" ON requisitions FOR DELETE TO authenticated USING (true);
+
+-- expenses ─── รายจ่าย
+ALTER TABLE expenses ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS "team_read_exp"   ON expenses;
+DROP POLICY IF EXISTS "team_write_exp"  ON expenses;
+DROP POLICY IF EXISTS "team_update_exp" ON expenses;
+DROP POLICY IF EXISTS "team_delete_exp" ON expenses;
+CREATE POLICY "team_read_exp"   ON expenses FOR SELECT TO authenticated USING (true);
+CREATE POLICY "team_write_exp"  ON expenses FOR INSERT TO authenticated WITH CHECK (true);
+CREATE POLICY "team_update_exp" ON expenses FOR UPDATE TO authenticated USING (true) WITH CHECK (true);
+CREATE POLICY "team_delete_exp" ON expenses FOR DELETE TO authenticated USING (true);
+
+-- quotes ─── ใบเสนอราคา
+ALTER TABLE quotes ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS "team_read_qt"   ON quotes;
+DROP POLICY IF EXISTS "team_write_qt"  ON quotes;
+DROP POLICY IF EXISTS "team_update_qt" ON quotes;
+DROP POLICY IF EXISTS "team_delete_qt" ON quotes;
+CREATE POLICY "team_read_qt"   ON quotes FOR SELECT TO authenticated USING (true);
+CREATE POLICY "team_write_qt"  ON quotes FOR INSERT TO authenticated WITH CHECK (true);
+CREATE POLICY "team_update_qt" ON quotes FOR UPDATE TO authenticated USING (true) WITH CHECK (true);
+CREATE POLICY "team_delete_qt" ON quotes FOR DELETE TO authenticated USING (true);
+
+-- purchase_orders ─── ใบสั่งซื้อ
+ALTER TABLE purchase_orders ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS "team_read_po"   ON purchase_orders;
+DROP POLICY IF EXISTS "team_write_po"  ON purchase_orders;
+DROP POLICY IF EXISTS "team_update_po" ON purchase_orders;
+DROP POLICY IF EXISTS "team_delete_po" ON purchase_orders;
+CREATE POLICY "team_read_po"   ON purchase_orders FOR SELECT TO authenticated USING (true);
+CREATE POLICY "team_write_po"  ON purchase_orders FOR INSERT TO authenticated WITH CHECK (true);
+CREATE POLICY "team_update_po" ON purchase_orders FOR UPDATE TO authenticated USING (true) WITH CHECK (true);
+CREATE POLICY "team_delete_po" ON purchase_orders FOR DELETE TO authenticated USING (true);
+
+-- shop_config ─── ตั้งค่าร้าน
+DO $$ BEGIN
+  IF EXISTS (SELECT FROM information_schema.tables WHERE table_name = 'shop_config') THEN
+    ALTER TABLE shop_config ENABLE ROW LEVEL SECURITY;
+    DROP POLICY IF EXISTS "team_read_shop"   ON shop_config;
+    DROP POLICY IF EXISTS "team_update_shop" ON shop_config;
+    CREATE POLICY "team_read_shop"   ON shop_config FOR SELECT TO authenticated USING (true);
+    CREATE POLICY "team_update_shop" ON shop_config FOR UPDATE TO authenticated USING (true) WITH CHECK (true);
+    CREATE POLICY "team_write_shop"  ON shop_config FOR INSERT TO authenticated WITH CHECK (true);
+  END IF;
+END $$;
+
+-- audit_logs ─── ประวัติการแก้ไข
+DO $$ BEGIN
+  IF EXISTS (SELECT FROM information_schema.tables WHERE table_name = 'audit_logs') THEN
+    ALTER TABLE audit_logs ENABLE ROW LEVEL SECURITY;
+    DROP POLICY IF EXISTS "team_read_audit"  ON audit_logs;
+    DROP POLICY IF EXISTS "team_write_audit" ON audit_logs;
+    CREATE POLICY "team_read_audit"  ON audit_logs FOR SELECT TO authenticated USING (true);
+    CREATE POLICY "team_write_audit" ON audit_logs FOR INSERT TO authenticated WITH CHECK (true);
+  END IF;
+END $$;
+
+-- ─────────────────────────────────────────────────────────────────
+-- 3. เปิด Realtime สำหรับตารางสำคัญ (ถ้ายังไม่ได้เปิด)
+-- ─────────────────────────────────────────────────────────────────
+DO $$ BEGIN
+  -- Enable Realtime publication for core tables
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_publication_tables
+    WHERE pubname = 'supabase_realtime' AND tablename = 'jobs'
+  ) THEN
+    ALTER PUBLICATION supabase_realtime ADD TABLE jobs;
+  END IF;
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_publication_tables
+    WHERE pubname = 'supabase_realtime' AND tablename = 'invoices'
+  ) THEN
+    ALTER PUBLICATION supabase_realtime ADD TABLE invoices;
+  END IF;
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_publication_tables
+    WHERE pubname = 'supabase_realtime' AND tablename = 'stock_items'
+  ) THEN
+    ALTER PUBLICATION supabase_realtime ADD TABLE stock_items;
+  END IF;
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_publication_tables
+    WHERE pubname = 'supabase_realtime' AND tablename = 'customers'
+  ) THEN
+    ALTER PUBLICATION supabase_realtime ADD TABLE customers;
+  END IF;
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_publication_tables
+    WHERE pubname = 'supabase_realtime' AND tablename = 'vehicles'
+  ) THEN
+    ALTER PUBLICATION supabase_realtime ADD TABLE vehicles;
+  END IF;
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_publication_tables
+    WHERE pubname = 'supabase_realtime' AND tablename = 'requisitions'
+  ) THEN
+    ALTER PUBLICATION supabase_realtime ADD TABLE requisitions;
+  END IF;
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_publication_tables
+    WHERE pubname = 'supabase_realtime' AND tablename = 'quotes'
+  ) THEN
+    ALTER PUBLICATION supabase_realtime ADD TABLE quotes;
+  END IF;
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_publication_tables
+    WHERE pubname = 'supabase_realtime' AND tablename = 'purchase_orders'
+  ) THEN
+    ALTER PUBLICATION supabase_realtime ADD TABLE purchase_orders;
+  END IF;
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_publication_tables
+    WHERE pubname = 'supabase_realtime' AND tablename = 'expenses'
+  ) THEN
+    ALTER PUBLICATION supabase_realtime ADD TABLE expenses;
+  END IF;
+END $$;
+
+-- ─────────────────────────────────────────────────────────────────
+-- 4. ยืนยันผล
+-- ─────────────────────────────────────────────────────────────────
+SELECT tablename, policyname, cmd
 FROM pg_policies
-WHERE tablename IN ('invoices','invoice_items','jobs','customers','vehicles','stock_items','profiles')
+WHERE tablename IN (
+  'invoices','invoice_items','jobs','customers','vehicles',
+  'stock_items','profiles','requisitions','expenses','quotes','purchase_orders'
+)
 ORDER BY tablename, cmd;
+
+SELECT tablename FROM pg_publication_tables WHERE pubname = 'supabase_realtime' ORDER BY tablename;

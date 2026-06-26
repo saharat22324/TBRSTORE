@@ -46,9 +46,10 @@ function reportHTML() {
 
   // Calculate cost from invoice items (qty * cost per item) — more reliable than stored totalCost
   const calcInvCost = inv => (inv.items || []).reduce((s, it) => s + ((it.qty || 0) * (it.cost || 0)), 0);
-  /* Revenue = ex-VAT (VAT belongs to Revenue Dept, not shop income) */
-  const mRev    = fmt(mInvs.reduce((s, i) => s + i.grand - (i.vat || 0), 0));
-  const mVat    = fmt(mInvs.reduce((s, i) => s + (i.vat || 0), 0));          // VAT to remit
+  /* Revenue calculations */
+  const mGrand  = fmt(mInvs.reduce((s, i) => s + i.grand, 0));               // รวม VAT (ยอดบนบิล)
+  const mVat    = fmt(mInvs.reduce((s, i) => s + (i.vat || 0), 0));          // VAT นำส่ง
+  const mRev    = fmt(mInvs.reduce((s, i) => s + i.grand - (i.vat || 0), 0));// ก่อน VAT (ใช้คำนวณกำไร)
   const mCost   = mInvs.reduce((s, i) => s + calcInvCost(i), 0);
   const mGross  = fmt(mRev - mCost);
 
@@ -117,8 +118,9 @@ function reportHTML() {
   /* ── Invoice table rows ── */
   const invRows = mInvs.length
     ? [...mInvs].reverse().map(i => {
-        const invCost = (i.items || []).reduce((s, it) => s + ((it.qty || 0) * (it.cost || 0)), 0);
-        const gp = fmt(i.grand - (i.vat || 0) - invCost); // ex-VAT gross profit
+        const invCost   = (i.items || []).reduce((s, it) => s + ((it.qty || 0) * (it.cost || 0)), 0);
+        const invExVat  = fmt(i.grand - (i.vat || 0)); // ก่อน VAT
+        const gp        = fmt(invExVat - invCost);     // กำไร = ก่อน VAT - ต้นทุน
         return `
           <tr>
             <td class="mono" style="font-size:.75rem;color:var(--teal);cursor:pointer"
@@ -127,6 +129,7 @@ function reportHTML() {
             <td style="font-weight:600">${esc(i.cust || '—')}</td>
             <td style="font-size:.8rem;color:var(--fg2)">${esc(i.plate || '—')}</td>
             <td class="r money fc-gold">${THB(i.grand)}</td>
+            <td class="r" style="font-size:.82rem;color:var(--fg2)">${THB(invExVat)}${(i.vat||0)>0 ? `<br><span style="font-size:.65rem;color:var(--warn)">VAT ${THB(i.vat)}</span>` : ''}</td>
             ${hasPermission('canViewCost') ? `<td class="r" style="font-size:.82rem;color:var(--bad)">${THB(invCost)}</td>` : ''}
             <td class="r" style="font-weight:700;color:${gp>=0?'var(--grn)':'var(--bad)'}">${THB(gp)}</td>
             <td class="c">
@@ -148,7 +151,7 @@ function reportHTML() {
             </td>
           </tr>`;
       }).join('')
-    : `<tr><td colspan="9" class="tbl-empty">ยังไม่มีบิลในเดือนนี้</td></tr>`;
+    : `<tr><td colspan="${hasPermission('canViewCost') ? 10 : 9}" class="tbl-empty">ยังไม่มีบิลในเดือนนี้</td></tr>`;
 
   /* ── โบนัสช่าง ── */
   const [ym_y, ym_m] = reportMonth.split('-').map(Number);
@@ -263,6 +266,13 @@ function reportHTML() {
   for (const inv of mInvs) {
     for (const it of (inv.items || [])) {
       const t = it.itemType || 'other';
+      // น้ำมัน/สต็อก ที่ price=0 → ตัดสต็อกอย่างเดียว รายได้อยู่ใน "บริการ"
+      // → โอนต้นทุนไปหักกำไรของ service category แทน
+      if (it.itemType === 'stock' && (it.price || 0) === 0) {
+        if (!typeMap['service']) typeMap['service'] = { rev: 0, cost: 0, qty: 0 };
+        typeMap['service'].cost += (it.qty || 0) * (it.cost || 0);
+        continue;
+      }
       if (!typeMap[t]) typeMap[t] = { rev: 0, cost: 0, qty: 0 };
       typeMap[t].rev  += (it.qty || 0) * (it.price || 0);
       typeMap[t].cost += (it.qty || 0) * (it.cost  || 0);
@@ -348,10 +358,23 @@ function reportHTML() {
 
     <!-- ── Stats ── -->
     <div class="g4 mb16">
-      <div class="stat red">
-        <div class="sk">${svgI('<path d="M12 1v22M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/>')} ยอดขาย <span style="font-size:.65rem;opacity:.7">(ไม่รวม VAT)</span></div>
-        <div class="sv" style="font-size:1.4rem">${THB(mRev)}</div>
-        <div class="sd">${mInvs.length} บิล · วันนี้ ${THB(todayRev)}${mVat > 0 ? ` · <span style="color:var(--warn)">VAT นำส่ง ${THB(mVat)}</span>` : ''}</div>
+      <div class="stat red" style="padding-bottom:10px">
+        <div class="sk">${svgI('<path d="M12 1v22M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/>')} ยอดขาย &nbsp;<span style="font-size:.65rem;opacity:.6">${mInvs.length} บิล • วันนี้ ${THB(todayRev)}</span></div>
+        <div style="display:flex;gap:8px;margin-top:6px;flex-wrap:wrap">
+          <div style="background:rgba(255,255,255,.06);border-radius:8px;padding:7px 12px;flex:1;min-width:110px">
+            <div style="font-size:.62rem;color:var(--fg2);margin-bottom:2px;letter-spacing:.3px">รวม VAT</div>
+            <div style="font-size:1.25rem;font-weight:800;color:var(--fg);font-family:'JetBrains Mono',monospace">${THB(mGrand)}</div>
+          </div>
+          <div style="background:rgba(255,255,255,.06);border-radius:8px;padding:7px 12px;flex:1;min-width:110px">
+            <div style="font-size:.62rem;color:var(--fg2);margin-bottom:2px;letter-spacing:.3px">ก่อน VAT</div>
+            <div style="font-size:1.25rem;font-weight:800;color:var(--grn);font-family:'JetBrains Mono',monospace">${THB(mRev)}</div>
+          </div>
+          ${mVat > 0 ? `
+          <div style="background:rgba(255,193,7,.08);border-radius:8px;padding:7px 12px;flex:1;min-width:90px">
+            <div style="font-size:.62rem;color:var(--warn);margin-bottom:2px;letter-spacing:.3px">VAT นำส่ง</div>
+            <div style="font-size:1.25rem;font-weight:800;color:var(--warn);font-family:'JetBrains Mono',monospace">${THB(mVat)}</div>
+          </div>` : ''}
+        </div>
       </div>
       <div class="stat gold">
         <div class="sk">${svgI('<path d="M18 20V10M12 20V4M6 20v-6"/>')} กำไรขั้นต้น</div>
@@ -420,7 +443,8 @@ function reportHTML() {
           <thead>
             <tr>
               <th>เลขที่</th><th>วันที่</th><th>ลูกค้า</th><th>ทะเบียน</th>
-              <th class="r">ยอดรวม</th>
+              <th class="r">ยอดรวม (VAT)</th>
+              <th class="r">ก่อน VAT</th>
               ${hasPermission('canViewCost') ? '<th class="r">COGS</th>' : ''}
               <th class="r">กำไร</th>
               <th class="c">ชำระ</th>

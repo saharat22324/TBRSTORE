@@ -1259,6 +1259,39 @@ async function getServices() {
   }
 }
 
+async function upsertService(svc) {
+  try {
+    const { error } = await getSupabase()
+      .from('services')
+      .upsert({
+        service_code: svc.id,
+        name:         svc.name,
+        description:  svc.detail || '',
+        price:        svc.price  || 0,
+        active:       true,
+      }, { onConflict: 'service_code' });
+    if (error) throw error;
+    return true;
+  } catch (err) {
+    console.warn('[Service] upsertService error:', err);
+    return false;
+  }
+}
+
+async function deleteServiceByCode(code) {
+  try {
+    const { error } = await getSupabase()
+      .from('services')
+      .update({ active: false })
+      .eq('service_code', code);
+    if (error) throw error;
+    return true;
+  } catch (err) {
+    console.warn('[Service] deleteService error:', err);
+    return false;
+  }
+}
+
 /* ══════════════════════════════════════
    AUDIT LOG
 ══════════════════════════════════════ */

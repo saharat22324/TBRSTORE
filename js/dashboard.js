@@ -15,7 +15,9 @@ function dashboardHTML() {
     const d = new Date(i.ts);
     return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}` === ym;
   });
-  const mRev     = fmt(mInv.reduce((s, i) => s + i.grand - (i.vat || 0), 0)); // ex-VAT
+  const mGrand   = fmt(mInv.reduce((s, i) => s + i.grand, 0));                // รวม VAT (ยอดบนบิล)
+  const mVat     = fmt(mInv.reduce((s, i) => s + (i.vat || 0), 0));           // VAT นำส่ง
+  const mRev     = fmt(mInv.reduce((s, i) => s + i.grand - (i.vat || 0), 0)); // ก่อน VAT (ใช้คำนวณกำไร)
   const mCost    = mInv.reduce((s, i) => s + calcInvCost(i), 0);
   const mProfit  = fmt(mRev - mCost);
   const mAvgBill = mInv.length > 0 ? fmt(mRev / mInv.length) : 0;
@@ -129,10 +131,23 @@ function dashboardHTML() {
   return `
     <!-- ── Stat cards ── -->
     <div class="g4 mb16">
-      <div class="stat red">
-        <div class="sk">${svgI('<path d="M12 1v22M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/>')} ยอดขายเดือนนี้</div>
-        <div class="sv" style="font-size:1.45rem">${THB(mRev)}</div>
-        <div class="sd">${mInv.length} บิล • วันนี้ ${THB(todayRev)}</div>
+      <div class="stat red" style="padding-bottom:10px">
+        <div class="sk">${svgI('<path d="M12 1v22M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/>')} ยอดขายเดือนนี้ &nbsp;<span style="font-size:.65rem;opacity:.6">${mInv.length} บิล • วันนี้ ${THB(todayRev)}</span></div>
+        <div style="display:flex;gap:8px;margin-top:6px;flex-wrap:wrap">
+          <div style="background:rgba(255,255,255,.06);border-radius:8px;padding:7px 12px;flex:1;min-width:110px">
+            <div style="font-size:.62rem;color:var(--fg2);margin-bottom:2px;letter-spacing:.3px">รวม VAT</div>
+            <div style="font-size:1.25rem;font-weight:800;color:var(--fg);font-family:'JetBrains Mono',monospace">${THB(mGrand)}</div>
+          </div>
+          <div style="background:rgba(255,255,255,.06);border-radius:8px;padding:7px 12px;flex:1;min-width:110px">
+            <div style="font-size:.62rem;color:var(--fg2);margin-bottom:2px;letter-spacing:.3px">ก่อน VAT</div>
+            <div style="font-size:1.25rem;font-weight:800;color:var(--grn);font-family:'JetBrains Mono',monospace">${THB(mRev)}</div>
+          </div>
+          ${mVat > 0 ? `
+          <div style="background:rgba(255,193,7,.08);border-radius:8px;padding:7px 12px;flex:1;min-width:90px">
+            <div style="font-size:.62rem;color:var(--warn);margin-bottom:2px;letter-spacing:.3px">VAT นำส่ง</div>
+            <div style="font-size:1.25rem;font-weight:800;color:var(--warn);font-family:'JetBrains Mono',monospace">${THB(mVat)}</div>
+          </div>` : ''}
+        </div>
       </div>
       <div class="stat gold">
         <div class="sk">${svgI('<path d="M18 20V10M12 20V4M6 20v-6"/>')} กำไรเดือนนี้</div>

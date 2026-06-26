@@ -366,6 +366,9 @@ function openSvcModal(id) {
       S.services.push(data);
     }
 
+    if (useSupabase && typeof upsertService === 'function') {
+      upsertService(data).catch(e => console.warn('[Settings] service sync:', e));
+    }
     await saveData();
     closeMod();
     renderPanel();
@@ -375,6 +378,9 @@ function openSvcModal(id) {
   ov.querySelector('#delSvc')?.addEventListener('click', async () => {
     if (!confirm('ลบ Package นี้?')) return;
     S.services = S.services.filter(x => x.id !== id);
+    if (useSupabase && typeof deleteServiceByCode === 'function') {
+      deleteServiceByCode(id).catch(e => console.warn('[Settings] service delete sync:', e));
+    }
     await saveData();
     closeMod();
     renderPanel();
