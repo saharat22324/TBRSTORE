@@ -60,9 +60,9 @@ function billingHTML() {
         <div class="sd">วันนี้ ${todayInv.length} บิล</div>
       </div>
       <div class="stat gold" style="min-height:92px">
-        <div class="sk">${svgI('<path d="M12 1v22M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/>')} ยอดขายรวม (รวม VAT)</div>
-        <div class="sv" style="font-size:1.45rem">${THB(totalGrand)}</div>
-        <div class="sd">VAT รวม ${THB(totalVat)} · วันนี้ ${THB(todayGrand)}</div>
+        <div class="sk">${svgI('<path d="M12 1v22M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/>')} ยอดขายรวม</div>
+        <div class="sv" style="font-size:1.3rem">${THB(totalGrand)}<span style="font-size:.65rem;font-weight:400;color:var(--fg2);margin-left:4px">รวม VAT</span></div>
+        <div class="sd">${THB(totalGrand - totalVat)} ไม่รวม VAT · VAT ${THB(totalVat)}</div>
       </div>
       <div class="stat teal" style="min-height:92px">
         <div class="sk">${svgI('<path d="M18 20V10M12 20V4M6 20v-6"/>')} ค่าเฉลี่ยต่อบิล</div>
