@@ -953,10 +953,12 @@ function bindReport() {
       return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}` === reportMonth;
     });
     if (!mInvs2.length) return showToast('ไม่มีบิลในเดือนนี้', 'err');
-    const header = 'เลขที่,วันที่,ลูกค้า,ทะเบียน,ยอดรวม,ชำระ';
-    const rows = mInvs2.map(i =>
-      `"${i.no}","${dateStr(i.ts)}","${(i.cust||'').replace(/"/g,'""')}","${(i.plate||'').replace(/"/g,'""')}",${i.grand},${i.paid ? 'ชำระแล้ว' : 'ค้างชำระ'}`
-    );
+    const header = 'เลขที่,วันที่,ลูกค้า,ทะเบียน,ยอดรวม (รวม VAT),ก่อน VAT,VAT 7%,ชำระ';
+    const rows = mInvs2.map(i => {
+      const exVat = fmt(i.grand - (i.vat || 0));
+      const vat   = i.vat || 0;
+      return `"${i.no}","${dateStr(i.ts)}","${(i.cust||'').replace(/"/g,'""')}","${(i.plate||'').replace(/"/g,'""')}",${i.grand},${exVat},${vat},${i.paid ? 'ชำระแล้ว' : 'ค้างชำระ'}`;
+    });
     const csv = [header, ...rows].join('\n');
     const a   = document.createElement('a');
     a.href    = URL.createObjectURL(new Blob(["\uFEFF"+csv], { type:'text/csv;charset=utf-8' }));
