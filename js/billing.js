@@ -15,10 +15,11 @@ function billingHTML() {
   
   /* ── Stats ── */
   const totalInv = S.invoices.length;
-  const totalRev = S.invoices.reduce((s, i) => s + i.grand - (i.vat || 0), 0); // ex-VAT
-  const avgBill  = totalInv > 0 ? totalRev / totalInv : 0;
-  const todayInv = S.invoices.filter(i => new Date(i.ts).toDateString() === new Date().toDateString());
-  const todayRev = todayInv.reduce((s, i) => s + i.grand - (i.vat || 0), 0); // ex-VAT
+  const totalGrand = S.invoices.reduce((s, i) => s + i.grand, 0);
+  const totalVat   = S.invoices.reduce((s, i) => s + (i.vat || 0), 0);
+  const avgBill    = totalInv > 0 ? totalGrand / totalInv : 0;
+  const todayInv   = S.invoices.filter(i => new Date(i.ts).toDateString() === new Date().toDateString());
+  const todayGrand = todayInv.reduce((s, i) => s + i.grand, 0);
 
   const stOpts  = S.stockItems.map(i =>
     `<option value="stock:${i.id}">[สต๊อก] ${esc(i.name)} [${i.unit}] — ${THB(i.sell)}</option>`
@@ -59,9 +60,9 @@ function billingHTML() {
         <div class="sd">วันนี้ ${todayInv.length} บิล</div>
       </div>
       <div class="stat gold" style="min-height:92px">
-        <div class="sk">${svgI('<path d="M12 1v22M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/>')} ยอดขายรวม</div>
-        <div class="sv" style="font-size:1.45rem">${THB(totalRev)}</div>
-        <div class="sd">วันนี้ ${THB(todayRev)}</div>
+        <div class="sk">${svgI('<path d="M12 1v22M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/>')} ยอดขายรวม (รวม VAT)</div>
+        <div class="sv" style="font-size:1.45rem">${THB(totalGrand)}</div>
+        <div class="sd">VAT รวม ${THB(totalVat)} · วันนี้ ${THB(todayGrand)}</div>
       </div>
       <div class="stat teal" style="min-height:92px">
         <div class="sk">${svgI('<path d="M18 20V10M12 20V4M6 20v-6"/>')} ค่าเฉลี่ยต่อบิล</div>
