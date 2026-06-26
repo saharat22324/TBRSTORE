@@ -15,15 +15,15 @@ function dashboardHTML() {
     const d = new Date(i.ts);
     return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}` === ym;
   });
-  const mRev     = mInv.reduce((s, i) => s + i.grand, 0);
+  const mRev     = fmt(mInv.reduce((s, i) => s + i.grand - (i.vat || 0), 0)); // ex-VAT
   const mCost    = mInv.reduce((s, i) => s + calcInvCost(i), 0);
-  const mProfit  = mRev - mCost;
-  const mAvgBill = mInv.length > 0 ? mRev / mInv.length : 0;
+  const mProfit  = fmt(mRev - mCost);
+  const mAvgBill = mInv.length > 0 ? fmt(mRev / mInv.length) : 0;
 
   /* ── Today ── */
   const todayJobs = S.jobs.filter(j => new Date(j.createdAt).toDateString() === today);
   const todayInv  = S.invoices.filter(i => new Date(i.ts).toDateString() === today);
-  const todayRev  = todayInv.reduce((s, i) => s + i.grand, 0);
+  const todayRev  = todayInv.reduce((s, i) => s + i.grand - (i.vat || 0), 0);
 
   /* ── Stock alerts ── */
   const lowStock  = S.stockItems.filter(i => i.qty <= i.reorder);
@@ -41,7 +41,7 @@ function dashboardHTML() {
     S.invoices.filter(i => {
       const d = new Date(i.ts);
       return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}` === m;
-    }).reduce((s, i) => s + i.grand, 0)
+    }).reduce((s, i) => s + i.grand - (i.vat || 0), 0) // ex-VAT
   );
   const maxS = Math.max(...mSales, 1);
 

@@ -44,9 +44,11 @@ function reportHTML() {
     return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}` === reportMonth;
   });
 
-  const mRev    = mInvs.reduce((s, i) => s + i.grand, 0);
   // Calculate cost from invoice items (qty * cost per item) — more reliable than stored totalCost
   const calcInvCost = inv => (inv.items || []).reduce((s, it) => s + ((it.qty || 0) * (it.cost || 0)), 0);
+  /* Revenue = ex-VAT (VAT belongs to Revenue Dept, not shop income) */
+  const mRev    = fmt(mInvs.reduce((s, i) => s + i.grand - (i.vat || 0), 0));
+  const mVat    = fmt(mInvs.reduce((s, i) => s + (i.vat || 0), 0));          // VAT to remit
   const mCost   = mInvs.reduce((s, i) => s + calcInvCost(i), 0);
   const mGross  = fmt(mRev - mCost);
 
@@ -56,11 +58,11 @@ function reportHTML() {
 
   const mNet    = fmt(mGross - mExp);
 
-  /* ── Today revenue ── */
+  /* ── Today revenue (ex-VAT) ── */
   const today   = new Date().toDateString();
   const todayRev= S.invoices
     .filter(i => new Date(i.ts).toDateString() === today)
-    .reduce((s, i) => s + i.grand, 0);
+    .reduce((s, i) => s + i.grand - (i.vat || 0), 0);
 
   const stockVal= S.stockItems.reduce((s, i) => s + i.qty * i.cost, 0);
 
@@ -162,7 +164,7 @@ function reportHTML() {
   };
   const periodProfit = (from, to) => {
     const invs = mInvs.filter(i => invInRange(i, from, to));
-    const sell = invs.reduce((s, i) => s + i.grand, 0);
+    const sell = invs.reduce((s, i) => s + i.grand - (i.vat || 0), 0); // ex-VAT
     const cost = invs.reduce((s, i) => s + calcInvCost(i), 0);
     return { sell: fmt(sell), cost: fmt(cost), profit: fmt(sell - cost), count: invs.length };
   };
@@ -292,9 +294,9 @@ function reportHTML() {
     <!-- ── Stats ── -->
     <div class="g4 mb16">
       <div class="stat red">
-        <div class="sk">${svgI('<path d="M12 1v22M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/>')} ยอดขาย</div>
+        <div class="sk">${svgI('<path d="M12 1v22M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/>')} ยอดขาย <span style="font-size:.65rem;opacity:.7">(ไม่รวม VAT)</span></div>
         <div class="sv" style="font-size:1.4rem">${THB(mRev)}</div>
-        <div class="sd">${mInvs.length} บิล · วันนี้ ${THB(todayRev)}</div>
+        <div class="sd">${mInvs.length} บิล · วันนี้ ${THB(todayRev)}${mVat > 0 ? ` · <span style="color:var(--warn)">VAT นำส่ง ${THB(mVat)}</span>` : ''}</div>
       </div>
       <div class="stat gold">
         <div class="sk">${svgI('<path d="M18 20V10M12 20V4M6 20v-6"/>')} กำไรขั้นต้น</div>
