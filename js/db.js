@@ -181,7 +181,6 @@ async function syncRemoteData() {
         const ex = qtById.get(q.id);
         if (!ex.converted && q.converted) { ex.converted = true; changed = true; }
       } else if (qtByNo.has(q.no)) {
-        // Same quote by number — update UUID and converted flag
         const ex = qtByNo.get(q.no);
         if (ex.id !== q.id) { ex.id = q.id; changed = true; }
         if (!ex.converted && q.converted) { ex.converted = true; changed = true; }
@@ -193,6 +192,27 @@ async function syncRemoteData() {
     const prevQtLen = S.quotes.length;
     S.quotes = S.quotes.filter(q => !q.id || !_delUuidRx.test(q.id) || sbQtIds.has(q.id));
     if (S.quotes.length !== prevQtLen) { changed = true; console.log(`[DB] 🗑 Removed ${prevQtLen - S.quotes.length} deleted quote(s)`); }
+
+    // ── Purchase Orders ──
+    if (!S.purchaseOrders) S.purchaseOrders = [];
+    const poById = new Map(S.purchaseOrders.map(p => [p.id, p]));
+    const poByNo = new Map(S.purchaseOrders.map(p => [p.no, p]));
+    for (const p of (newState.purchaseOrders || [])) {
+      if (poById.has(p.id)) {
+        const ex = poById.get(p.id);
+        if (ex.status !== p.status) { ex.status = p.status; ex.receivedAt = p.receivedAt; changed = true; }
+      } else if (poByNo.has(p.no)) {
+        const ex = poByNo.get(p.no);
+        if (ex.id !== p.id) { ex.id = p.id; changed = true; }
+        if (ex.status !== p.status) { ex.status = p.status; ex.receivedAt = p.receivedAt; changed = true; }
+      } else {
+        S.purchaseOrders.push(p); changed = true;
+      }
+    }
+    const sbPoIds   = new Set((newState.purchaseOrders || []).map(p => p.id).filter(Boolean));
+    const prevPoLen = S.purchaseOrders.length;
+    S.purchaseOrders = S.purchaseOrders.filter(p => !p.id || !_delUuidRx.test(p.id) || sbPoIds.has(p.id));
+    if (S.purchaseOrders.length !== prevPoLen) { changed = true; console.log(`[DB] 🗑 Removed ${prevPoLen - S.purchaseOrders.length} deleted PO(s)`); }
 
     if (changed) {
       syncSeqFromState();
@@ -233,9 +253,10 @@ function startLiveSync() {
         .on('postgres_changes', { event: '*', schema: 'public', table: 'stock_items'   }, syncRemoteData)
         .on('postgres_changes', { event: '*', schema: 'public', table: 'customers'     }, syncRemoteData)
         .on('postgres_changes', { event: '*', schema: 'public', table: 'vehicles'      }, syncRemoteData)
-        .on('postgres_changes', { event: '*', schema: 'public', table: 'requisitions'  }, syncRemoteData)
-        .on('postgres_changes', { event: '*', schema: 'public', table: 'expenses'      }, syncRemoteData)
-        .on('postgres_changes', { event: '*', schema: 'public', table: 'quotes'        }, syncRemoteData)
+        .on('postgres_changes', { event: '*', schema: 'public', table: 'requisitions'     }, syncRemoteData)
+        .on('postgres_changes', { event: '*', schema: 'public', table: 'expenses'         }, syncRemoteData)
+        .on('postgres_changes', { event: '*', schema: 'public', table: 'quotes'           }, syncRemoteData)
+        .on('postgres_changes', { event: '*', schema: 'public', table: 'purchase_orders'  }, syncRemoteData)
         .subscribe(status => {
           if (status === 'SUBSCRIBED')
             console.log('[DB] ✅ Supabase Realtime เชื่อมต่อแล้ว — sync อัตโนมัติทุก operation');
@@ -620,6 +641,20 @@ function convertSupabaseToState(dbData) {
     }));
   }
 
+  if (dbData.purchaseOrders && dbData.purchaseOrders.length > 0) {
+    state.purchaseOrders = dbData.purchaseOrders.map(p => ({
+      id:         p.id,
+      no:         p.no          || '',
+      ts:         new Date(p.created_at).getTime(),
+      supplier:   p.supplier    || '',
+      status:     p.status      || 'pending',
+      items:      Array.isArray(p.items) ? p.items : [],
+      total:      parseFloat(p.total) || 0,
+      note:       p.note        || '',
+      receivedAt: p.received_at ? new Date(p.received_at).getTime() : null,
+    }));
+  }
+
   return state;
 }
 
@@ -692,10 +727,12 @@ function syncSeqFromState() {
   const maxInv = Math.max(0, ...S.invoices.map(i => extract(i.no, 'INV')));
   const maxJob = Math.max(0, ...S.jobs.map(j => extract(j.no, 'JOB')));
   const maxQt  = Math.max(0, ...((S.quotes||[]).map(q => extract(q.no, 'QT'))));
+  const maxPo  = Math.max(0, ...((S.purchaseOrders||[]).map(p => extract(p.no, 'PO'))));
 
   if (maxInv >= (S.seq?.inv || 1)) S.seq.inv = maxInv + 1;
   if (maxJob >= (S.seq?.job || 1)) S.seq.job = maxJob + 1;
   if (maxQt  >= (S.seq?.qt  || 1)) S.seq.qt  = maxQt  + 1;
+  if (maxPo  >= (S.seq?.po  || 1)) S.seq.po  = maxPo  + 1;
 
   if (maxInv > 0 || maxJob > 0) {
     console.log(`[DB] 🔢 Seq synced → INV:${S.seq.inv} JOB:${S.seq.job}`);
@@ -915,6 +952,16 @@ function mergeLocalStorageIntoS() {
     for (const q of (local.quotes || [])) {
       if (q.no && !sbQtNos.has(q.no)) {
         S.quotes.push(q);
+        merged++;
+      }
+    }
+
+    // Purchase Orders: merge local ones not yet in Supabase (by no)
+    if (!S.purchaseOrders) S.purchaseOrders = [];
+    const sbPoNos = new Set(S.purchaseOrders.map(p => p.no).filter(Boolean));
+    for (const p of (local.purchaseOrders || [])) {
+      if (p.no && !sbPoNos.has(p.no)) {
+        S.purchaseOrders.push(p);
         merged++;
       }
     }

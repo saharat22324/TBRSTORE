@@ -1056,6 +1056,77 @@ async function getQuotes() {
   }
 }
 
+/* ══════════════════════════════════════
+   PURCHASE ORDERS
+══════════════════════════════════════ */
+async function addPO(no, supplier, items, total, note) {
+  try {
+    const row = {
+      no,
+      supplier:   supplier || null,
+      status:     'pending',
+      items:      items    || [],
+      total:      parseFloat(total) || 0,
+      note:       note     || null,
+      created_by: currentUser?.id || null,
+    };
+    const { data, error } = await getSupabase()
+      .from('purchase_orders')
+      .insert([row])
+      .select()
+      .single();
+    if (error) throw error;
+    return data;
+  } catch (err) {
+    console.error('[Service] addPO error:', err);
+    return null;
+  }
+}
+
+async function updatePO(poId, updates) {
+  try {
+    const { data, error } = await getSupabase()
+      .from('purchase_orders')
+      .update(updates)
+      .eq('id', poId)
+      .select()
+      .single();
+    if (error) throw error;
+    return data;
+  } catch (err) {
+    console.error('[Service] updatePO error:', err);
+    return null;
+  }
+}
+
+async function deletePO(poId) {
+  try {
+    const { error } = await getSupabase()
+      .from('purchase_orders')
+      .delete()
+      .eq('id', poId);
+    if (error) throw error;
+    return true;
+  } catch (err) {
+    console.error('[Service] deletePO error:', err);
+    return false;
+  }
+}
+
+async function getPOs() {
+  try {
+    const { data, error } = await getSupabase()
+      .from('purchase_orders')
+      .select('*')
+      .order('created_at', { ascending: false });
+    if (error) throw error;
+    return data || [];
+  } catch (err) {
+    console.error('[Service] getPOs error:', err);
+    return [];
+  }
+}
+
 /**
  * === BULK DATA LOADING ===
  */
@@ -1131,12 +1202,18 @@ async function loadAllData() {
         const data = await getQuotes();
         console.log('[Service] ✅ Quotes loaded:', data?.length || 0);
         return data;
+      })(),
+      (async () => {
+        console.log('[Service] Loading purchase orders...');
+        const data = await getPOs();
+        console.log('[Service] ✅ POs loaded:', data?.length || 0);
+        return data;
       })()
     ]);
 
     // Extract successful results
     const [customers, vehicles, jobs, stockItems, invoices, services, shopConfig, stockLedger,
-           requisitions, expenses, quotes] = results.map((r, i) => {
+           requisitions, expenses, quotes, purchaseOrders] = results.map((r, i) => {
       if (r.status === 'fulfilled') {
         return r.value;
       } else {
@@ -1147,17 +1224,18 @@ async function loadAllData() {
 
     console.log('[Service] ✅ Bulk data load complete - Customers:', customers?.length || 0);
     return {
-      customers:    customers     || [],
-      vehicles:     vehicles      || [],
-      jobs:         jobs          || [],
-      stockItems:   stockItems    || [],
-      invoices:     invoices      || [],
-      services:     services      || [],
-      shopConfig:   shopConfig    || {},
-      stockLedger:  stockLedger   || [],
-      requisitions: requisitions  || [],
-      expenses:     expenses      || [],
-      quotes:       quotes        || [],
+      customers:      customers       || [],
+      vehicles:       vehicles        || [],
+      jobs:           jobs            || [],
+      stockItems:     stockItems      || [],
+      invoices:       invoices        || [],
+      services:       services        || [],
+      shopConfig:     shopConfig      || {},
+      stockLedger:    stockLedger     || [],
+      requisitions:   requisitions    || [],
+      expenses:       expenses        || [],
+      quotes:         quotes          || [],
+      purchaseOrders: purchaseOrders  || [],
     };
   } catch (err) {
     console.error('[Service] loadAllData error:', err);
