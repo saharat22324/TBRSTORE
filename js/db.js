@@ -1055,19 +1055,31 @@ async function syncLocalToSupabase(opts = {}) {
   let syncedCount = 0;
   let failedCount = 0;
   let lastErr = null;
+  const _uuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+  const MAX_TRIES = 3; // เลิกพยายามพุชขึ้นถ้า fail ถาวร (กัน toast เด้งไม่จบ)
 
   try {
     // 1. Sync customers
+    const syncedCustPhones = new Map(
+      (S.customers || []).filter(x => _uuid.test(x.id || '') && x.phone).map(x => [x.phone, x.id])
+    );
     for (const c of (S.customers || [])) {
       if (!c.id || c.id.startsWith('C-')) { // local timestamp IDs
+        if (c.phone && syncedCustPhones.has(c.phone)) {
+          const uuid = syncedCustPhones.get(c.phone);
+          idMap[c.id] = uuid; c.id = uuid; delete c._syncTries;
+          continue;
+        }
+        if ((c._syncTries || 0) >= MAX_TRIES) continue;
         try {
           const result = await addCustomer(c.name || '', c.phone || '', c.email || '', c.line || '', c.address || '', c.note || '');
           if (result?.id) {
             idMap[c.id] = result.id;
             c.id = result.id;
+            delete c._syncTries;
             syncedCount++;
-          } else { failedCount++; }
-        } catch (e) { failedCount++; lastErr = e; }
+          } else { failedCount++; c._syncTries = (c._syncTries || 0) + 1; }
+        } catch (e) { failedCount++; lastErr = e; c._syncTries = (c._syncTries || 0) + 1; }
       }
     }
 
@@ -1077,16 +1089,26 @@ async function syncLocalToSupabase(opts = {}) {
     }
 
     // 2. Sync vehicles
+    const syncedVehPlates = new Map(
+      (S.vehicles || []).filter(x => _uuid.test(x.id || '') && x.plate).map(x => [x.plate, x.id])
+    );
     for (const v of (S.vehicles || [])) {
       if (!v.id || v.id.startsWith('V-')) {
+        if (v.plate && syncedVehPlates.has(v.plate)) {
+          const uuid = syncedVehPlates.get(v.plate);
+          idMap[v.id] = uuid; v.id = uuid; delete v._syncTries;
+          continue;
+        }
+        if ((v._syncTries || 0) >= MAX_TRIES) continue;
         try {
           const result = await addVehicle(v.custId, v.plate, v.brand, v.model, v.year, v.color, v.mileage, '', '', v.note || '');
           if (result?.id) {
             idMap[v.id] = result.id;
             v.id = result.id;
+            delete v._syncTries;
             syncedCount++;
-          } else { failedCount++; }
-        } catch (e) { failedCount++; lastErr = e; }
+          } else { failedCount++; v._syncTries = (v._syncTries || 0) + 1; }
+        } catch (e) { failedCount++; lastErr = e; v._syncTries = (v._syncTries || 0) + 1; }
       }
     }
 
@@ -1097,16 +1119,28 @@ async function syncLocalToSupabase(opts = {}) {
     }
 
     // 3. Sync jobs
+    // dedupe: งานที่ขึ้น Supabase ไปแล้ว (มี UUID id) map ตามเลขงาน
+    const syncedJobNos = new Map(
+      (S.jobs || []).filter(x => _uuid.test(x.id || '') && x.no).map(x => [x.no, x.id])
+    );
     for (const j of (S.jobs || [])) {
       if (!j.id || j.id.startsWith('J-')) {
+        // ถ้าเลขงานนี้มีบน Supabase แล้ว → รับ UUID มาใช้ ไม่ insert ซ้ำ
+        if (j.no && syncedJobNos.has(j.no)) {
+          const uuid = syncedJobNos.get(j.no);
+          idMap[j.id] = uuid; j.id = uuid; delete j._syncTries;
+          continue;
+        }
+        if ((j._syncTries || 0) >= MAX_TRIES) continue; // fail ถาวร → เลิกพยายาม
         try {
           const result = await addJob(j.vehicleId, j.custId, j.complaint || '', j.assignTo || '', j.mileage || 0, j.note || '');
           if (result?.id) {
             idMap[j.id] = result.id;
             j.id = result.id;
+            delete j._syncTries;
             syncedCount++;
-          } else { failedCount++; }
-        } catch (e) { failedCount++; lastErr = e; }
+          } else { failedCount++; j._syncTries = (j._syncTries || 0) + 1; }
+        } catch (e) { failedCount++; lastErr = e; j._syncTries = (j._syncTries || 0) + 1; }
       }
     }
 
@@ -1118,8 +1152,20 @@ async function syncLocalToSupabase(opts = {}) {
     }
 
     // 4. Sync invoices
+    // 4. Sync invoices
+    // dedupe: บิลที่ขึ้น Supabase ไปแล้ว (มี UUID id) map ตามเลขที่บิล
+    const syncedInvNos = new Map(
+      (S.invoices || []).filter(x => _uuid.test(x.id || '') && x.no).map(x => [x.no, x.id])
+    );
     for (const inv of (S.invoices || [])) {
       if (!inv.id || inv.id.startsWith('I-')) {
+        // ถ้าเลขที่บิลนี้มีบน Supabase แล้ว → รับ UUID มาใช้ ไม่ insert ซ้ำ (กันเลขซ้ำ fail วนไม่จบ)
+        if (inv.no && syncedInvNos.has(inv.no)) {
+          const uuid = syncedInvNos.get(inv.no);
+          idMap[inv.id] = uuid; inv.id = uuid; delete inv._syncTries;
+          continue;
+        }
+        if ((inv._syncTries || 0) >= MAX_TRIES) continue; // fail ถาวร → เลิกพยายาม
         try {
           const items = (inv.items || []).map(it => ({
             type: it.itemType || 'service',
@@ -1137,9 +1183,10 @@ async function syncLocalToSupabase(opts = {}) {
           if (result?.id) {
             idMap[inv.id] = result.id;
             inv.id = result.id;
+            delete inv._syncTries;
             syncedCount++;
-          } else { failedCount++; }
-        } catch (e) { failedCount++; lastErr = e; }
+          } else { failedCount++; inv._syncTries = (inv._syncTries || 0) + 1; }
+        } catch (e) { failedCount++; lastErr = e; inv._syncTries = (inv._syncTries || 0) + 1; }
       }
     }
 
