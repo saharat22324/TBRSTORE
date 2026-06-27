@@ -251,6 +251,8 @@ function openJobModal(jid, prefVid) {
     /* อัปเดตเลขไมล์รถ */
     if (mile && v) v.mileage = mile;
 
+    let _newJobCloudOk = false;
+
     const data = {
       vehicleId:  vid,
       custId:     v?.custId,
@@ -298,16 +300,15 @@ function openJobModal(jid, prefVid) {
         ...data,
       };
       S.jobs.push(newJob);
-      // Save to Supabase
+      // เขียนขึ้น Supabase ก่อน แล้วใช้ผลจริง (รอผล ไม่ใช่ fire-and-forget)
       if (useSupabase && typeof addJob === 'function') {
-        addJob(data.vehicleId, data.custId, data.complaint, data.assignTo, data.mileage, data.note)
-          .then(result => {
-            if (result?.id) {
-              newJob.id = result.id; // Update to Supabase UUID
-              localStorage.setItem(DB_KEY, JSON.stringify(S));
-            }
-          })
-          .catch(e => console.warn('[Jobs] addJob Supabase error:', e));
+        try {
+          const result = await addJob(data.vehicleId, data.custId, data.complaint, data.assignTo, data.mileage, data.note);
+          if (result?.id) {
+            newJob.id = result.id;     // ใช้ UUID จริงจาก Supabase
+            _newJobCloudOk = true;
+          }
+        } catch (e) { console.warn('[Jobs] addJob Supabase error:', e); }
       }
     }
 
@@ -315,7 +316,15 @@ function openJobModal(jid, prefVid) {
     closeMod();
     renderPanel();
     renderNav();
-    showToast(j ? 'อัปเดตงานแล้ว' : `เปิดงาน ${S.jobs.slice(-1)[0]?.no} แล้ว`);
+    if (j) {
+      showToast('อัปเดตงานแล้ว');
+    } else if (!useSupabase) {
+      showToast(`เปิดงาน ${S.jobs.slice(-1)[0]?.no} แล้ว`);
+    } else if (_newJobCloudOk) {
+      showToast(`เปิดงาน ${S.jobs.slice(-1)[0]?.no} แล้ว · ขึ้นคลาวด์ ☁️`);
+    } else {
+      showToast('เปิดงานแล้ว — ยังไม่ขึ้นคลาวด์ ระบบจะซิงค์อัตโนมัติ', 'err');
+    }
   });
 
   bindModalClose(ov, '#mCl', '#mCl2');
