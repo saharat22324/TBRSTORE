@@ -714,9 +714,16 @@ function openJobDetail(jid) {
 
   ov.querySelector('#printJobBtn')?.addEventListener('click', () => {
     const s = S.shop || {};
-    const reqRows = reqs.flatMap(r => r.items.map(it =>
+    let reqRows = reqs.flatMap(r => r.items.map(it =>
       `<tr><td>${esc(it.name)}</td><td class="c">${numFmt(it.qty)} ${esc(it.unit||'')}</td></tr>`
-    )).join('') || '<tr><td colspan="2" style="color:#888;text-align:center">—</td></tr>';
+    )).join('');
+    // ถ้าไม่มีใบเบิก ให้แสดงรายการจากบิลแทน (อะไหล่/บริการที่ใช้ในงาน)
+    if (!reqRows && inv && Array.isArray(inv.items)) {
+      reqRows = inv.items.map(it =>
+        `<tr><td>${esc(it.name)}</td><td class="c">${numFmt(it.qty)} ${esc(it.unit||'')}</td></tr>`
+      ).join('');
+    }
+    if (!reqRows) reqRows = '<tr><td colspan="2" style="color:#888;text-align:center">—</td></tr>';
 
     const dc = `
       <div class="doc" style="max-width:680px;margin:0 auto;font-family:sans-serif">
