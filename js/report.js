@@ -1112,22 +1112,21 @@ function openExpModal() {
     };
     S.expenses.push(exp);
 
-    // Save to Supabase
+    // Save to Supabase (รอผล — ยืนยันขึ้นคลาวด์จริง)
+    let _expCloudOk = false;
     if (useSupabase && typeof addExpense === 'function') {
-      addExpense(label, amt, exp.date)
-        .then(result => {
-          if (result?.id) {
-            exp.id = result.id;
-            localStorage.setItem(DB_KEY, JSON.stringify(S));
-          }
-        })
-        .catch(e => console.warn('[Exp] Supabase save failed:', e));
+      try {
+        const result = await addExpense(label, amt, exp.date);
+        if (result?.id) { exp.id = result.id; _expCloudOk = true; }
+      } catch (e) { console.warn('[Exp] Supabase save failed:', e); }
     }
 
     await saveData();
     closeMod();
     renderPanel();
-    showToast(`เพิ่ม ${label} ${THB(amt)}`);
+    if (!useSupabase)     showToast(`เพิ่ม ${label} ${THB(amt)}`);
+    else if (_expCloudOk) showToast(`เพิ่ม ${label} ${THB(amt)} · ขึ้นคลาวด์ ☁️`);
+    else                  showToast(`เพิ่ม ${label} ${THB(amt)} — ยังไม่ขึ้นคลาวด์ ระบบจะซิงค์อัตโนมัติ`, 'err');
   });
 
   bindModalClose(ov, '#mCl', '#mCl2');

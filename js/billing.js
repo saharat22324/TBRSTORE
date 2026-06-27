@@ -693,6 +693,7 @@ async function saveInvoice() {
     if (j) j.status = 5;
   }
 
+  let _invCloudOk = false;
   try {
     // Try to save to Supabase
     if (useSupabase && typeof addInvoice === 'function') {
@@ -717,7 +718,7 @@ async function saveInvoice() {
         sub, bDisc, vat ? 0.07 : 0, grand, note, no,
         { cust, phone, plate, model: sv('bModel') }  // meta: snapshot customer/vehicle info
       );
-      if (supaResult) inv.id = supaResult.id;
+      if (supaResult) { inv.id = supaResult.id; _invCloudOk = true; }
     }
   } catch (err) {
     console.warn('[Billing] Supabase save failed (using localStorage):', err);
@@ -727,7 +728,9 @@ async function saveInvoice() {
   await saveData();
   if (typeof addAuditLog === 'function')
     addAuditLog('INVOICE_CREATE', 'invoice', inv.id || null, no, { grand });
-  showToast(`ออกใบเสร็จ ${no} แล้ว`);
+  if (!useSupabase)     showToast(`ออกใบเสร็จ ${no} แล้ว`);
+  else if (_invCloudOk) showToast(`ออกใบเสร็จ ${no} แล้ว · ขึ้นคลาวด์ ☁️`);
+  else                  showToast(`ออกใบเสร็จ ${no} — ยังไม่ขึ้นคลาวด์ ระบบจะซิงค์อัตโนมัติ`, 'err');
 
   /* Reset billing state */
   bItems = []; bKey = 0; bDisc = 0; bVat = false; bJobId = null;

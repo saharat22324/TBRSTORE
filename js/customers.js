@@ -380,23 +380,25 @@ function openCustModal(id) {
     };
 
     try {
+      let _custCloudOk = false;
       const isUUID = id => /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id);
       if (m) {
         // Update existing
         if (useSupabase) {
           if (isUUID(m.id)) {
             // Real Supabase ID → update (map JS field names to DB column names)
-            await updateCustomer(m.id, {
+            const r = await updateCustomer(m.id, {
               name:    data.name,
               phone:   data.phone,
               email:   data.email,
               line_id: data.line,   // local state uses 'line', DB uses 'line_id'
               note:    data.note,
             });
+            if (r) _custCloudOk = true;
           } else {
             // Local ID → create in Supabase and replace local ID
             const result = await addCustomer(data.name, data.phone, data.email, data.line, '', data.note);
-            if (result) m.id = result.id;
+            if (result) { m.id = result.id; _custCloudOk = true; }
           }
         }
         Object.assign(m, data);
@@ -405,7 +407,7 @@ function openCustModal(id) {
         const newCust = { id: 'C-' + Date.now(), createdAt: Date.now(), ...data };
         if (useSupabase && typeof addCustomer === 'function') {
           const result = await addCustomer(data.name, data.phone, data.email, data.line, '', data.note);
-          if (result) newCust.id = result.id;
+          if (result) { newCust.id = result.id; _custCloudOk = true; }
         }
         S.customers.push(newCust);
       }
@@ -413,7 +415,9 @@ function openCustModal(id) {
       closeMod();
       renderPanel();
       renderNav();
-      showToast(m ? 'อัปเดตลูกค้าแล้ว' : 'เพิ่มลูกค้าแล้ว');
+      if (!useSupabase)      showToast(m ? 'อัปเดตลูกค้าแล้ว' : 'เพิ่มลูกค้าแล้ว');
+      else if (_custCloudOk) showToast((m ? 'อัปเดตลูกค้าแล้ว' : 'เพิ่มลูกค้าแล้ว') + ' · ขึ้นคลาวด์ ☁️');
+      else                   showToast((m ? 'อัปเดตลูกค้า' : 'เพิ่มลูกค้า') + ' — ยังไม่ขึ้นคลาวด์ ระบบจะซิงค์อัตโนมัติ', 'err');
     } catch (err) {
       console.error('Save customer error:', err);
       showToast('บันทึกลูกค้าไม่สำเร็จ', 'err');
@@ -505,6 +509,7 @@ function openVehModal(vid, prefCustId) {
     };
 
     try {
+      let _vehCloudOk = false;
       const isUUID = id => /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id);
       const safeCustId = isUUID(custId) ? custId : null;
       if (v) {
@@ -522,11 +527,12 @@ function openVehModal(vid, prefCustId) {
             };
             if (safeCustId)  vUpdates.customer_id    = safeCustId;
             if (data.vin)    vUpdates.chassis_number = data.vin;
-            await updateVehicle(v.id, vUpdates);
+            const r = await updateVehicle(v.id, vUpdates);
+            if (r) _vehCloudOk = true;
           } else {
             // Local ID → create in Supabase and replace local ID
             const result = await addVehicle(safeCustId, data.plate, data.brand, data.model, data.year, data.color, data.mileage, '', data.vin, '');
-            if (result) v.id = result.id;
+            if (result) { v.id = result.id; _vehCloudOk = true; }
           }
         }
         Object.assign(v, data);
@@ -535,7 +541,7 @@ function openVehModal(vid, prefCustId) {
         const newVeh = { id: 'V-' + Date.now(), createdAt: Date.now(), custId, ...data };
         if (useSupabase && typeof addVehicle === 'function') {
           const result = await addVehicle(safeCustId, data.plate, data.brand, data.model, data.year, data.color, data.mileage, '', data.vin, '');
-          if (result) newVeh.id = result.id;
+          if (result) { newVeh.id = result.id; _vehCloudOk = true; }
         }
         S.vehicles.push(newVeh);
       }
@@ -543,7 +549,9 @@ function openVehModal(vid, prefCustId) {
       closeMod();
       renderPanel();
       renderNav();
-      showToast(v ? 'อัปเดตรถแล้ว' : 'เพิ่มรถแล้ว');
+      if (!useSupabase)     showToast(v ? 'อัปเดตรถแล้ว' : 'เพิ่มรถแล้ว');
+      else if (_vehCloudOk) showToast((v ? 'อัปเดตรถแล้ว' : 'เพิ่มรถแล้ว') + ' · ขึ้นคลาวด์ ☁️');
+      else                  showToast((v ? 'อัปเดตรถ' : 'เพิ่มรถ') + ' — ยังไม่ขึ้นคลาวด์ ระบบจะซิงค์อัตโนมัติ', 'err');
     } catch (err) {
       console.error('Save vehicle error:', err);
       showToast('บันทึกรถไม่สำเร็จ', 'err');

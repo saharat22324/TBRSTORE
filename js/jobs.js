@@ -960,22 +960,21 @@ function openReqModal(jid) {
     if (!j.requisitions) j.requisitions = [];
     j.requisitions.push(req.id);
 
-    // Save to Supabase
+    // Save to Supabase (รอผล — ยืนยันขึ้นคลาวด์จริง)
+    let _reqCloudOk = false;
     if (useSupabase && typeof addRequisition === 'function') {
-      addRequisition(jid, no, req.items, req.note)
-        .then(result => {
-          if (result?.id) {
-            req.id = result.id;
-            localStorage.setItem(DB_KEY, JSON.stringify(S));
-          }
-        })
-        .catch(e => console.warn('[Req] Supabase save failed:', e));
+      try {
+        const result = await addRequisition(jid, no, req.items, req.note);
+        if (result?.id) { req.id = result.id; _reqCloudOk = true; }
+      } catch (e) { console.warn('[Req] Supabase save failed:', e); }
     }
 
     await saveData();
     closeMod();
     renderNav();
-    showToast(`เบิกสต๊อก ${no} แล้ว · ตัดของเรียบร้อย`);
+    if (!useSupabase)     showToast(`เบิกสต๊อก ${no} แล้ว · ตัดของเรียบร้อย`);
+    else if (_reqCloudOk) showToast(`เบิกสต๊อก ${no} แล้ว · ตัดของเรียบร้อย ☁️`);
+    else                  showToast(`เบิกสต๊อก ${no} — ยังไม่ขึ้นคลาวด์ ระบบจะซิงค์อัตโนมัติ`, 'err');
     openJobDetail(jid);
   });
 
