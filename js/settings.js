@@ -217,6 +217,14 @@ function systemSettingsHTML() {
               Import ข้อมูล (.json)
               <input type="file" accept=".json" id="importFile" style="display:none">
             </label>
+            <button class="btn btn-gold" id="forceSyncBtn">
+              ${svgI('<path d="M21 2v6h-6"/><path d="M3 12a9 9 0 0 1 15-6.7L21 8"/><path d="M3 22v-6h6"/><path d="M21 12a9 9 0 0 1-15 6.7L3 16"/>')}
+              ตรวจสอบ &amp; ดันข้อมูลขึ้นคลาวด์
+            </button>
+            <div style="font-size:.78rem;color:var(--fg2);line-height:1.5">
+              ใช้เมื่อ <b style="color:var(--fg)">ช่างคนอื่นไม่เห็นข้อมูลที่คุณเพิ่ม</b><br>
+              ระบบจะดันข้อมูลที่ค้างในเครื่องนี้ขึ้นส่วนกลาง และแจ้งถ้าถูกบล็อก
+            </div>
           </div>
 
           <div style="margin-top:20px;padding-top:16px;border-top:1px solid var(--ln)">
@@ -299,6 +307,38 @@ function bindSettings() {
       showToast('Import ข้อมูลสำเร็จ');
     } catch (err) {
       showToast('Import ไม่สำเร็จ — ตรวจสอบไฟล์', 'err');
+    }
+  });
+
+  sel('forceSyncBtn')?.addEventListener('click', async (e) => {
+    const btn = e.currentTarget;
+    if (!window.supabaseReady) {
+      showToast('ยังเชื่อมต่อ Supabase ไม่ได้ — ลองรีเฟรชหน้า', 'err');
+      return;
+    }
+    if (typeof syncLocalToSupabase !== 'function') {
+      showToast('ฟังก์ชันซิงค์ไม่พร้อม', 'err');
+      return;
+    }
+    const original = btn.innerHTML;
+    btn.disabled = true;
+    btn.innerHTML = 'กำลังดันข้อมูลขึ้นคลาวด์...';
+    try {
+      const res = await syncLocalToSupabase();
+      const synced = res?.syncedCount || 0;
+      const failed = res?.failedCount || 0;
+      if (failed > 0) {
+        showToast(`ดันขึ้นได้ ${synced} รายการ • ติดบล็อก ${failed} รายการ (RLS)`, 'err');
+      } else if (synced > 0) {
+        showToast(`ดันข้อมูลขึ้นคลาวด์สำเร็จ ${synced} รายการ ✅`, 'ok');
+      } else {
+        showToast('ข้อมูลทั้งหมดอยู่บนคลาวด์แล้ว ✅', 'ok');
+      }
+    } catch (err) {
+      showToast('ดันข้อมูลไม่สำเร็จ: ' + (err?.message || err), 'err');
+    } finally {
+      btn.disabled = false;
+      btn.innerHTML = original;
     }
   });
 

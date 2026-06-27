@@ -9,6 +9,7 @@ const DB_KEY = 'tbr-system-v1';
 let useSupabase = false;
 let _servicesSynced = false; // one-time flag per session
 let _liveSync      = null;   // polling interval for remote sync
+let _autoPush      = null;   // interval for auto-pushing local-only records up
 let _lastSyncTs    = 0;      // debounce timestamp
 
 /* ══════════════════════════════════════
@@ -281,11 +282,34 @@ function startLiveSync() {
   if (_liveSync) clearInterval(_liveSync);
   _liveSync = setInterval(syncRemoteData, 15000);
 
+  // 2b. Auto-push 12 วิ — ดันข้อมูลที่ค้างในเครื่อง (local ID) ขึ้น Supabase อัตโนมัติ
+  //     ทำให้ "ทุกคนเพิ่มแล้วคนอื่นเห็นเอง" โดยไม่ต้องกดปุ่ม (เงียบ — ไม่เด้ง toast รัว)
+  if (_autoPush) clearInterval(_autoPush);
+  _autoPush = setInterval(() => {
+    if (hasUnsyncedLocalRecords() && typeof syncLocalToSupabase === 'function') {
+      syncLocalToSupabase({ silent: true }).catch(e => console.warn('[DB] auto-push error:', e));
+    }
+  }, 12000);
+
   // 3. Sync เมื่อกลับมาที่แท็บ
   document.removeEventListener('visibilitychange', _onTabVisible);
   document.addEventListener('visibilitychange', _onTabVisible);
 
-  console.log('[DB] 🔁 Live sync started (Realtime + polling 15s + visibilitychange)');
+  console.log('[DB] 🔁 Live sync started (Realtime + polling 15s + auto-push 12s + visibilitychange)');
+}
+
+/**
+ * มีข้อมูลที่ยังเป็น local ID (ยังไม่ถูกดันขึ้น Supabase) หรือไม่
+ * local ID = ขึ้นต้นด้วย C- / V- / J- / I-
+ */
+function hasUnsyncedLocalRecords() {
+  const isLocal = e => e && e.id && /^(C-|V-|J-|I-)/.test(e.id);
+  return [
+    ...(S.customers || []),
+    ...(S.vehicles  || []),
+    ...(S.jobs      || []),
+    ...(S.invoices  || []),
+  ].some(isLocal);
 }
 
 /**
@@ -1021,13 +1045,16 @@ async function pushCostsToSupabase() {
  * ซิงค์ข้อมูลจาก localStorage ไปยัง Supabase (one-time migration)
  * ทำงานเมื่อ Supabase พร้อมแต่ยังไม่มีข้อมูล (tables empty)
  */
-async function syncLocalToSupabase() {
+async function syncLocalToSupabase(opts = {}) {
+  const silent = opts.silent === true;
   if (!window.supabaseReady) return;
   if (!S.customers?.length && !S.jobs?.length && !S.invoices?.length) return;
 
   console.log('[DB] 🔄 Syncing unsynced local records to Supabase...');
   const idMap = {}; // local ID → Supabase UUID
   let syncedCount = 0;
+  let failedCount = 0;
+  let lastErr = null;
 
   try {
     // 1. Sync customers
@@ -1039,8 +1066,8 @@ async function syncLocalToSupabase() {
             idMap[c.id] = result.id;
             c.id = result.id;
             syncedCount++;
-          }
-        } catch (e) { /* skip individual failures */ }
+          } else { failedCount++; }
+        } catch (e) { failedCount++; lastErr = e; }
       }
     }
 
@@ -1058,8 +1085,8 @@ async function syncLocalToSupabase() {
             idMap[v.id] = result.id;
             v.id = result.id;
             syncedCount++;
-          }
-        } catch (e) { /* skip individual failures */ }
+          } else { failedCount++; }
+        } catch (e) { failedCount++; lastErr = e; }
       }
     }
 
@@ -1078,8 +1105,8 @@ async function syncLocalToSupabase() {
             idMap[j.id] = result.id;
             j.id = result.id;
             syncedCount++;
-          }
-        } catch (e) { /* skip individual failures */ }
+          } else { failedCount++; }
+        } catch (e) { failedCount++; lastErr = e; }
       }
     }
 
@@ -1111,8 +1138,8 @@ async function syncLocalToSupabase() {
             idMap[inv.id] = result.id;
             inv.id = result.id;
             syncedCount++;
-          }
-        } catch (e) { /* skip individual failures */ }
+          } else { failedCount++; }
+        } catch (e) { failedCount++; lastErr = e; }
       }
     }
 
@@ -1121,14 +1148,30 @@ async function syncLocalToSupabase() {
 
     if (syncedCount > 0) {
       console.log(`[DB] ✅ Synced ${syncedCount} records to Supabase — data is now backed up`);
-      if (typeof showToast === 'function') {
+      if (!silent && typeof showToast === 'function') {
         showToast(`ซิงค์ข้อมูล ${syncedCount} รายการไปยัง Supabase แล้ว ✅`, 'ok');
       }
     } else {
       console.log('[DB] Sync ran but nothing new to migrate');
     }
+
+    // ── ถ้ามีรายการที่ขึ้นไม่สำเร็จ → เตือนผู้ใช้ (ปกติเกิดจาก RLS บล็อก) ──
+    if (failedCount > 0) {
+      console.warn(`[DB] ⚠️  ${failedCount} รายการขึ้น Supabase ไม่สำเร็จ`);
+      window._rlsWarning = true;
+      if (!silent) {
+        if (typeof reportSupabaseWriteError === 'function' && lastErr) {
+          reportSupabaseWriteError(lastErr, 'syncLocalToSupabase');
+        } else if (typeof showToast === 'function') {
+          showToast(`⚠️ ${failedCount} รายการยังขึ้นส่วนกลางไม่สำเร็จ — คนอื่นจะยังไม่เห็น`, 'err');
+        }
+      }
+    }
+
+    return { syncedCount, failedCount };
   } catch (err) {
     console.error('[DB] syncLocalToSupabase error:', err);
+    return { syncedCount, failedCount, error: err };
   }
 }
 

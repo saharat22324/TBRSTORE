@@ -9,6 +9,44 @@ let currentUser = null;
 let currentUserRole = null;
 
 /**
+ * รายงานความล้มเหลวในการ "เขียน" ข้อมูลขึ้น Supabase ให้ผู้ใช้เห็นทันที
+ * (เดิมระบบจะ catch แล้วเงียบ ทำให้ข้อมูลค้างอยู่ใน localStorage เครื่องเดียว
+ *  คนอื่นในทีมเลยไม่เห็น) — ฟังก์ชันนี้จะเด้ง toast + เปิด banner เตือน
+ * @param {Error} err  error object จาก Supabase
+ * @param {string} op  ชื่อ operation เช่น 'addJob' (ใช้ใน log)
+ */
+function reportSupabaseWriteError(err, op) {
+  const msg  = (err && (err.message || err.error_description || '')) + '';
+  const code = (err && err.code) || '';
+  const isRls =
+    /row-level security|permission denied|not authorized|policy/i.test(msg) ||
+    code === '42501' || code === 'PGRST301' || code === '401';
+
+  console.error(`[Service] ${op} write failed:`, msg || err);
+
+  // เปิด banner เตือน admin (ใน nav.js) ทุกกรณีที่เขียนไม่สำเร็จ
+  if (typeof window !== 'undefined') {
+    window._rlsWarning = true;
+    window._lastSyncError = { op, msg, code, ts: Date.now() };
+  }
+
+  // เด้ง toast ให้ผู้ใช้ทุก role รู้ว่าข้อมูลยังไม่ขึ้นระบบกลาง (debounce กันเด้งรัว)
+  if (typeof showToast === 'function') {
+    const now = Date.now();
+    if (now - (window._lastWriteErrorToast || 0) > 8000) {
+      window._lastWriteErrorToast = now;
+      showToast(
+        isRls
+          ? '⚠️ ข้อมูลถูกบล็อกโดยระบบ (RLS) — ยังไม่ขึ้นส่วนกลาง คนอื่นจะยังไม่เห็น'
+          : '⚠️ บันทึกขึ้นระบบกลางไม่สำเร็จ — ข้อมูลอยู่ในเครื่องนี้เท่านั้น',
+        'err'
+      );
+    }
+  }
+}
+if (typeof window !== 'undefined') window.reportSupabaseWriteError = reportSupabaseWriteError;
+
+/**
  * ROLE-BASED ACCESS CONTROL (RBAC)
  * Role IDs: 1=Admin, 2=Technician, 4=Supervisor
  */
@@ -145,7 +183,7 @@ async function addCustomer(name, phone, email, lineId, address, note) {
     if (error) throw error;
     return data;
   } catch (err) {
-    console.error('[Service] addCustomer error:', err);
+    reportSupabaseWriteError(err, 'addCustomer');
     return null;
   }
 }
@@ -227,7 +265,7 @@ async function addVehicle(customerId, plate, brand, model, year, color, mileage,
     if (error) throw error;
     return data;
   } catch (err) {
-    console.error('[Service] addVehicle error:', err);
+    reportSupabaseWriteError(err, 'addVehicle');
     return null;
   }
 }
@@ -313,7 +351,7 @@ async function addJob(vehicleId, customerId, complaint, assignTo, mileage, note)
     if (error) throw error;
     return data;
   } catch (err) {
-    console.error('[Service] addJob error:', err);
+    reportSupabaseWriteError(err, 'addJob');
     return null;
   }
 }
@@ -428,7 +466,7 @@ async function addStockItem(sku, name, categoryId, unit, costPrice, sellPrice, q
     if (error) throw error;
     return data;
   } catch (err) {
-    console.error('[Service] addStockItem error:', err);
+    reportSupabaseWriteError(err, 'addStockItem');
     return null;
   }
 }
@@ -663,7 +701,7 @@ async function addInvoice(jobId, customerId, vehicleId, items, subtotal, discoun
 
     return invoice;
   } catch (err) {
-    console.error('[Service] addInvoice error:', err);
+    reportSupabaseWriteError(err, 'addInvoice');
     return null;
   }
 }
@@ -882,7 +920,7 @@ async function addRequisition(jobId, no, items, note) {
     if (error) throw error;
     return data;
   } catch (err) {
-    console.error('[Service] addRequisition error:', err);
+    reportSupabaseWriteError(err, 'addRequisition');
     return null;
   }
 }
@@ -948,7 +986,7 @@ async function addExpense(label, amount, date, note) {
     if (error) throw error;
     return data;
   } catch (err) {
-    console.error('[Service] addExpense error:', err);
+    reportSupabaseWriteError(err, 'addExpense');
     return null;
   }
 }
