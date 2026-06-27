@@ -117,7 +117,7 @@ function reportHTML() {
 
   /* ── Invoice table rows ── */
   const invRows = mInvs.length
-    ? [...mInvs].reverse().map(i => {
+    ? [...mInvs].sort((a, b) => (b.ts || 0) - (a.ts || 0)).map(i => {
         const invCost   = (i.items || []).reduce((s, it) => s + ((it.qty || 0) * (it.cost || 0)), 0);
         const invExVat  = fmt(i.grand - (i.vat || 0)); // ก่อน VAT
         const gp        = fmt(invExVat - invCost);     // กำไร = ก่อน VAT - ต้นทุน
@@ -856,7 +856,7 @@ function bindReport() {
                      'กรกฎาคม','สิงหาคม','กันยายน','ตุลาคม','พฤศจิกายน','ธันวาคม'][+ymM-1];
     const periodLabel = `${thMonth} ${+ymY + 543}`;
 
-    const invRowsHTML = [...mInvs2].reverse().map((i, idx) => {
+    const invRowsHTML = [...mInvs2].sort((a, b) => (b.ts || 0) - (a.ts || 0)).map((i, idx) => {
       const exVat = i.grand - (i.vat || 0);
       const vat   = i.vat || 0;
       return `<tr style="border-bottom:1px solid #e5e5e5">

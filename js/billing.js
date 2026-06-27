@@ -29,7 +29,9 @@ function billingHTML() {
     `<option value="svc:${s.id}">[บริการ] ${esc(s.name)} — ${THB(s.price)}</option>`
   ).join('');
 
-  const recentInv = S.invoices.slice(-6).reverse();
+  const recentInv = [...S.invoices]
+    .sort((a, b) => (b.ts || b.createdAt || 0) - (a.ts || a.createdAt || 0))
+    .slice(0, 6);
 
   const recentList = recentInv.length
     ? recentInv.map(i => `

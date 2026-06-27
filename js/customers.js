@@ -206,7 +206,7 @@ function openCustHistory(cid) {
   const cInvs = S.invoices.filter(i => {
     if ((i.cust || '').trim() === (c.name || '').trim()) return true;
     return S.jobs.some(j => i.jobId === j.id && vIds.includes(j.vehicleId));
-  }).slice().reverse();
+  }).sort((a, b) => (b.ts || b.createdAt || 0) - (a.ts || a.createdAt || 0));
 
   const totalSpent = cInvs.reduce((s, i) => s + i.grand, 0);
   const pendingAmt = cInvs.filter(i => !i.paid).reduce((s, i) => s + i.grand, 0);

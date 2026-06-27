@@ -11,9 +11,10 @@ let _jobDateTo   = '';  // กรองวันที่: YYYY-MM-DD
    HTML
 ══════════════════════════════════════ */
 function jobsHTML() {
-  const filtered = _jobFilter === -1
-    ? [...S.jobs].reverse()
-    : S.jobs.filter(j => j.status === _jobFilter).reverse();
+  const filtered = (_jobFilter === -1
+    ? [...S.jobs]
+    : S.jobs.filter(j => j.status === _jobFilter)
+  ).sort((a, b) => (b.createdAt || b.ts || 0) - (a.createdAt || a.ts || 0));
 
   // ── Search filter ──
   const q = _jobSearch.trim().toLowerCase();

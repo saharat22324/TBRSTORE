@@ -30,7 +30,9 @@ function dashboardHTML() {
   /* ── Stock alerts ── */
   const lowStock  = S.stockItems.filter(i => i.qty <= i.reorder);
   const openJobs  = S.jobs.filter(j => j.status < 5);
-  const recent    = S.jobs.slice(-6).reverse();
+  const recent    = [...S.jobs]
+    .sort((a, b) => (b.createdAt || b.ts || 0) - (a.createdAt || a.ts || 0))
+    .slice(0, 6);
 
   /* ── Unpaid invoices ── */
   const unpaidInvs  = S.invoices.filter(i => !i.paid).sort((a,b) => (b.ts||0)-(a.ts||0));
