@@ -376,6 +376,20 @@ async function updateJob(jobId, updates) {
   }
 }
 
+async function deleteJob(jobId) {
+  try {
+    const { error } = await getSupabase()
+      .from('jobs')
+      .delete()
+      .eq('id', jobId);
+    if (error) throw error;
+    return true;
+  } catch (err) {
+    console.error('[Service] deleteJob error:', err);
+    return false;
+  }
+}
+
 async function getJobs() {
   try {
     // If profiles join previously failed, skip straight to fallback

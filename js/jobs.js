@@ -476,6 +476,11 @@ function openJobDetail(jid) {
       </div>
       <div class="modal-f">
         <button class="btn btn-ghost" id="mCl2">ปิด</button>
+        ${hasPermission('canDeleteData') ? `
+        <button class="btn btn-red btn-sm" id="delJobBtn">
+          ${svgI('<path d="M3 6h18M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2m3 0v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6"/>',14)}
+          ลบงาน
+        </button>` : ''}
         <button class="btn btn-ghost btn-sm" id="printJobBtn"
           style="margin-left:auto">
           ${svgI('<path d="M6 9V2h12v7M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2M6 14h12v8H6z"/>',14)}
@@ -628,7 +633,57 @@ function openJobDetail(jid) {
 
   bindModalClose(ov, '#mCl', '#mCl2');
 
-  /* Print job card */
+  /* Delete job (admin only) */
+  ov.querySelector('#delJobBtn')?.addEventListener('click', async () => {
+    if (inv) {
+      showToast('งานนี้ออกบิลแล้ว — กรุณาลบใบเสร็จก่อนจึงจะลบงานได้', 'err');
+      return;
+    }
+    const ok = await showConfirm(
+      'ลบงาน',
+      `ต้องการลบงาน <b>${esc(j.no)}</b> (${esc(j.custName || '—')}) ?<br>
+       ${reqs.length ? `ใบเบิก ${reqs.length} ใบจะถูกลบและคืนสินค้ากลับสต๊อก<br>` : ''}
+       <span style="color:var(--bad)">การลบนี้ย้อนกลับไม่ได้</span>`,
+      'ลบงาน'
+    );
+    if (!ok) return;
+
+    /* คืนสต๊อกจากใบเบิกทุกใบ แล้วลบใบเบิก */
+    const _uuidRe = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+    for (const r of reqs) {
+      r.items.forEach(it => {
+        if (!it.sid) return;
+        const st = S.stockItems.find(x => x.id === it.sid);
+        if (st) {
+          st.qty  = fmt(parseFloat(st.qty) + parseFloat(it.qty));
+          st.used = fmt(Math.max(0, (st.used || 0) - it.qty));
+        }
+      });
+      if (useSupabase && typeof deleteRequisition === 'function' && _uuidRe.test(r.id)) {
+        deleteRequisition(r.id).catch(e => console.warn('[Job] req delete failed:', e));
+      }
+    }
+    S.requisitions = S.requisitions.filter(r => r.jobId !== jid);
+
+    /* ลบงานออกจาก state */
+    S.jobs = S.jobs.filter(x => x.id !== jid);
+
+    /* ลบจาก Supabase */
+    if (useSupabase && typeof deleteJob === 'function' && _uuidRe.test(j.id)) {
+      deleteJob(j.id).catch(e => console.warn('[Job] Supabase delete failed:', e));
+    }
+    if (typeof addAuditLog === 'function') {
+      addAuditLog('JOB_DELETE', 'job', j.id, j.no, { cust: j.custName || '' });
+    }
+
+    await saveData();
+    closeMod();
+    renderNav();
+    renderPanel();
+    showToast(`ลบงาน ${j.no} แล้ว`);
+  });
+
+
   ov.querySelector('#printJobBtn')?.addEventListener('click', () => {
     const s = S.shop || {};
     const reqRows = reqs.flatMap(r => r.items.map(it =>
