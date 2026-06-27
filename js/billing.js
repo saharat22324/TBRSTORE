@@ -433,7 +433,8 @@ function bCalc() {
   const sub  = bItems.reduce((s, i) => s + fmt(i.qty * i.price), 0);
   const base = Math.max(0, sub - bDisc);
   const vat  = bVat ? fmt(base * 0.07) : 0;
-  return { sub, base, vat, grand: fmt(base + vat) };
+  // ปัดยอดรวมสุทธิเป็นจำนวนเต็มบาท (ใกล้สุด) — มีผลเฉพาะบิลใหม่
+  return { sub, base, vat, grand: Math.round(base + vat) };
 }
 
 /* ══════════════════════════════════════
