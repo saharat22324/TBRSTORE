@@ -321,10 +321,10 @@ async function deleteVehicle(vehicleId) {
  * === JOBS ===
  */
 
-async function addJob(vehicleId, customerId, complaint, assignTo, mileage, note) {
+async function addJob(vehicleId, customerId, complaint, assignTo, mileage, note, jobNo) {
   try {
-    // Get job number
-    const jobNo = await getNextJobNumber();
+    // ใช้เลขงานที่แอปสร้างไว้ก่อน → ถ้าไม่มี ค่อยลอง RPC → สุดท้าย gen เอง (กัน job_number = null ที่ทำให้ insert พัง)
+    const jobNum = jobNo || await getNextJobNumber() || ('JOB-' + Date.now());
 
     // Validate UUIDs — local IDs must not be sent as FK references
     const uuidRe = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -335,7 +335,7 @@ async function addJob(vehicleId, customerId, complaint, assignTo, mileage, note)
     const { data, error } = await getSupabase()
       .from('jobs')
       .insert([{
-        job_number: jobNo,
+        job_number: jobNum,
         vehicle_id: safeVehicleId,
         customer_id: safeCustomerId,
         complaint,

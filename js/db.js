@@ -1145,7 +1145,7 @@ async function syncLocalToSupabase(opts = {}) {
         }
         if ((j._syncTries || 0) >= MAX_TRIES) continue; // fail ถาวร → เลิกพยายาม
         try {
-          const result = await addJob(j.vehicleId, j.custId, j.complaint || '', j.assignTo || '', j.mileage || 0, j.note || '');
+          const result = await addJob(j.vehicleId, j.custId, j.complaint || '', j.assignTo || '', j.mileage || 0, j.note || '', j.no);
           if (result?.id) {
             idMap[j.id] = result.id;
             j.id = result.id;

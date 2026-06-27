@@ -285,7 +285,7 @@ function openJobModal(jid, prefVid) {
           updateJob(j.id, dbData).catch(e => console.warn('[Jobs] updateJob Supabase error:', e));
         } else if (typeof addJob === 'function') {
           // Local ID → create in Supabase, replace local ID
-          addJob(data.vehicleId, data.custId, data.complaint, data.assignTo, data.mileage, data.note)
+          addJob(data.vehicleId, data.custId, data.complaint, data.assignTo, data.mileage, data.note, j.no)
             .then(result => { if (result?.id) { j.id = result.id; localStorage.setItem(DB_KEY, JSON.stringify(S)); } })
             .catch(e => console.warn('[Jobs] addJob (upsert) error:', e));
         }
@@ -303,7 +303,7 @@ function openJobModal(jid, prefVid) {
       // เขียนขึ้น Supabase ก่อน แล้วใช้ผลจริง (รอผล ไม่ใช่ fire-and-forget)
       if (useSupabase && typeof addJob === 'function') {
         try {
-          const result = await addJob(data.vehicleId, data.custId, data.complaint, data.assignTo, data.mileage, data.note);
+          const result = await addJob(data.vehicleId, data.custId, data.complaint, data.assignTo, data.mileage, data.note, no);
           if (result?.id) {
             newJob.id = result.id;     // ใช้ UUID จริงจาก Supabase
             _newJobCloudOk = true;
