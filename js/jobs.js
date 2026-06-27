@@ -387,6 +387,23 @@ function openJobDetail(jid) {
         ยังไม่มีใบเบิก — กดปุ่ม "สร้างใบเบิก" เพื่อเบิกของจากสต๊อก
       </div></div>`;
 
+  const billItems = inv && Array.isArray(inv.items) ? inv.items : [];
+  const billItemsList = billItems.length
+    ? `<div class="mt8" style="border-top:1px dashed var(--p3);padding-top:8px">
+        <div style="font-size:.76rem;color:var(--fg2);font-weight:700;margin-bottom:4px">
+          รายการที่เบิก/ใช้ในงานนี้
+        </div>
+        <table class="tbl" style="font-size:.8rem"><tbody>
+          ${billItems.map(it => `
+            <tr>
+              <td>${esc(it.name)}${it.sid ? ' <span style="font-size:.68rem;color:var(--teal)">(อะไหล่)</span>' : ''}</td>
+              <td class="r" style="color:var(--fg2)">${numFmt(it.qty)}${it.unit ? ' '+esc(it.unit) : ''}</td>
+              ${hasPermission('canViewCost') ? `<td class="r fc-gold">${THB((it.cost||0)*(it.qty||0))}</td>` : ''}
+            </tr>`).join('')}
+        </tbody></table>
+      </div>`
+    : '';
+
   const billSection = inv
     ? `<div style="font-size:.86rem">
         ออกใบเสร็จ <b style="color:var(--teal)">${inv.no}</b><br>
@@ -396,6 +413,7 @@ function openJobDetail(jid) {
           ${THB(inv.grand - totalCost)}
         </span>` : ''}
       </div>
+      ${billItemsList}
       <button class="btn btn-ghost btn-sm mt8" id="viewInvBtn">ดูใบเสร็จ</button>`
     : `${hasPermission('canViewCost') ? `<div style="font-size:.86rem;color:var(--fg2);margin-bottom:10px">
         ต้นทุนใบเบิก ${THB(totalCost)}
