@@ -975,12 +975,14 @@ async function getRequisitions() {
 async function addExpense(label, amount, date, note) {
   try {
     const sb = getSupabase();
+    // map app fields → real DB columns (category/description/expense_date NOT NULL)
     const row = {
-      label,
-      amount:     parseFloat(amount) || 0,
-      date:       date || new Date().toISOString().slice(0, 10),
-      note:       note || null,
-      created_by: currentUser?.id || null,
+      category:     'ทั่วไป',
+      description:  label || '',
+      amount:       parseFloat(amount) || 0,
+      expense_date: date || new Date().toISOString().slice(0, 10),
+      reference:    note || null,
+      created_by:   currentUser?.id || null,
     };
     const { data, error } = await sb.from('expenses').insert([row]).select().single();
     if (error) throw error;
@@ -1010,7 +1012,7 @@ async function getExpenses() {
     const { data, error } = await getSupabase()
       .from('expenses')
       .select('*')
-      .order('date', { ascending: false });
+      .order('expense_date', { ascending: false });
     if (error) throw error;
     return data || [];
   } catch (err) {

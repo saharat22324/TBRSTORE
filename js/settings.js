@@ -324,7 +324,7 @@ function bindSettings() {
     btn.disabled = true;
     btn.innerHTML = 'กำลังดันข้อมูลขึ้นคลาวด์...';
     try {
-      const res = await syncLocalToSupabase();
+      const res = await syncLocalToSupabase({ force: true });
       const synced = res?.syncedCount || 0;
       const failed = res?.failedCount || 0;
       if (failed > 0) {

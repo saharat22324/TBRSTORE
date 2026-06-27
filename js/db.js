@@ -317,7 +317,8 @@ function hasUnsyncedLocalRecords() {
  * Runs once per session after login so Supabase always has the latest prices/names.
  */
 async function syncSeedServicesToSupabase() {
-  if (_servicesSynced || !window.supabaseReady || !window.supabase) return;
+  const sb = window.getSupabase?.();
+  if (_servicesSynced || !window.supabaseReady || !sb) return;
   _servicesSynced = true;
 
   const seedServices = (typeof seedData === 'function' ? seedData() : S)?.services || [];
@@ -330,7 +331,7 @@ async function syncSeedServicesToSupabase() {
     price: s.price || 0,
   }));
 
-  const { error } = await window.supabase
+  const { error } = await sb
     .from('services')
     .upsert(rows, { onConflict: 'service_code' });
 
@@ -339,7 +340,7 @@ async function syncSeedServicesToSupabase() {
   } else {
     console.log(`[DB] ✅ Synced ${rows.length} services to Supabase`);
     // Reload services into S
-    const { data } = await window.supabase.from('services').select('*');
+    const { data } = await sb.from('services').select('*');
     if (data?.length) {
       S.services = data.map(s => ({ id: s.service_code, name: s.name, detail: s.description || '', price: s.price }));
     }
@@ -650,9 +651,10 @@ function convertSupabaseToState(dbData) {
   if (dbData.expenses && dbData.expenses.length > 0) {
     state.expenses = dbData.expenses.map(e => ({
       id:     e.id,
-      label:  e.label  || '',
+      label:  e.description || e.label || '',
       amount: parseFloat(e.amount) || 0,
-      date:   e.date   || '',
+      date:   e.expense_date || e.date || '',
+      note:   e.reference || e.note || '',
     }));
   }
 
@@ -1047,8 +1049,15 @@ async function pushCostsToSupabase() {
  */
 async function syncLocalToSupabase(opts = {}) {
   const silent = opts.silent === true;
+  const force  = opts.force === true; // กดปุ่มเอง = ลองใหม่ทุก record แม้เคย fail ครบโควต้า
   if (!window.supabaseReady) return;
   if (!S.customers?.length && !S.jobs?.length && !S.invoices?.length) return;
+
+  // force = ผู้ใช้สั่งซิงค์เอง → ล้างตัวนับ fail ออกก่อน เพื่อให้ record ที่เคยค้างถาวรถูกดันขึ้นใหม่
+  if (force) {
+    [...(S.customers || []), ...(S.vehicles || []), ...(S.jobs || []), ...(S.invoices || [])]
+      .forEach(r => { if (r && r._syncTries) delete r._syncTries; });
+  }
 
   console.log('[DB] 🔄 Syncing unsynced local records to Supabase...');
   const idMap = {}; // local ID → Supabase UUID
