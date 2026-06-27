@@ -947,6 +947,8 @@ function openReqModal(jid) {
       }
     }
 
+    const no  = nextSeqNo('rq').replace('rq-', 'RQ-');
+
     /* Deduct stock */
     rItems.forEach(it => {
       if (!it.sid) return;
@@ -965,7 +967,6 @@ function openReqModal(jid) {
       }
     });
 
-    const no  = nextSeqNo('rq').replace('rq-', 'RQ-');
     const req = {
       id:     'RQ-' + Date.now(),
       no,
