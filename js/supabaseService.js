@@ -59,7 +59,8 @@ const PERMISSIONS = {
     canManageTeam: true,
     canViewReports: true,
     canAddCustomer: true,
-    canDeleteData: true
+    canDeleteData: true,
+    canDeleteJob: true
   },
   2: { // Technician
     name: 'Technician',
@@ -69,9 +70,10 @@ const PERMISSIONS = {
     canManageTeam: false,
     canViewReports: false,
     canAddCustomer: true,          // ✅ เพิ่มลูกค้าได้
-    canDeleteData: false
+    canDeleteData: false,
+    canDeleteJob: false
   },
-  4: { // Supervisor
+  4: { // Supervisor (หัวหน้าช่าง)
     name: 'Supervisor',
     canViewCost: false,
     canViewProfit: true,
@@ -79,7 +81,8 @@ const PERMISSIONS = {
     canManageTeam: false,
     canViewReports: true,
     canAddCustomer: true,          // ✅ เพิ่มลูกค้าได้
-    canDeleteData: false
+    canDeleteData: false,
+    canDeleteJob: true             // ✅ ลบ Job Card ได้ (เฉพาะงาน ไม่รวมลูกค้า/รถ/บิล)
   }
 };
 

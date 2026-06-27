@@ -486,7 +486,7 @@ function openJobDetail(jid) {
       </div>
       <div class="modal-f">
         <button class="btn btn-ghost" id="mCl2">ปิด</button>
-        ${hasPermission('canDeleteData') ? `
+        ${(hasPermission('canDeleteData') || hasPermission('canDeleteJob')) ? `
         <button class="btn btn-red btn-sm" id="delJobBtn">
           ${svgI('<path d="M3 6h18M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2m3 0v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6"/>',14)}
           ลบงาน
@@ -643,7 +643,7 @@ function openJobDetail(jid) {
 
   bindModalClose(ov, '#mCl', '#mCl2');
 
-  /* Delete job (admin only) */
+  /* Delete job (admin + supervisor/หัวหน้าช่าง) */
   ov.querySelector('#delJobBtn')?.addEventListener('click', async () => {
     if (inv) {
       showToast('งานนี้ออกบิลแล้ว — กรุณาลบใบเสร็จก่อนจึงจะลบงานได้', 'err');
