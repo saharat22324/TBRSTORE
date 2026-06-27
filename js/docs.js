@@ -71,7 +71,7 @@ function buildInvoiceHTML(d) {
   const R = n => '฿' + Math.round(n).toLocaleString('th-TH');
 
   /* Item rows — fill to min 8 rows */
-  const itemRows = d.items.map((it, i) => `
+  const itemRows = (d.items || []).map((it, i) => `
       <tr>
         <td class="c" style="color:#888">${i+1}</td>
         <td>${esc(it.name)}</td>
@@ -219,7 +219,7 @@ function buildQuoteHTML(d) {
   const expD = new Date((d.ts || Date.now()) + 7 * 86400000);
   const R = n => '฿' + Math.round(n).toLocaleString('th-TH');
 
-  const itemRows = d.items.map((it, i) => `
+  const itemRows = (d.items || []).map((it, i) => `
     <tr>
       <td class="c" style="color:#888">${i+1}</td>
       <td>${esc(it.name)}</td>

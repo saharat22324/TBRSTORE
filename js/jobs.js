@@ -631,7 +631,7 @@ function openJobDetail(jid) {
       if (!confirm(`ต้องการลบใบเบิก ${req.no} และคืนสินค้ากลับสต๊อกหรือ?`)) return;
       
       /* Restore stock */
-      req.items.forEach(it => {
+      (req.items || []).forEach(it => {
         if (!it.sid) return;
         const st = S.stockItems.find(x => x.id === it.sid);
         if (st) {
@@ -679,7 +679,7 @@ function openJobDetail(jid) {
     /* คืนสต๊อกจากใบเบิกทุกใบ แล้วลบใบเบิก */
     const _uuidRe = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
     for (const r of reqs) {
-      r.items.forEach(it => {
+      (r.items || []).forEach(it => {
         if (!it.sid) return;
         const st = S.stockItems.find(x => x.id === it.sid);
         if (st) {
@@ -1094,7 +1094,7 @@ function openEditReqModal(jid, reqId) {
     /* Calculate stock differences: restore old quantities first, then deduct new quantities.
        Using restore-all + re-deduct approach (safe when items are deleted/reordered) */
     // 1. Restore all OLD stock
-    req.items.forEach(it => {
+    (req.items || []).forEach(it => {
       if (!it.sid) return;
       const st = S.stockItems.find(x => x.id === it.sid);
       if (st) {

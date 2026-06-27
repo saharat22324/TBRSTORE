@@ -231,6 +231,7 @@ function addToLedger(itemId, type, qty, note) {
 
 function openStockAdj(id, type) {
   const m  = S.stockItems.find(i => i.id === id);
+  if (!m) { showToast('ไม่พบรายการสินค้า', 'err'); return; }
   const ov = sel('mOv');
 
   ov.innerHTML = `
