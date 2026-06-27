@@ -219,11 +219,12 @@ function systemSettingsHTML() {
             </label>
             <button class="btn btn-gold" id="forceSyncBtn">
               ${svgI('<path d="M21 2v6h-6"/><path d="M3 12a9 9 0 0 1 15-6.7L21 8"/><path d="M3 22v-6h6"/><path d="M21 12a9 9 0 0 1-15 6.7L3 16"/>')}
-              ตรวจสอบ &amp; ดันข้อมูลขึ้นคลาวด์
+              ซิงค์ข้อมูลทั้งหมด (ดันขึ้น + ดึงลง)
             </button>
             <div style="font-size:.78rem;color:var(--fg2);line-height:1.5">
-              ใช้เมื่อ <b style="color:var(--fg)">ช่างคนอื่นไม่เห็นข้อมูลที่คุณเพิ่ม</b><br>
-              ระบบจะดันข้อมูลที่ค้างในเครื่องนี้ขึ้นส่วนกลาง และแจ้งถ้าถูกบล็อก
+              ใช้เมื่อ <b style="color:var(--fg)">ไม่เห็นข้อมูลที่คนอื่นเพิ่ม หรือคนอื่นไม่เห็นของเรา</b><br>
+              ระบบจะดันข้อมูลในเครื่องขึ้นส่วนกลาง และดึงข้อมูลล่าสุดจากส่วนกลางลงมา
+            </div>
             </div>
           </div>
 
@@ -322,17 +323,23 @@ function bindSettings() {
     }
     const original = btn.innerHTML;
     btn.disabled = true;
-    btn.innerHTML = 'กำลังดันข้อมูลขึ้นคลาวด์...';
+    btn.innerHTML = 'กำลังซิงค์ข้อมูล...';
     try {
+      // 1) ดันข้อมูลในเครื่องนี้ขึ้นคลาวด์ (push)
       const res = await syncLocalToSupabase({ force: true });
       const synced = res?.syncedCount || 0;
       const failed = res?.failedCount || 0;
+      // 2) ดึงข้อมูลล่าสุดจากคนอื่นลงมา (pull)
+      let pulled = false;
+      if (typeof syncRemoteData === 'function') {
+        pulled = await syncRemoteData({ force: true });
+      }
       if (failed > 0) {
         showToast(`ดันขึ้นได้ ${synced} รายการ • ติดบล็อก ${failed} รายการ (RLS)`, 'err');
-      } else if (synced > 0) {
-        showToast(`ดันข้อมูลขึ้นคลาวด์สำเร็จ ${synced} รายการ ✅`, 'ok');
+      } else if (synced > 0 || pulled) {
+        showToast(`ซิงค์สำเร็จ ✅ ดันขึ้น ${synced} • ดึงข้อมูลใหม่ลงมาแล้ว`, 'ok');
       } else {
-        showToast('ข้อมูลทั้งหมดอยู่บนคลาวด์แล้ว ✅', 'ok');
+        showToast('ข้อมูลอัปเดตล่าสุดทุกเครื่องแล้ว ✅', 'ok');
       }
     } catch (err) {
       showToast('ดันข้อมูลไม่สำเร็จ: ' + (err?.message || err), 'err');

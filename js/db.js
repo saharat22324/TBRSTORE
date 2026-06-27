@@ -16,9 +16,10 @@ let _lastSyncTs    = 0;      // debounce timestamp
    LIVE SYNC — ดึงข้อมูลใหม่จาก Supabase
    เรียกจาก Realtime subscription / polling / visibilitychange
 ══════════════════════════════════════ */
-async function syncRemoteData() {
-  if (!useSupabase || !window.supabaseReady || typeof loadAllData !== 'function') return;
-  if (Date.now() - _lastSyncTs < 5000) return; // debounce 5 วิ
+async function syncRemoteData(opts) {
+  if (!useSupabase || !window.supabaseReady || typeof loadAllData !== 'function') return false;
+  const _force = opts?.force === true;
+  if (!_force && Date.now() - _lastSyncTs < 5000) return false; // debounce 5 วิ
   _lastSyncTs = Date.now();
 
   try {
@@ -242,8 +243,10 @@ async function syncRemoteData() {
         console.log('[DB] 🔄 Remote changes buffered (user in form)');
       }
     }
+    return changed;
   } catch (e) {
     console.warn('[DB] syncRemoteData error:', e);
+    return false;
   }
 }
 
