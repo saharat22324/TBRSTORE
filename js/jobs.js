@@ -249,7 +249,14 @@ function openJobModal(jid, prefVid) {
     const mile = parseInt(sv('jMile')) || 0;
 
     /* อัปเดตเลขไมล์รถ */
-    if (mile && v) v.mileage = mile;
+    if (mile && v) {
+      v.mileage = mile;
+      // ซิงค์เลขไมล์ขึ้น Supabase ด้วย (ไม่งั้นโหลดใหม่แล้วค่าจะย้อนกลับ + คนอื่นไม่เห็น)
+      const _isUUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+      if (useSupabase && typeof updateVehicle === 'function' && _isUUID.test(v.id)) {
+        updateVehicle(v.id, { mileage: mile }).catch(e => console.warn('[Jobs] vehicle mileage sync failed:', e));
+      }
+    }
 
     let _newJobCloudOk = false;
 
