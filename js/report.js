@@ -266,37 +266,67 @@ function reportHTML() {
   for (const inv of mInvs) {
     for (const it of (inv.items || [])) {
       const t = it.itemType || 'other';
+      const _desc = it.desc || it.name || '(ไม่มีชื่อ)';
       // น้ำมัน/สต็อก ที่ price=0 → ตัดสต็อกอย่างเดียว รายได้อยู่ใน "บริการ"
       // → โอนต้นทุนไปหักกำไรของ service category แทน
       if (it.itemType === 'stock' && (it.price || 0) === 0) {
-        if (!typeMap['service']) typeMap['service'] = { rev: 0, cost: 0, qty: 0 };
+        if (!typeMap['service']) typeMap['service'] = { rev: 0, cost: 0, qty: 0, items: {} };
         typeMap['service'].cost += (it.qty || 0) * (it.cost || 0);
+        const k = _desc + ' (ต้นทุนน้ำมัน)';
+        if (!typeMap['service'].items[k]) typeMap['service'].items[k] = { qty: 0, rev: 0, cost: 0 };
+        typeMap['service'].items[k].qty  += (it.qty || 0);
+        typeMap['service'].items[k].cost += (it.qty || 0) * (it.cost || 0);
         continue;
       }
-      if (!typeMap[t]) typeMap[t] = { rev: 0, cost: 0, qty: 0 };
+      if (!typeMap[t]) typeMap[t] = { rev: 0, cost: 0, qty: 0, items: {} };
       typeMap[t].rev  += (it.qty || 0) * (it.price || 0);
       typeMap[t].cost += (it.qty || 0) * (it.cost  || 0);
       typeMap[t].qty  += (it.qty || 0);
+      if (!typeMap[t].items[_desc]) typeMap[t].items[_desc] = { qty: 0, rev: 0, cost: 0 };
+      typeMap[t].items[_desc].qty  += (it.qty || 0);
+      typeMap[t].items[_desc].rev  += (it.qty || 0) * (it.price || 0);
+      typeMap[t].items[_desc].cost += (it.qty || 0) * (it.cost  || 0);
     }
   }
   const typeOrder = ['stock', 'order', 'service', 'other'];
+  const _canCost = hasPermission('canViewCost');
+  const _typeColspan = _canCost ? 5 : 4;
   const typeRows = typeOrder.filter(t => typeMap[t]).map(t => {
     const d = typeMap[t];
     const gp = fmt(d.rev - d.cost);
     const gpPct = d.rev > 0 ? Math.round((d.rev - d.cost) / d.rev * 100) : 0;
+    // รายการย่อยในประเภทนี้ (เรียงตามยอดขายมาก→น้อย)
+    const subItems = Object.entries(d.items || {}).sort((a, b) => b[1].rev - a[1].rev);
+    const subRows = subItems.map(([desc, x]) => {
+      const lgp = fmt(x.rev - x.cost);
+      return `
+        <tr class="cat-detail" data-cat="${t}" style="display:none;background:var(--p1)">
+          <td style="padding-left:26px;font-size:.84rem;color:var(--fg2)">
+            ${esc(desc)} <span style="color:var(--fg3,#888)">×${fmt(x.qty)}</span>
+          </td>
+          <td class="r money" style="font-size:.84rem">${THB(x.rev)}</td>
+          ${_canCost ? `<td class="r" style="font-size:.84rem;color:var(--bad)">${THB(x.cost)}</td>` : ''}
+          <td class="r" style="font-size:.84rem;color:${lgp>=0?'var(--grn)':'var(--bad)'}">${THB(lgp)}</td>
+          <td></td>
+        </tr>`;
+    }).join('') || `<tr class="cat-detail" data-cat="${t}" style="display:none;background:var(--p1)"><td colspan="${_typeColspan}" class="tbl-empty" style="padding-left:26px">ไม่มีรายการย่อย</td></tr>`;
     return `
-      <tr>
+      <tr class="cat-row" data-cat="${t}" style="cursor:pointer">
         <td>
+          <span class="cat-caret" data-cat="${t}" style="display:inline-block;width:12px;transition:transform .15s;color:var(--fg2)">▸</span>
           <span style="display:inline-block;width:8px;height:8px;border-radius:50%;
-                       background:${TYPE_COLOR[t]};margin-right:5px"></span>
+                       background:${TYPE_COLOR[t]};margin:0 5px"></span>
           <b>${TYPE_LABEL[t] || t}</b>
         </td>
         <td class="r money fc-gold">${THB(d.rev)}</td>
-        ${hasPermission('canViewCost') ? `<td class="r" style="color:var(--bad)">${THB(d.cost)}</td>` : ''}
+        ${_canCost ? `<td class="r" style="color:var(--bad)">${THB(d.cost)}</td>` : ''}
         <td class="r" style="font-weight:700;color:${gp>=0?'var(--grn)':'var(--bad)'}">${THB(gp)}</td>
         <td class="r" style="font-size:.8rem;color:var(--fg2)">${gpPct}%</td>
-      </tr>`;
-  }).join('') || `<tr><td colspan="${hasPermission('canViewCost') ? 5 : 4}" class="tbl-empty">ยังไม่มีข้อมูล</td></tr>`;
+      </tr>
+      ${subRows}`;
+  }).join('') || `<tr><td colspan="${_typeColspan}" class="tbl-empty">ยังไม่มีข้อมูล</td></tr>`;
+
+
 
   const categoryHTML = `
     <div class="card" style="margin-top:16px">
@@ -838,7 +868,18 @@ function bindReport() {
   /* Add expense button */
   sel('addExpBtn')?.addEventListener('click', openExpModal);
 
-  /* Print VAT Report */
+  /* คลิกแถวประเภท → ขยาย/ยุบ ดูรายการย่อย */
+  document.querySelectorAll('.cat-row').forEach(row => {
+    row.addEventListener('click', () => {
+      const cat = row.dataset.cat;
+      const details = document.querySelectorAll(`.cat-detail[data-cat="${cat}"]`);
+      const caret = row.querySelector('.cat-caret');
+      const isOpen = details[0] && details[0].style.display !== 'none';
+      details.forEach(d => { d.style.display = isOpen ? 'none' : 'table-row'; });
+      if (caret) caret.style.transform = isOpen ? 'rotate(0deg)' : 'rotate(90deg)';
+    });
+  });
+
   sel('rPrintVAT')?.addEventListener('click', () => {
     const mInvs2 = S.invoices.filter(i => {
       const d = new Date(i.ts);
