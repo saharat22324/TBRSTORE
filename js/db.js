@@ -38,6 +38,10 @@ async function syncRemoteData(opts) {
         if (ex.status !== j.status) { ex.status = j.status; changed = true; }
         // Sync assignTo (fixes UUID→name when profiles join resolves)
         if (j.assignTo && j.assignTo !== ex.assignTo) { ex.assignTo = j.assignTo; changed = true; }
+        // Sync edited fields (อาการ/เลขไมล์/โน้ต) จากผู้ใช้อื่น
+        if (j.complaint !== undefined && j.complaint !== ex.complaint) { ex.complaint = j.complaint; changed = true; }
+        if (j.mileage && j.mileage !== ex.mileage) { ex.mileage = j.mileage; changed = true; }
+        if (j.note !== undefined && j.note !== ex.note) { ex.note = j.note; changed = true; }
       } else if (jobByNo.has(j.no)) {
         // Job exists by number but different id (local id vs UUID) — sync assignTo + status
         const ex = jobByNo.get(j.no);
@@ -93,8 +97,9 @@ async function syncRemoteData(opts) {
     for (const c of newState.customers) {
       if (custById.has(c.id)) {
         const ex = custById.get(c.id);
-        if (ex.name !== c.name || ex.phone !== c.phone || ex.email !== c.email || ex.address !== c.address) {
-          Object.assign(ex, { name: c.name, phone: c.phone, email: c.email, address: c.address, note: c.note });
+        if (ex.name !== c.name || ex.phone !== c.phone || ex.email !== c.email ||
+            ex.address !== c.address || ex.note !== c.note || ex.line !== c.line) {
+          Object.assign(ex, { name: c.name, phone: c.phone, email: c.email, address: c.address, line: c.line, note: c.note });
           changed = true;
         }
       } else {
@@ -107,8 +112,9 @@ async function syncRemoteData(opts) {
     for (const v of newState.vehicles) {
       if (vehById.has(v.id)) {
         const ex = vehById.get(v.id);
-        if (ex.plate !== v.plate || ex.mileage !== v.mileage || ex.brand !== v.brand || ex.model !== v.model) {
-          Object.assign(ex, { plate: v.plate, brand: v.brand, model: v.model, year: v.year, color: v.color, mileage: v.mileage, note: v.note });
+        if (ex.plate !== v.plate || ex.mileage !== v.mileage || ex.brand !== v.brand || ex.model !== v.model ||
+            ex.year !== v.year || ex.color !== v.color || ex.note !== v.note || ex.custId !== v.custId) {
+          Object.assign(ex, { custId: v.custId, plate: v.plate, brand: v.brand, model: v.model, year: v.year, color: v.color, mileage: v.mileage, note: v.note });
           changed = true;
         }
       } else {
