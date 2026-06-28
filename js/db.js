@@ -429,6 +429,10 @@ async function loadData() {
 
           // ALWAYS merge localStorage records not yet in Supabase (safety net)
           mergeLocalStorageIntoS();
+          // รีเซ็ตตัวนับ retry ทุกครั้งที่โหลดหน้า — กัน record ที่เคย fail ชั่วคราว
+          // ค้างไม่ขึ้นคลาวด์ถาวร (auto-push จะลองดันขึ้นใหม่ทุก session)
+          [...(S.customers||[]), ...(S.vehicles||[]), ...(S.jobs||[]), ...(S.invoices||[])]
+            .forEach(r => { if (r && r._syncTries) delete r._syncTries; });
           // Sync seq counters so invoice/job numbers never collide between users
           syncSeqFromState();
           // Sync seed services (prices/names) to Supabase in background
