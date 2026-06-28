@@ -31,7 +31,8 @@ function reportSupabaseWriteError(err, op) {
   }
 
   // เด้ง toast ให้ผู้ใช้ทุก role รู้ว่าข้อมูลยังไม่ขึ้นระบบกลาง (debounce กันเด้งรัว)
-  if (typeof showToast === 'function') {
+  // ข้าม toast ถ้ากำลัง auto-push เบื้องหลัง (silent) — กันเด้งซ้ำทุก 12 วิจาก record ที่ค้าง
+  if (typeof showToast === 'function' && !(typeof window !== 'undefined' && window._suppressWriteErrorToast)) {
     const now = Date.now();
     if (now - (window._lastWriteErrorToast || 0) > 8000) {
       window._lastWriteErrorToast = now;

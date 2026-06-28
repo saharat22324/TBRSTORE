@@ -985,8 +985,17 @@ function mergeLocalStorageIntoS() {
 
     // Vehicles: match by plate
     const sbPlates = new Set(S.vehicles.map(v => v.plate).filter(Boolean));
+    // map local-customer-id → cloud-customer-UUID (จับคู่ด้วยเบอร์โทร) เพื่อแก้ custId ที่ค้างเป็น local id
+    const _localCustById   = new Map((local.customers || []).map(c => [c.id, c]));
+    const _cloudCustByPhone = new Map(S.customers.filter(c => c.phone).map(c => [c.phone, c.id]));
+    const _cloudCustIds     = new Set(S.customers.map(c => c.id));
     for (const v of (local.vehicles || [])) {
       if (v.plate && !sbPlates.has(v.plate)) {
+        // ถ้า custId ไม่ตรงกับลูกค้าในคลาวด์ → remap เป็น UUID ผ่านเบอร์โทรของลูกค้าเดิม
+        if (!_cloudCustIds.has(v.custId)) {
+          const lc = _localCustById.get(v.custId);
+          if (lc && lc.phone && _cloudCustByPhone.has(lc.phone)) v.custId = _cloudCustByPhone.get(lc.phone);
+        }
         S.vehicles.push(v);
         toSync.vehicles.push(v);
         merged++;
@@ -1107,6 +1116,9 @@ async function syncLocalToSupabase(opts = {}) {
   }
 
   console.log('[DB] 🔄 Syncing unsynced local records to Supabase...');
+  // เก็บ toast error เงียบระหว่าง auto-push เบื้องหลัง (silent) — กัน toast เด้งซ้ำทุก 12 วิ
+  // จาก record ที่ค้าง (add* ข้างในเรียก reportSupabaseWriteError เอง)
+  if (silent && typeof window !== 'undefined') window._suppressWriteErrorToast = true;
   const idMap = {}; // local ID → Supabase UUID
   let syncedCount = 0;
   let failedCount = 0;
@@ -1275,6 +1287,8 @@ async function syncLocalToSupabase(opts = {}) {
   } catch (err) {
     console.error('[DB] syncLocalToSupabase error:', err);
     return { syncedCount, failedCount, error: err };
+  } finally {
+    if (silent && typeof window !== 'undefined') window._suppressWriteErrorToast = false;
   }
 }
 
