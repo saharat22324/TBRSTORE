@@ -205,10 +205,225 @@ function buildInvoiceActions(d) {
         ${svgI('<path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 1 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/>')} แก้ไขบิล
       </button>
       ${paidBtn}
+      <button class="btn-cdoc" id="dTax"
+        style="background:#e3f2fd;color:#1565c0;border-color:#90caf9">
+        ${svgI('<path d="M9 12h6M9 16h6M9 8h2M14 2v6h6"/><path d="M4 2h10l6 6v12a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2z"/>')}
+        ใบกำกับภาษี
+      </button>
       <button class="btn-prt" id="dPr">
         ${svgI('<path d="M6 9V2h12v7M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><rect x="6" y="14" width="12" height="8"/>')}
         พิมพ์ใบเสร็จ
       </button>
+    </div>`;
+}
+
+/* ══════════════════════════════════════
+   TAX INVOICE (ใบกำกับภาษีเต็มรูป)
+══════════════════════════════════════ */
+const TAX_BUYERS_KEY = 'tbr-tax-buyers';
+
+function loadTaxBuyers() {
+  try { return JSON.parse(localStorage.getItem(TAX_BUYERS_KEY)) || {}; }
+  catch { return {}; }
+}
+function saveTaxBuyer(key, buyer) {
+  if (!key) return;
+  const all = loadTaxBuyers();
+  all[key] = buyer;
+  try { localStorage.setItem(TAX_BUYERS_KEY, JSON.stringify(all)); } catch {}
+}
+
+function openTaxInvoiceModal(d) {
+  const ov    = sel('mOv');
+  const saved = loadTaxBuyers()[d.cust] || {};
+
+  ov.innerHTML = `
+    <div class="modal md">
+      <div class="modal-h">
+        <h3>ออกใบกำกับภาษี — ${d.no}</h3>
+        <button class="closex" id="mCl">${svgI('<path d="M18 6 6 18M6 6l12 12"/>')}</button>
+      </div>
+      <div class="modal-b">
+        <div style="font-size:.8rem;color:var(--fg2);margin-bottom:12px">
+          กรอกข้อมูลผู้ซื้อสำหรับใบกำกับภาษีเต็มรูป (ระบบจะจำไว้ครั้งถัดไป)
+        </div>
+        <div class="fld mb12">
+          <label>ชื่อผู้ซื้อ / บริษัท *</label>
+          <input id="txName" value="${esc(saved.name || d.cust || '')}" placeholder="ชื่อ-นามสกุล หรือ ชื่อบริษัท">
+        </div>
+        <div class="fld mb12">
+          <label>ที่อยู่ผู้ซื้อ *</label>
+          <textarea id="txAddr" rows="2" placeholder="บ้านเลขที่ / ถนน / ตำบล / อำเภอ / จังหวัด / รหัสไปรษณีย์">${esc(saved.address || '')}</textarea>
+        </div>
+        <div class="fgrid c2 mb12">
+          <div class="fld">
+            <label>เลขประจำตัวผู้เสียภาษี (13 หลัก) *</label>
+            <input id="txTax" value="${esc(saved.taxId || '')}" maxlength="17" inputmode="numeric" placeholder="0-0000-00000-00-0">
+          </div>
+          <div class="fld">
+            <label>สำนักงาน</label>
+            <select id="txBranch" style="width:100%;background:var(--ink);border:1px solid var(--ln2);
+                    color:var(--fg);border-radius:8px;padding:9px 11px;font-size:.88rem;outline:none">
+              <option value="สำนักงานใหญ่" ${(saved.branch||'สำนักงานใหญ่')==='สำนักงานใหญ่'?'selected':''}>สำนักงานใหญ่</option>
+              <option value="สาขา" ${saved.branch && saved.branch!=='สำนักงานใหญ่'?'selected':''}>สาขา…</option>
+            </select>
+          </div>
+        </div>
+        <div class="fld" id="txBranchNoWrap" style="display:${saved.branch && saved.branch!=='สำนักงานใหญ่'?'block':'none'}">
+          <label>เลขที่สาขา</label>
+          <input id="txBranchNo" value="${esc(saved.branch && saved.branch!=='สำนักงานใหญ่' ? saved.branch.replace(/\D/g,'') : '')}" placeholder="เช่น 00001">
+        </div>
+      </div>
+      <div class="modal-f">
+        <button class="btn btn-ghost" id="mCl2">ยกเลิก</button>
+        <button class="btn btn-gold" id="txOk">${svgI('<path d="M20 6 9 17l-5-5"/>')} สร้างใบกำกับภาษี</button>
+      </div>
+    </div>`;
+
+  openOv('mOv');
+  bindModalClose(ov, '#mCl', '#mCl2');
+
+  ov.querySelector('#txBranch').addEventListener('change', e => {
+    sel('txBranchNoWrap').style.display = e.target.value === 'สำนักงานใหญ่' ? 'none' : 'block';
+  });
+
+  ov.querySelector('#txOk').addEventListener('click', () => {
+    const name = sv('txName').trim();
+    const addr = sv('txAddr').trim();
+    const taxId = sv('txTax').trim();
+    if (!name)  return showToast('กรุณากรอกชื่อผู้ซื้อ', 'err');
+    if (!addr)  return showToast('กรุณากรอกที่อยู่ผู้ซื้อ', 'err');
+    if (taxId.replace(/\D/g, '').length !== 13)
+      return showToast('เลขประจำตัวผู้เสียภาษีต้องมี 13 หลัก', 'err');
+
+    const branchSel = sv('txBranch');
+    const branch = branchSel === 'สำนักงานใหญ่'
+      ? 'สำนักงานใหญ่'
+      : ('สาขา ' + (sv('txBranchNo').trim() || ''));
+
+    const buyer = { name, address: addr, taxId, branch };
+    saveTaxBuyer(d.cust, buyer);
+    closeMod();
+    showTaxDoc(d, buyer);
+  });
+}
+
+function showTaxDoc(d, buyer) {
+  const ov = sel('dOv');
+  const dc = buildTaxInvoiceHTML(d, buyer);
+  ov.innerHTML = `
+    <div style="width:min(780px,100%);animation:pop .18s ease">
+      ${dc}
+      <div class="doc-acts">
+        <button class="btn-cdoc" id="dCl2">${svgI('<path d="M18 6 6 18M6 6l12 12"/>')} ปิด</button>
+        <button class="btn-cdoc" id="dTaxBack" style="background:#e3f2fd;color:#1565c0;border-color:#90caf9">
+          ${svgI('<path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 1 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/>')} แก้ไขข้อมูลผู้ซื้อ
+        </button>
+        <button class="btn-prt" id="dPrTax">
+          ${svgI('<path d="M6 9V2h12v7M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><rect x="6" y="14" width="12" height="8"/>')}
+          พิมพ์ใบกำกับภาษี
+        </button>
+      </div>
+    </div>`;
+  openOv('dOv');
+  ov.querySelector('#dCl2').addEventListener('click', closeDoc);
+  ov.querySelector('#dTaxBack').addEventListener('click', () => openTaxInvoiceModal(d));
+  ov.querySelector('#dPrTax').addEventListener('click', () => {
+    document.getElementById('pz').innerHTML = dc;
+    window.print();
+    setTimeout(() => { document.getElementById('pz').innerHTML = ''; }, 600);
+  });
+}
+
+function buildTaxInvoiceHTML(d, buyer) {
+  const s = S.shop;
+  const R = n => '฿' + Math.round(n).toLocaleString('th-TH');
+  const Rd = n => '฿' + (Math.round(n * 100) / 100).toLocaleString('th-TH', { minimumFractionDigits: 2 });
+
+  /* แยกฐานภาษีและ VAT จากยอดบิล — ถ้าบิลไม่ได้คิด VAT ให้ถอดออกจากยอดรวม (VAT-inclusive) */
+  const hasVat  = (d.vat || 0) > 0;
+  const preVat  = hasVat ? Math.max(0, (d.sub || 0) - (d.disc || 0)) : (d.grand / 1.07);
+  const vatAmt  = hasVat ? d.vat : (d.grand - d.grand / 1.07);
+  const total   = d.grand;
+
+  const itemRows = (d.items || []).map((it, i) => `
+      <tr>
+        <td class="c" style="color:#888">${i + 1}</td>
+        <td>${esc(it.name)}</td>
+        <td class="r" style="white-space:nowrap">${numFmt(it.qty)}${it.unit ? '\u00a0' + esc(it.unit) : ''}</td>
+        <td class="r">${R(it.price)}</td>
+        <td class="r" style="font-weight:700">${R(it.qty * it.price)}</td>
+      </tr>`).join('');
+
+  const blankRows = Array(Math.max(0, 8 - (d.items || []).length))
+    .fill('<tr><td class="c" style="color:#ddd">·</td><td></td><td></td><td></td><td></td></tr>')
+    .join('');
+
+  return `
+    <div class="doc">
+      <div class="doc-hd">
+        ${docLogoHTML()}
+        <div class="doc-ta">
+          <div class="doc-tt">ใบกำกับภาษี</div>
+          <div class="doc-te">TAX INVOICE / ใบเสร็จรับเงิน</div>
+        </div>
+      </div>
+      <div class="doc-stripe"></div>
+
+      <div class="doc-bd">
+        <div class="doc-ref">
+          <span>เลขที่: <b>${d.no}</b></span>
+          <span>วันที่: <b>${dateStr(d.ts)}</b></span>
+          <span>สำนักงานผู้ขาย: <b>สำนักงานใหญ่</b></span>
+        </div>
+
+        <!-- Buyer box -->
+        <div class="doc-box" style="margin-bottom:12px">
+          <div class="lbl">ลูกค้า / ผู้ซื้อ (Customer)</div>
+          <div class="nm">${esc(buyer.name)}</div>
+          <div class="sb" style="white-space:pre-line">${esc(buyer.address)}</div>
+          <div class="sb">
+            เลขประจำตัวผู้เสียภาษี: <b>${esc(buyer.taxId)}</b>
+            &nbsp;·&nbsp; ${esc(buyer.branch || 'สำนักงานใหญ่')}
+          </div>
+          ${d.plate ? `<div class="sb">รถ: ${esc(d.plate)} ${esc(d.model || '')}</div>` : ''}
+        </div>
+
+        <table class="dt">
+          <thead>
+            <tr>
+              <th style="width:24px">ลำดับ</th>
+              <th>รายการ / Description</th>
+              <th class="r" style="width:55px">จำนวน</th>
+              <th class="r" style="width:90px">ราคา/หน่วย</th>
+              <th class="r" style="width:90px">จำนวนเงิน</th>
+            </tr>
+          </thead>
+          <tbody>${itemRows}${blankRows}</tbody>
+        </table>
+
+        <div style="display:flex;justify-content:space-between;align-items:flex-end;margin-top:8px">
+          <div class="doc-words">(${bahtWords(total)})</div>
+          <div style="display:flex;justify-content:flex-end">
+            <div class="doc-sum-box">
+              <div class="dsr"><span>มูลค่าสินค้า/บริการ</span><span>${Rd(preVat)}</span></div>
+              <div class="dsr"><span>ภาษีมูลค่าเพิ่ม 7%</span><span>${Rd(vatAmt)}</span></div>
+              <div class="dsr tot">
+                <span class="lbl">จำนวนเงินรวมทั้งสิ้น</span>
+                <span class="lv">${R(total)}</span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="doc-sigs">
+          <div class="doc-sig"><div class="line">ผู้รับเงิน<div class="dt2">วันที่………………………</div></div></div>
+          <div class="doc-sig"><div class="line">ผู้รับสินค้า/บริการ<div class="dt2">วันที่………………………</div></div></div>
+          <div class="doc-sig"><div class="line">ผู้มีอำนาจลงนาม<div class="dt2">วันที่………………………</div></div></div>
+        </div>
+
+        <div class="doc-foot">เอกสารออกเป็นชุด / ต้นฉบับ (Original) · ${esc(s.note || 'ขอบคุณที่ใช้บริการ')}</div>
+      </div>
     </div>`;
 }
 
@@ -329,6 +544,9 @@ function bindDocActions(type, data, dc) {
     window.print();
     setTimeout(() => { document.getElementById('pz').innerHTML = ''; }, 600);
   });
+
+  /* Tax invoice (ใบกำกับภาษีเต็มรูป) */
+  ov.querySelector('#dTax')?.addEventListener('click', () => openTaxInvoiceModal(data));
 
   /* Edit invoice — load into billing form */
   ov.querySelector('#dEditBill')?.addEventListener('click', () => {
