@@ -198,6 +198,10 @@ function openJobModal(jid, prefVid) {
     return `<option value="${v.id}"${selected}>${esc(v.plate)} — ${esc([v.brand,v.model].filter(Boolean).join(' '))} (${esc(c?.name||'?')})</option>`;
   }).join('');
 
+  // เลขไมล์เริ่มต้น: แก้งาน = ไมล์ของงาน · เปิดงานใหม่ = ไมล์ล่าสุดของรถที่เลือก
+  const _initVid  = j?.vehicleId || prefVid || '';
+  const _initMile = j ? (j.mileage || '') : (S.vehicles.find(v => v.id === _initVid)?.mileage || '');
+
   ov.innerHTML = `
     <div class="modal md">
       <div class="modal-h">
@@ -210,7 +214,7 @@ function openJobModal(jid, prefVid) {
             <select id="jVeh"><option value="">— เลือกรถ —</option>${vehOpts}</select>
           </div>
           <div class="fld"><label>เลขไมล์ขณะเข้า</label>
-            <input id="jMile" type="number" value="${j?.mileage||''}" placeholder="85000">
+            <input id="jMile" type="number" value="${_initMile}" placeholder="85000">
           </div>
         </div>
         <div class="fld mb12"><label>รายการแจ้งซ่อม / อาการ</label>
@@ -239,6 +243,13 @@ function openJobModal(jid, prefVid) {
     </div>`;
 
   openOv('mOv');
+
+  /* เลือกรถ → ดึงเลขไมล์ล่าสุดของรถมาใส่อัตโนมัติ */
+  ov.querySelector('#jVeh')?.addEventListener('change', e => {
+    const v = S.vehicles.find(x => x.id === e.target.value);
+    const mileInp = ov.querySelector('#jMile');
+    if (v && mileInp) mileInp.value = v.mileage || '';
+  });
 
   ov.querySelector('#mOk').addEventListener('click', async () => {
     const vid = sv('jVeh');
