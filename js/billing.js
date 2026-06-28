@@ -30,8 +30,7 @@ function billingHTML() {
   ).join('');
 
   const recentInv = [...S.invoices]
-    .sort((a, b) => (b.ts || b.createdAt || 0) - (a.ts || a.createdAt || 0))
-    .slice(0, 6);
+    .sort((a, b) => (b.ts || b.createdAt || 0) - (a.ts || a.createdAt || 0));
 
   const recentList = recentInv.length
     ? recentInv.map(i => `
@@ -217,9 +216,9 @@ function billingHTML() {
         <div class="card">
           <div class="card-h" style="padding:10px 14px">
             ${svgI('<path d="M12 8v4l3 2"/><circle cx="12" cy="12" r="9"/>',14)}
-            <h2 style="font-size:.92rem">บิลล่าสุด</h2>
+            <h2 style="font-size:.92rem">บิลล่าสุด (${totalInv})</h2>
           </div>
-          <div style="padding:4px 0">${recentList}</div>
+          <div style="padding:4px 0;max-height:420px;overflow-y:auto">${recentList}</div>
         </div>
       </div>
     </div>`;
