@@ -247,6 +247,13 @@ async function addVehicle(customerId, plate, brand, model, year, color, mileage,
   try {
     const uuidRe = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
     const safeCustomerId = customerId && uuidRe.test(customerId) ? customerId : null;
+    // year/mileage เป็นคอลัมน์ integer ในคลาวด์ — ค่าว่าง "" จะทำให้ insert fail (22P02)
+    // แปลงเป็นตัวเลข ถ้าว่าง/ไม่ใช่ตัวเลข → null
+    const toInt = (x) => {
+      if (x === null || x === undefined || x === '') return null;
+      const n = parseInt(String(x).replace(/[^\d-]/g, ''), 10);
+      return Number.isFinite(n) ? n : null;
+    };
 
     const { data, error } = await getSupabase()
       .from('vehicles')
@@ -255,9 +262,9 @@ async function addVehicle(customerId, plate, brand, model, year, color, mileage,
         plate,
         brand,
         model,
-        year,
+        year: toInt(year),
         color,
-        mileage,
+        mileage: toInt(mileage),
         engine_number: engineNumber,
         chassis_number: chassisNumber,
         note,
@@ -276,9 +283,19 @@ async function addVehicle(customerId, plate, brand, model, year, color, mileage,
 
 async function updateVehicle(vehicleId, updates) {
   try {
+    // year/mileage เป็น integer ในคลาวด์ — กันค่าว่าง "" ที่ทำให้ update fail (22P02)
+    const u = { ...updates };
+    const toInt = (x) => {
+      if (x === null || x === undefined || x === '') return null;
+      const n = parseInt(String(x).replace(/[^\d-]/g, ''), 10);
+      return Number.isFinite(n) ? n : null;
+    };
+    if ('year' in u) u.year = toInt(u.year);
+    if ('mileage' in u) u.mileage = toInt(u.mileage);
+
     const { data, error } = await getSupabase()
       .from('vehicles')
-      .update(updates)
+      .update(u)
       .eq('id', vehicleId)
       .select()
       .single();
