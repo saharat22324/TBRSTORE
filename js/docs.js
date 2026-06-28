@@ -81,7 +81,7 @@ function buildInvoiceHTML(d) {
         <td class="r" style="font-weight:700">${R(it.qty * it.price)}</td>
       </tr>`).join('');
 
-  const blankRows = Array(Math.max(0, 8 - d.items.length))
+  const blankRows = Array(Math.max(0, 8 - (d.items || []).length))
     .fill('<tr><td class="c" style="color:#ddd">·</td><td></td><td></td><td></td><td></td><td></td></tr>')
     .join('');
 
@@ -340,11 +340,16 @@ function buildTaxInvoiceHTML(d, buyer) {
   const R = n => '฿' + Math.round(n).toLocaleString('th-TH');
   const Rd = n => '฿' + (Math.round(n * 100) / 100).toLocaleString('th-TH', { minimumFractionDigits: 2 });
 
-  /* แยกฐานภาษีและ VAT จากยอดบิล — ถ้าบิลไม่ได้คิด VAT ให้ถอดออกจากยอดรวม (VAT-inclusive) */
-  const hasVat  = (d.vat || 0) > 0;
-  const preVat  = hasVat ? Math.max(0, (d.sub || 0) - (d.disc || 0)) : (d.grand / 1.07);
-  const vatAmt  = hasVat ? d.vat : (d.grand - d.grand / 1.07);
-  const total   = d.grand;
+  /* แยกฐานภาษีและ VAT ให้ยอดลงตัวเสมอ (ผลรวมแยก VAT = ยอดสุทธิจริง)
+     - บิลคิด VAT: ฐาน = ยอดสินค้า − ส่วนลด, VAT = ยอดสุทธิ − ฐาน
+     - บิลไม่คิด VAT: ถือว่าราคารวม VAT แล้ว (VAT-inclusive) ถอด 7% ออกจากยอดสุทธิ */
+  const hasVat   = (d.vat || 0) > 0;
+  const total    = d.grand;
+  const subTotal = (d.sub || 0);
+  const discAmt  = (d.disc || 0);
+  const preVat   = hasVat ? Math.max(0, subTotal - discAmt) : (total / 1.07);
+  const vatAmt   = Math.max(0, total - preVat);
+  const showDisc = hasVat && discAmt > 0;
 
   const itemRows = (d.items || []).map((it, i) => `
       <tr>
@@ -406,7 +411,11 @@ function buildTaxInvoiceHTML(d, buyer) {
           <div class="doc-words">(${bahtWords(total)})</div>
           <div style="display:flex;justify-content:flex-end">
             <div class="doc-sum-box">
-              <div class="dsr"><span>มูลค่าสินค้า/บริการ</span><span>${Rd(preVat)}</span></div>
+              ${showDisc ? `
+              <div class="dsr"><span>มูลค่าสินค้า/บริการ</span><span>${Rd(subTotal)}</span></div>
+              <div class="dsr"><span>ส่วนลด</span><span>${Rd(discAmt)}</span></div>
+              <div class="dsr"><span>มูลค่าหลังหักส่วนลด</span><span>${Rd(preVat)}</span></div>` : `
+              <div class="dsr"><span>มูลค่าสินค้า/บริการ</span><span>${Rd(preVat)}</span></div>`}
               <div class="dsr"><span>ภาษีมูลค่าเพิ่ม 7%</span><span>${Rd(vatAmt)}</span></div>
               <div class="dsr tot">
                 <span class="lbl">จำนวนเงินรวมทั้งสิ้น</span>
@@ -444,7 +453,7 @@ function buildQuoteHTML(d) {
       <td class="r" style="font-weight:700">${R(it.qty * it.price)}</td>
     </tr>`).join('');
 
-  const blankRows = Array(Math.max(0, 8 - d.items.length))
+  const blankRows = Array(Math.max(0, 8 - (d.items || []).length))
     .fill('<tr><td class="c" style="color:#ddd">·</td><td></td><td></td><td></td><td></td><td></td></tr>')
     .join('');
 
@@ -614,7 +623,7 @@ function bindDocActions(type, data, dc) {
     }
 
     /* Restore stock */
-    data.items.forEach(it => {
+    (data.items || []).forEach(it => {
       if (it.sid && it.itemType === 'stock') {
         const m = S.stockItems.find(x => x.id === it.sid);
         if (m) {
