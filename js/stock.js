@@ -23,6 +23,12 @@ function stockHTML() {
     ? S.stockItems.filter(i => i.cat === stockFilterCat)
     : S.stockItems;
 
+  // คำนวณยอด "ใช้ไป" จากใบเบิกจริง (ทนต่อการซิงค์คลาวด์ — ไม่หายเหมือน field used)
+  const usedBySid = {};
+  (S.requisitions || []).forEach(r => (r.items || []).forEach(it => {
+    if (it.sid) usedBySid[it.sid] = (usedBySid[it.sid] || 0) + (parseFloat(it.qty) || 0);
+  }));
+
   const alert = lowItems.length ? `
     <div class="alert al-warn mb14">
       ${svgI('<path d="M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0Z"/><path d="M12 9v4M12 17h.01"/>')}
@@ -35,6 +41,10 @@ function stockHTML() {
   const rows = items.map(i => {
     const st  = i.qty <= 0 ? 'bad' : i.qty <= i.reorder ? 'warn' : 'ok';
     const pct = Math.min(100, Math.round(i.qty / (i.reorder * 2.5) * 100));
+
+    // ใช้ไป = ยอดเบิกจริงจากใบเบิก · รับเข้า = คงเหลือ + ใช้ไป (ยอดที่เคยมีทั้งหมด)
+    const usedQty = usedBySid[i.id] || 0;
+    const recvQty = fmt((i.qty || 0) + usedQty);
 
     return `
       <tr>
@@ -53,8 +63,8 @@ function stockHTML() {
           <span style="color:var(--fg2);font-size:.76rem"> ${esc(i.unit)}</span>
           <div class="sbar"><i class="${st!=='ok'?st:''}" style="width:${pct}%"></i></div>
         </td>
-        <td class="r" style="font-size:.8rem;color:var(--fg2)">${numFmt(i.recv||0)}</td>
-        <td class="r" style="font-size:.8rem;color:var(--fg2)">${numFmt(i.used||0)}</td>
+        <td class="r" style="font-size:.8rem;color:var(--fg2)">${numFmt(recvQty)}</td>
+        <td class="r" style="font-size:.8rem;color:var(--fg2)">${numFmt(usedQty)}</td>
         ${hasPermission('canViewCost') ? `<td class="r" style="font-size:.84rem">${THB(i.cost)}</td>` : ''}
         <td class="r"><b style="color:var(--gold)">${THB(i.sell)}</b></td>
         ${hasPermission('canViewCost') ? `<td class="r" style="font-size:.82rem">${THB(i.qty * i.cost)}</td>` : ''}
