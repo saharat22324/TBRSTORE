@@ -222,6 +222,38 @@ async function syncRemoteData(opts) {
     S.purchaseOrders = S.purchaseOrders.filter(p => !p.id || !_delUuidRx.test(p.id) || sbPoIds.has(p.id));
     if (S.purchaseOrders.length !== prevPoLen) { changed = true; console.log(`[DB] 🗑 Removed ${prevPoLen - S.purchaseOrders.length} deleted PO(s)`); }
 
+    // ── Services: ราคา/ชื่อบริการ เปลี่ยน → sync เรียลไทม์ ──
+    if (newState.services?.length > 0) {
+      if (!S.services) S.services = [];
+      const svcById = new Map(S.services.map(s => [s.id, s]));
+      for (const s of newState.services) {
+        if (svcById.has(s.id)) {
+          const ex = svcById.get(s.id);
+          if (ex.name !== s.name || ex.detail !== s.detail || ex.price !== s.price) {
+            Object.assign(ex, { name: s.name, detail: s.detail, price: s.price });
+            changed = true;
+          }
+        } else {
+          S.services.push(s); changed = true;
+        }
+      }
+      // ลบบริการที่ถูกลบจากคลาวด์
+      const sbSvcIds = new Set(newState.services.map(s => s.id));
+      const prevSvcLen = S.services.length;
+      S.services = S.services.filter(s => sbSvcIds.has(s.id));
+      if (S.services.length !== prevSvcLen) changed = true;
+    }
+
+    // ── Shop config: ตั้งค่าร้าน เปลี่ยน → sync เรียลไทม์ ──
+    if (newState.shop && S.shop) {
+      const sh = newState.shop;
+      if (S.shop.name !== sh.name || S.shop.addr !== sh.addr || S.shop.phone !== sh.phone ||
+          S.shop.tax !== sh.tax || S.shop.line !== sh.line || S.shop.note !== sh.note) {
+        Object.assign(S.shop, sh);
+        changed = true;
+      }
+    }
+
     // ── Stock Ledger: append new entries from other users ──
     if (newState.stockLedger?.length > 0) {
       const ledgerIds = new Set((S.stockLedger || []).map(e => e._id).filter(Boolean));
@@ -278,6 +310,8 @@ function startLiveSync() {
         .on('postgres_changes', { event: '*', schema: 'public', table: 'expenses'         }, syncRemoteData)
         .on('postgres_changes', { event: '*', schema: 'public', table: 'quotes'           }, syncRemoteData)
         .on('postgres_changes', { event: '*', schema: 'public', table: 'purchase_orders'  }, syncRemoteData)
+        .on('postgres_changes', { event: '*', schema: 'public', table: 'services'         }, syncRemoteData)
+        .on('postgres_changes', { event: '*', schema: 'public', table: 'shop_config'      }, syncRemoteData)
         .subscribe(status => {
           if (status === 'SUBSCRIBED')
             console.log('[DB] ✅ Supabase Realtime เชื่อมต่อแล้ว — sync อัตโนมัติทุก operation');
