@@ -36,7 +36,18 @@ jobs:
           test -n "$BACKUP_ENCRYPTION_PASSPHRASE" || { echo "BACKUP_ENCRYPTION_PASSPHRASE is not configured"; exit 1; }
 
       - name: Install PostgreSQL and encryption tools
-        run: sudo apt-get update && sudo apt-get install -y postgresql-client gnupg
+        shell: bash
+        run: |
+          sudo install -d -m 0755 /usr/share/postgresql-common/pgdg
+          sudo curl --fail --silent --show-error \
+            --output /usr/share/postgresql-common/pgdg/apt.postgresql.org.asc \
+            https://www.postgresql.org/media/keys/ACCC4CF8.asc
+          . /etc/os-release
+          echo "deb [signed-by=/usr/share/postgresql-common/pgdg/apt.postgresql.org.asc] https://apt.postgresql.org/pub/repos/apt ${VERSION_CODENAME}-pgdg main" \
+            | sudo tee /etc/apt/sources.list.d/pgdg.list >/dev/null
+          sudo apt-get update
+          sudo apt-get install -y postgresql-client-17 gnupg
+          echo "/usr/lib/postgresql/17/bin" >> "$GITHUB_PATH"
 
       - name: Create and verify encrypted backup
         shell: bash

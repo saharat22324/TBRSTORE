@@ -11,6 +11,10 @@ from pathlib import Path
 PROJECT_REF = "tgtuxvmuapiltmkulvlk"
 
 
+def environment_or_default(name: str, default: str) -> str:
+    return os.environ.get(name, "").strip() or default
+
+
 def find_postgres_tool(name: str) -> Path:
     command = shutil.which(name)
     if command:
@@ -42,10 +46,10 @@ def main() -> int:
     parser.add_argument("--output-directory", type=Path, default=Path("backups"))
     parser.add_argument("--password-env", help="environment variable containing the database password")
     parser.add_argument("--encrypt-passphrase-env", help="environment variable containing the GPG passphrase")
-    parser.add_argument("--host", default=os.environ.get("SUPABASE_DB_HOST", f"db.{PROJECT_REF}.supabase.co"))
-    parser.add_argument("--port", default=os.environ.get("SUPABASE_DB_PORT", "5432"))
-    parser.add_argument("--username", default=os.environ.get("SUPABASE_DB_USER", "postgres"))
-    parser.add_argument("--database", default=os.environ.get("SUPABASE_DB_NAME", "postgres"))
+    parser.add_argument("--host", default=environment_or_default("SUPABASE_DB_HOST", f"db.{PROJECT_REF}.supabase.co"))
+    parser.add_argument("--port", default=environment_or_default("SUPABASE_DB_PORT", "5432"))
+    parser.add_argument("--username", default=environment_or_default("SUPABASE_DB_USER", "postgres"))
+    parser.add_argument("--database", default=environment_or_default("SUPABASE_DB_NAME", "postgres"))
     args = parser.parse_args()
 
     pg_dump = find_postgres_tool("pg_dump")

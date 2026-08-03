@@ -100,6 +100,16 @@ def main() -> int:
         r"CREATE POLICY prod_stock_(insert|update)",
         "stock item insert/update policies must remain RPC-only",
     )
+    require(
+        "scripts/backup-supabase.py",
+        r"os\.environ\.get\(name, \"\"\)\.strip\(\) or default",
+        "blank optional backup settings must use connection defaults",
+    )
+    require(
+        ".github/workflows/backup.yml",
+        r"postgresql-client-17",
+        "Production backups must use the reviewed PostgreSQL 17 client",
+    )
 
     if ERRORS:
         print("Repository validation failed:")
