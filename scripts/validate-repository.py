@@ -110,6 +110,11 @@ def main() -> int:
         r"postgresql-client-17",
         "Production backups must use the reviewed PostgreSQL 17 client",
     )
+    require(
+        ".github/workflows/backup.yml",
+        r"--decrypt backups-ci/\*\.dump\.gpg[\s\S]*pg_restore --list backups-ci/restore-check\.dump",
+        "encrypted backups must pass a decryption and restore-catalog check",
+    )
 
     if ERRORS:
         print("Repository validation failed:")

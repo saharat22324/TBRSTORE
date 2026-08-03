@@ -64,6 +64,12 @@ jobs:
           test "$(find backups-ci -type f -name '*.dump' | wc -l)" -eq 0
           test "$(find backups-ci -type f -name '*.dump.gpg' | wc -l)" -eq 1
           (cd backups-ci && sha256sum --check *.sha256)
+          printf '%s' "$BACKUP_ENCRYPTION_PASSPHRASE" \
+            | gpg --batch --yes --pinentry-mode loopback --passphrase-fd 0 \
+                --output backups-ci/restore-check.dump --decrypt backups-ci/*.dump.gpg
+          pg_restore --list backups-ci/restore-check.dump >/dev/null
+          rm backups-ci/restore-check.dump
+          test "$(find backups-ci -type f -name '*.dump' | wc -l)" -eq 0
 
       - name: Store encrypted backup for 30 days
         uses: actions/upload-artifact@v4
