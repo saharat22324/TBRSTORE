@@ -70,7 +70,7 @@ function stockHTML() {
         ${hasPermission('canViewCost') ? `<td class="r" style="font-size:.82rem">${THB(i.qty * i.cost)}</td>` : ''}
         <td class="c">
           <div class="flex gap6" style="justify-content:center">
-            <button class="btn btn-xs"
+            ${hasPermission('canManageStock') ? `<button class="btn btn-xs"
               style="background:rgba(46,204,113,.14);color:var(--grn);border:1px solid rgba(46,204,113,.3)"
               data-sadj="${i.id}" data-st="in" title="รับสินค้าเข้า">
               +รับ
@@ -79,7 +79,7 @@ function stockHTML() {
               style="background:rgba(238,166,28,.14);color:var(--gold);border:1px solid rgba(238,166,28,.3)"
               data-sadj="${i.id}" data-st="count" title="ตั้งยอดจริง">
               ตั้งยอด
-            </button>
+            </button>` : ''}
             ${hasPermission('canEditPrices') ? `<button class="btn-icon" data-esi="${i.id}" title="แก้ไขรายการ">
               ${svgI('<path d="M12 20h9M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z"/>',13)}
             </button>
@@ -182,7 +182,10 @@ function bindStock() {
   );
 
   document.querySelectorAll('[data-sadj]').forEach(b =>
-    b.addEventListener('click', () => openStockAdj(b.dataset.sadj, b.dataset.st))
+    b.addEventListener('click', () => {
+      if (!hasPermission('canManageStock')) return showToast('คุณไม่มีสิทธิ์ปรับยอดสต๊อก', 'err');
+      openStockAdj(b.dataset.sadj, b.dataset.st);
+    })
   );
 
   document.querySelectorAll('[data-esi]').forEach(b =>
@@ -240,6 +243,7 @@ function addToLedger(itemId, type, qty, note) {
 }
 
 function openStockAdj(id, type) {
+  if (!hasPermission('canManageStock')) return showToast('คุณไม่มีสิทธิ์ปรับยอดสต๊อก', 'err');
   const m  = S.stockItems.find(i => i.id === id);
   if (!m) { showToast('ไม่พบรายการสินค้า', 'err'); return; }
   const ov = sel('mOv');

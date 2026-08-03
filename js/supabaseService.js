@@ -57,6 +57,7 @@ const PERMISSIONS = {
     canViewCost: true,
     canViewProfit: true,
     canEditPrices: true,
+    canManageStock: true,
     canManageTeam: true,
     canViewReports: true,
     canAddCustomer: true,
@@ -73,6 +74,7 @@ const PERMISSIONS = {
     canViewCost: false,
     canViewProfit: true,           // ✅ เห็นกำไรได้
     canEditPrices: false,
+    canManageStock: false,
     canManageTeam: false,
     canViewReports: false,
     canAddCustomer: true,          // ✅ เพิ่มลูกค้าได้
@@ -89,6 +91,7 @@ const PERMISSIONS = {
     canViewCost: false,
     canViewProfit: true,
     canEditPrices: false,
+    canManageStock: true,
     canManageTeam: false,
     canViewReports: true,
     canAddCustomer: true,          // ✅ เพิ่มลูกค้าได้
@@ -418,12 +421,11 @@ async function updateJob(jobId, updates) {
 
 async function deleteJob(jobId) {
   try {
-    const { error } = await getSupabase()
-      .from('jobs')
-      .delete()
-      .eq('id', jobId);
+    const { data, error } = await getSupabase().rpc('delete_job_atomic', {
+      p_job_id: jobId,
+    });
     if (error) throw error;
-    return true;
+    return Array.isArray(data) ? data[0] : data;
   } catch (err) {
     console.error('[Service] deleteJob error:', err);
     return false;
@@ -990,17 +992,14 @@ async function getNextJobNumber() {
 ══════════════════════════════════════ */
 async function addRequisition(jobId, no, items, note) {
   try {
-    const sb = getSupabase();
-    const row = {
-      no,
-      job_id:     jobId || null,
-      items:      items || [],
-      note:       note  || null,
-      created_by: currentUser?.id || null,
-    };
-    const { data, error } = await sb.from('requisitions').insert([row]).select().single();
+    const { data, error } = await getSupabase().rpc('create_requisition_atomic', {
+      p_job_id: jobId,
+      p_no: no,
+      p_items: items || [],
+      p_note: note || null,
+    });
     if (error) throw error;
-    return data;
+    return Array.isArray(data) ? data[0] : data;
   } catch (err) {
     reportSupabaseWriteError(err, 'addRequisition');
     return null;
@@ -1009,14 +1008,13 @@ async function addRequisition(jobId, no, items, note) {
 
 async function updateRequisition(reqId, updates) {
   try {
-    const { data, error } = await getSupabase()
-      .from('requisitions')
-      .update(updates)
-      .eq('id', reqId)
-      .select()
-      .single();
+    const { data, error } = await getSupabase().rpc('update_requisition_atomic', {
+      p_requisition_id: reqId,
+      p_items: updates.items || [],
+      p_note: updates.note || null,
+    });
     if (error) throw error;
-    return data;
+    return Array.isArray(data) ? data[0] : data;
   } catch (err) {
     console.error('[Service] updateRequisition error:', err);
     return null;
@@ -1025,12 +1023,11 @@ async function updateRequisition(reqId, updates) {
 
 async function deleteRequisition(reqId) {
   try {
-    const { error } = await getSupabase()
-      .from('requisitions')
-      .delete()
-      .eq('id', reqId);
+    const { data, error } = await getSupabase().rpc('delete_requisition_atomic', {
+      p_requisition_id: reqId,
+    });
     if (error) throw error;
-    return true;
+    return Array.isArray(data) ? data[0] : data;
   } catch (err) {
     console.error('[Service] deleteRequisition error:', err);
     return false;

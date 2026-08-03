@@ -647,6 +647,11 @@ function openJobDetail(jid) {
       if (!req) return;
       
       if (!confirm(`ต้องการลบใบเบิก ${req.no} และคืนสินค้ากลับสต๊อกหรือ?`)) return;
+
+      if (useSupabase && typeof deleteRequisition === 'function') {
+        const result = await deleteRequisition(reqId);
+        if (!result?.id) return showToast(`ลบใบเบิก ${req.no} ไม่สำเร็จ · สต๊อกเดิมไม่เปลี่ยน`, 'err');
+      }
       
       /* Restore stock */
       (req.items || []).forEach(it => {
@@ -661,14 +666,6 @@ function openJobDetail(jid) {
       /* Remove requisition */
       S.requisitions = S.requisitions.filter(r => r.id !== reqId);
       j.requisitions = (j.requisitions || []).filter(rid => rid !== reqId);
-
-      // Delete from Supabase
-      if (useSupabase && typeof deleteRequisition === 'function') {
-        const _uuidRe = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-        if (_uuidRe.test(reqId)) {
-          deleteRequisition(reqId).catch(e => console.warn('[Req] Supabase delete failed:', e));
-        }
-      }
 
       await saveData();
       renderNav();
@@ -694,8 +691,12 @@ function openJobDetail(jid) {
     );
     if (!ok) return;
 
-    /* คืนสต๊อกจากใบเบิกทุกใบ แล้วลบใบเบิก */
-    const _uuidRe = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+    if (useSupabase && typeof deleteJob === 'function') {
+      const result = await deleteJob(j.id);
+      if (!result?.id) return showToast(`ลบงาน ${j.no} ไม่สำเร็จ · ข้อมูลและสต๊อกเดิมไม่เปลี่ยน`, 'err');
+    }
+
+    /* คืนสต๊อกจากใบเบิกทุกใบใน local cache หลัง transaction สำเร็จ */
     for (const r of reqs) {
       (r.items || []).forEach(it => {
         if (!it.sid) return;
@@ -705,19 +706,12 @@ function openJobDetail(jid) {
           st.used = fmt(Math.max(0, (st.used || 0) - it.qty));
         }
       });
-      if (useSupabase && typeof deleteRequisition === 'function' && _uuidRe.test(r.id)) {
-        deleteRequisition(r.id).catch(e => console.warn('[Job] req delete failed:', e));
-      }
     }
     S.requisitions = S.requisitions.filter(r => r.jobId !== jid);
 
     /* ลบงานออกจาก state */
     S.jobs = S.jobs.filter(x => x.id !== jid);
 
-    /* ลบจาก Supabase */
-    if (useSupabase && typeof deleteJob === 'function' && _uuidRe.test(j.id)) {
-      deleteJob(j.id).catch(e => console.warn('[Job] Supabase delete failed:', e));
-    }
     if (typeof addAuditLog === 'function') {
       addAuditLog('JOB_DELETE', 'job', j.id, j.no, { cust: j.custName || '' });
     }
@@ -967,24 +961,6 @@ function openReqModal(jid) {
 
     const no  = nextSeqNo('rq').replace('rq-', 'RQ-');
 
-    /* Deduct stock */
-    rItems.forEach(it => {
-      if (!it.sid) return;
-      const m = S.stockItems.find(x => x.id === it.sid);
-      if (m) {
-        m.qty  = fmt(m.qty  - it.qty);
-        m.used = fmt((m.used || 0) + it.qty);
-        // Sync stock qty to Supabase
-        if (useSupabase && typeof updateStockBySku === 'function') {
-          updateStockBySku(m.id, m.qty).catch(e => console.warn('[Req] stock sync failed:', e));
-        }
-        // Record in stock ledger
-        if (typeof addToLedger === 'function') {
-          addToLedger(m.id, 'out', it.qty, 'เบิก ' + no);
-        }
-      }
-    });
-
     const req = {
       id:     'RQ-' + Date.now(),
       no,
@@ -1000,18 +976,23 @@ function openReqModal(jid) {
       })),
     };
 
+    let _reqCloudOk = false;
+    if (useSupabase && typeof addRequisition === 'function') {
+      const result = await addRequisition(jid, no, req.items, req.note);
+      if (!result?.id) return showToast(`เบิกสต๊อก ${no} ไม่สำเร็จ · ข้อมูลและสต๊อกไม่ถูกเปลี่ยน`, 'err');
+      req.id = result.id;
+      req.items = Array.isArray(result.items) ? result.items : req.items;
+      _reqCloudOk = true;
+    }
+
+    req.items.forEach(it => {
+      if (!it.sid) return;
+      const m = S.stockItems.find(x => x.id === it.sid);
+      if (m) { m.qty=fmt(m.qty-it.qty); m.used=fmt((m.used||0)+it.qty); }
+    });
     S.requisitions.push(req);
     if (!j.requisitions) j.requisitions = [];
     j.requisitions.push(req.id);
-
-    // Save to Supabase (รอผล — ยืนยันขึ้นคลาวด์จริง)
-    let _reqCloudOk = false;
-    if (useSupabase && typeof addRequisition === 'function') {
-      try {
-        const result = await addRequisition(jid, no, req.items, req.note);
-        if (result?.id) { req.id = result.id; _reqCloudOk = true; }
-      } catch (e) { console.warn('[Req] Supabase save failed:', e); }
-    }
 
     await saveData();
     closeMod();
@@ -1109,8 +1090,12 @@ function openEditReqModal(jid, reqId) {
   sel('editReqSave').addEventListener('click', async () => {
     if (!editItems.length) return showToast('ต้องมีรายการอย่างน้อย 1 รายการ', 'err');
 
-    /* Calculate stock differences: restore old quantities first, then deduct new quantities.
-       Using restore-all + re-deduct approach (safe when items are deleted/reordered) */
+    if (useSupabase && typeof updateRequisition === 'function') {
+      const result = await updateRequisition(req.id, { items: editItems, note: req.note || null });
+      if (!result?.id) return showToast(`อัปเดตใบเบิก ${req.no} ไม่สำเร็จ · สต๊อกเดิมไม่เปลี่ยน`, 'err');
+      editItems = Array.isArray(result.items) ? result.items : editItems;
+    }
+
     // 1. Restore all OLD stock
     (req.items || []).forEach(it => {
       if (!it.sid) return;
@@ -1127,21 +1112,11 @@ function openEditReqModal(jid, reqId) {
       if (st) {
         st.qty  = fmt(parseFloat(st.qty)  - parseFloat(it.qty));
         st.used = fmt((st.used || 0) + parseFloat(it.qty));
-        if (useSupabase && typeof updateStockBySku === 'function')
-          updateStockBySku(st.id, st.qty).catch(() => {});
       }
     });
 
     /* Update requisition */
     req.items = editItems;
-
-    // Update in Supabase
-    if (useSupabase && typeof updateRequisition === 'function') {
-      const _uuidRe = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-      if (_uuidRe.test(req.id)) {
-        updateRequisition(req.id, { items: req.items }).catch(e => console.warn('[Req] Supabase update failed:', e));
-      }
-    }
 
     await saveData();
     closeMod();
