@@ -201,10 +201,17 @@ function bindStock() {
       }
       const m = S.stockItems.find(i => i.id === b.dataset.dsi);
       if (!confirm(`ลบ "${m?.name}" ออกจากคลัง?`)) return;
-      S.stockItems = S.stockItems.filter(i => i.id !== b.dataset.dsi);
-      if (useSupabase && typeof deleteStockItemBySku === 'function') {
-        deleteStockItemBySku(b.dataset.dsi).catch(e => console.warn('[Stock] delete sync failed:', e));
+      try {
+        if (useSupabase) {
+          if (typeof archiveStockItemAtomic !== 'function') throw new Error('Atomic stock archive service is unavailable');
+          await archiveStockItemAtomic(m.id, parseFloat(m.qty) || 0);
+        }
+      } catch (error) {
+        console.error('[Stock] archive failed:', error);
+        showToast('เก็บรายการไม่สำเร็จ ต้องมียอดคงเหลือ 0 และไม่มี PO ที่รอรับ', 'err');
+        return;
       }
+      S.stockItems = S.stockItems.filter(i => i.id !== b.dataset.dsi);
       await saveData();
       renderPanel();
       renderNav();
@@ -445,16 +452,22 @@ function openStockItemModal(id) {
 
   ov.querySelector('#delSI')?.addEventListener('click', async () => {
     if (!confirm('ลบรายการนี้?')) return;
-    S.stockItems = S.stockItems.filter(x => x.id !== id);
-    // Sync delete to Supabase
-    if (useSupabase && typeof deleteStockItemBySku === 'function') {
-      deleteStockItemBySku(id).catch(e => console.warn('[Stock] delete sync failed:', e));
+    try {
+      if (useSupabase) {
+        if (typeof archiveStockItemAtomic !== 'function') throw new Error('Atomic stock archive service is unavailable');
+        await archiveStockItemAtomic(id, parseFloat(m.qty) || 0);
+      }
+    } catch (error) {
+      console.error('[Stock] archive failed:', error);
+      showToast('เก็บรายการไม่สำเร็จ ต้องมียอดคงเหลือ 0 และไม่มี PO ที่รอรับ', 'err');
+      return;
     }
+    S.stockItems = S.stockItems.filter(x => x.id !== id);
     await saveData();
     closeMod();
     renderPanel();
     renderNav();
-    showToast('ลบแล้ว');
+    showToast('เก็บรายการแล้ว');
   });
 
   bindModalClose(ov, '#mCl', '#mCl2');

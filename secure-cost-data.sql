@@ -16,7 +16,7 @@ GRANT EXECUTE ON FUNCTION current_app_role() TO authenticated;
 CREATE OR REPLACE FUNCTION get_stock_items_secure()
 RETURNS TABLE (
   id UUID, sku VARCHAR, name VARCHAR, category_id INTEGER, unit VARCHAR,
-  cost_price DECIMAL, sell_price DECIMAL, quantity INTEGER, reorder_level INTEGER,
+  cost_price DECIMAL, sell_price DECIMAL, quantity NUMERIC(12,3), reorder_level INTEGER,
   supplier_id UUID, note TEXT, created_at TIMESTAMP, updated_at TIMESTAMP
 )
 LANGUAGE sql STABLE SECURITY DEFINER
@@ -27,6 +27,7 @@ AS $$
     s.sell_price, s.quantity, s.reorder_level, s.supplier_id, s.note,
     s.created_at, s.updated_at
   FROM stock_items s
+  WHERE s.active
   ORDER BY s.sku;
 $$;
 REVOKE ALL ON FUNCTION get_stock_items_secure() FROM PUBLIC;

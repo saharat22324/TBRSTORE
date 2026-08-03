@@ -604,6 +604,18 @@ async function deleteStockItemBySku(sku) {
   }
 }
 
+async function archiveStockItemAtomic(sku, expectedQuantity) {
+  const { data, error } = await getSupabase().rpc('archive_stock_item_atomic', {
+    p_sku: sku,
+    p_expected_quantity: expectedQuantity,
+  });
+  if (error) {
+    reportSupabaseWriteError(error, 'archiveStockItemAtomic');
+    throw error;
+  }
+  return data;
+}
+
 async function getStockItems() {
   try {
     const { data: secureData, error: secureError } = await getSupabase().rpc('get_stock_items_secure');
@@ -615,6 +627,7 @@ async function getStockItems() {
       const { data, error } = await getSupabase()
         .from('stock_items')
         .select('*')
+        .eq('active', true)
         .order('sku', { ascending: true });
       if (error) throw error;
       return data || [];
@@ -633,6 +646,7 @@ async function getStockItems() {
       const { data: data2, error: error2 } = await getSupabase()
         .from('stock_items')
         .select('*')
+        .eq('active', true)
         .order('sku', { ascending: true });
       if (error2) throw error2;
       return data2 || [];

@@ -115,6 +115,26 @@ def main() -> int:
         r"--decrypt backups-ci/\*\.dump\.gpg[\s\S]*pg_restore --list backups-ci/restore-check\.dump",
         "encrypted backups must pass a decryption and restore-catalog check",
     )
+    require(
+        "js/stock.js",
+        r"await archiveStockItemAtomic",
+        "stock removal must await the archive RPC",
+    )
+    forbid(
+        "js/stock.js",
+        r"deleteStockItemBySku",
+        "stock UI must not delete historical items",
+    )
+    forbid(
+        "production-role-policies.sql",
+        r"CREATE POLICY prod_stock_delete",
+        "direct stock deletion must remain disabled",
+    )
+    require(
+        "secure-cost-data.sql",
+        r"quantity NUMERIC\(12,3\)[\s\S]*WHERE s\.active",
+        "secure stock reads must preserve fractions and hide archived items",
+    )
 
     if ERRORS:
         print("Repository validation failed:")

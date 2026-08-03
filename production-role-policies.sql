@@ -136,8 +136,7 @@ DROP POLICY IF EXISTS prod_stock_update ON stock_items;
 DROP POLICY IF EXISTS prod_stock_delete ON stock_items;
 CREATE POLICY prod_stock_read ON stock_items FOR SELECT TO authenticated USING (TRUE);
 -- Stock creation, metadata edits, and quantity changes use SECURITY DEFINER atomic RPCs.
-CREATE POLICY prod_stock_delete ON stock_items FOR DELETE TO authenticated
-  USING (current_app_role() = 'admin');
+-- Stock removal uses archive_stock_item_atomic so historical references remain intact.
 
 DROP POLICY IF EXISTS team_read_req ON requisitions;
 DROP POLICY IF EXISTS team_write_req ON requisitions;
