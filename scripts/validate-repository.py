@@ -165,6 +165,41 @@ def main() -> int:
         r"CREATE POLICY prod_purchase_orders_(insert|update|delete)",
         "purchase-order writes must remain RPC-only",
     )
+    require(
+        "20260810_atomic_job_updates.sql",
+        r"CREATE OR REPLACE FUNCTION update_job_atomic[\s\S]*jsonb_object_keys\(p_updates\)[\s\S]*FOR UPDATE[\s\S]*p_updates\?'status_id'",
+        "job updates must lock rows and preserve omitted patch fields",
+    )
+    require(
+        "20260810_atomic_job_updates.sql",
+        r"UPDATE vehicles SET mileage=v_mileage[\s\S]*UPDATE jobs SET",
+        "job and vehicle mileage updates must share one transaction",
+    )
+    require(
+        "js/jobs.js",
+        r"await updateJobAtomic[\s\S]*Object\.assign\(j,data\)",
+        "local job edits must follow server success",
+    )
+    require(
+        "js/jobs.js",
+        r"await updateJobAtomic\(j\.id,oldStatus \+ 1[\s\S]*j\.status = newStatus",
+        "local job status changes must follow server success",
+    )
+    forbid(
+        "js/jobs.js",
+        r"\b(updateJob|updateVehicle)\(",
+        "job workflows must not use direct updates",
+    )
+    require(
+        "js/jobs.js",
+        r"\^\[0-9a-f\]\{8\}-\[0-9a-f\]\{4\}-\[0-9a-f\]\{4\}-\[0-9a-f\]\{4\}-\[0-9a-f\]\{12\}\$",
+        "job cloud writes must use complete UUID validation",
+    )
+    forbid(
+        "production-role-policies.sql",
+        r"CREATE POLICY prod_jobs_update",
+        "job updates must remain RPC-only",
+    )
 
     if ERRORS:
         print("Repository validation failed:")

@@ -91,8 +91,8 @@ DROP POLICY IF EXISTS prod_jobs_update ON jobs;
 DROP POLICY IF EXISTS prod_jobs_delete ON jobs;
 CREATE POLICY prod_jobs_read ON jobs FOR SELECT TO authenticated USING (TRUE);
 CREATE POLICY prod_jobs_insert ON jobs FOR INSERT TO authenticated WITH CHECK (created_by IS NULL OR created_by = auth.uid());
-CREATE POLICY prod_jobs_update ON jobs FOR UPDATE TO authenticated USING (TRUE) WITH CHECK (TRUE);
 CREATE POLICY prod_jobs_delete ON jobs FOR DELETE TO authenticated USING (current_app_role() IN ('admin','supervisor'));
+-- Job edits, status transitions and image updates use a SECURITY DEFINER atomic RPC.
 
 DROP POLICY IF EXISTS team_read_invoices ON invoices;
 DROP POLICY IF EXISTS team_write_invoices ON invoices;

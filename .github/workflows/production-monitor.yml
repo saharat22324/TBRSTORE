@@ -24,8 +24,8 @@ jobs:
           base="https://tbrstore.vercel.app"
           login="$(curl --fail --silent --show-error --location --retry 2 --max-time 20 "$base/login.html")"
           nav="$(curl --fail --silent --show-error --retry 2 --max-time 20 "$base/js/nav.js?monitor=1")"
-          service="$(curl --fail --silent --show-error --retry 2 --max-time 20 "$base/js/supabaseService.js?v=39&monitor=1")"
-          jobs="$(curl --fail --silent --show-error --retry 2 --max-time 20 "$base/js/jobs.js?v=31&monitor=1")"
+          service="$(curl --fail --silent --show-error --retry 2 --max-time 20 "$base/js/supabaseService.js?v=40&monitor=1")"
+          jobs="$(curl --fail --silent --show-error --retry 2 --max-time 20 "$base/js/jobs.js?v=32&monitor=1")"
           stock="$(curl --fail --silent --show-error --retry 2 --max-time 20 "$base/js/stock.js?v=34&monitor=1")"
           purchasing="$(curl --fail --silent --show-error --retry 2 --max-time 20 "$base/js/purchasing.js?v=32&monitor=1")"
           grep -q 'id="loginUsername"' <<<"$login"
@@ -37,8 +37,14 @@ jobs:
           grep -q "rpc('archive_stock_item_atomic'" <<<"$service"
           grep -q "rpc('create_purchase_order_atomic'" <<<"$service"
           grep -q "rpc('cancel_purchase_order_atomic'" <<<"$service"
+          grep -q "rpc('update_job_atomic'" <<<"$service"
           grep -q 'canManageStock' <<<"$service"
           grep -q 'await addRequisition' <<<"$jobs"
+          grep -q 'await updateJobAtomic' <<<"$jobs"
+          if grep -Eq '\b(updateJob|updateVehicle)\(' <<<"$jobs"; then
+            echo "Unsafe direct job update detected in deployed workflow"
+            exit 1
+          fi
           grep -q 'await adjustStockAtomic' <<<"$stock"
           grep -q 'await saveStockItemAtomic' <<<"$stock"
           grep -q 'await archiveStockItemAtomic' <<<"$stock"

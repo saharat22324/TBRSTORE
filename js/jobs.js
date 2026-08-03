@@ -259,55 +259,50 @@ function openJobModal(jid, prefVid) {
     const c    = S.customers.find(x => x.id === v?.custId);
     const mile = parseInt(sv('jMile')) || 0;
 
-    /* อัปเดตเลขไมล์รถ */
-    if (mile && v) {
-      v.mileage = mile;
-      // ซิงค์เลขไมล์ขึ้น Supabase ด้วย (ไม่งั้นโหลดใหม่แล้วค่าจะย้อนกลับ + คนอื่นไม่เห็น)
-      const _isUUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-      if (useSupabase && typeof updateVehicle === 'function' && _isUUID.test(v.id)) {
-        updateVehicle(v.id, { mileage: mile }).catch(e => console.warn('[Jobs] vehicle mileage sync failed:', e));
-      }
-    }
-
     let _newJobCloudOk = false;
 
     const data = {
-      vehicleId:  vid,
-      custId:     v?.custId,
-      custName:   c?.name || '',
-      plate:      v?.plate || '',
-      carModel:   [v?.brand, v?.model].filter(Boolean).join(' '),
-      mileage:    mile,
-      complaint:  sv('jComp'),
-      assignTo:   sv('jAssign'),
-      status:     parseInt(sv('jStatus')),
-      note:       sv('jNote'),
+      vehicleId: vid,
+      custId: v?.custId,
+      custName: c?.name || '',
+      plate: v?.plate || '',
+      carModel: [v?.brand,v?.model].filter(Boolean).join(' '),
+      mileage: mile,
+      complaint: sv('jComp'),
+      assignTo: sv('jAssign'),
+      status: parseInt(sv('jStatus')),
+      note: sv('jNote'),
     };
 
     if (j) {
-      Object.assign(j, data);
-      // Update in Supabase — only if j.id is a real Supabase UUID
-      if (useSupabase) {
-        const isUUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-        if (isUUID.test(j.id) && typeof updateJob === 'function') {
-          // Map JS field names → DB column names (camelCase → snake_case)
-          const dbData = {
-            complaint: data.complaint || null,
-            mileage:   data.mileage   || 0,
-            note:      data.note      || null,
-            assign_to: data.assignTo  || null,
-            status_id: (data.status   || 0) + 1,
-          };
-          if (isUUID.test(data.vehicleId)) dbData.vehicle_id  = data.vehicleId;
-          if (isUUID.test(data.custId))    dbData.customer_id = data.custId;
-          updateJob(j.id, dbData).catch(e => console.warn('[Jobs] updateJob Supabase error:', e));
-        } else if (typeof addJob === 'function') {
-          // Local ID → create in Supabase, replace local ID
-          addJob(data.vehicleId, data.custId, data.complaint, data.assignTo, data.mileage, data.note, j.no)
-            .then(result => { if (result?.id) { j.id = result.id; localStorage.setItem(DB_KEY, JSON.stringify(S)); } })
-            .catch(e => console.warn('[Jobs] addJob (upsert) error:', e));
+      const isUUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+      if (useSupabase && isUUID.test(j.id)) {
+        if (typeof updateJobAtomic !== 'function') return showToast('บริการอัปเดตงานไม่พร้อมใช้งาน', 'err');
+        const dbData = {
+          complaint: data.complaint || null,
+          mileage: data.mileage || 0,
+          note: data.note || null,
+          assign_to: isUUID.test(data.assignTo) ? data.assignTo : null,
+          status_id: (data.status || 0) + 1,
+        };
+        if (isUUID.test(data.vehicleId)) dbData.vehicle_id = data.vehicleId;
+        if (isUUID.test(data.custId)) dbData.customer_id = data.custId;
+        try {
+          const saved = await updateJobAtomic(j.id,j.status + 1,j.updatedAt,dbData);
+          data.updatedAt = saved.updated_at;
+        } catch (error) {
+          console.error('[Jobs] atomic update failed:',error);
+          showToast('อัปเดตงานไม่สำเร็จ กรุณาโหลดข้อมูลใหม่แล้วลองอีกครั้ง', 'err');
+          return;
         }
+      } else if (useSupabase && typeof addJob === 'function') {
+        const result = await addJob(data.vehicleId,data.custId,data.complaint,data.assignTo,data.mileage,data.note,j.no);
+        if (!result?.id) return showToast('อัปเดตงานไม่สำเร็จ', 'err');
+        j.id = result.id;
+        data.updatedAt = result.updated_at;
       }
+      Object.assign(j,data);
+      if (mile && v) v.mileage = mile;
     } else {
       const no = nextSeqNo('job').replace('job-', 'JOB-');
       const newJob = {
@@ -549,10 +544,18 @@ function openJobDetail(jid) {
       );
       if (!ok) return;
       const oldStatus = j.status;
-      j.status = newStatus;
-      if (useSupabase && j.id && typeof updateJob === 'function') {
-        updateJob(j.id, { status_id: j.status + 1 }).catch(e => console.warn('[Jobs] status sync failed:', e));
+      if (useSupabase) {
+        try {
+          if (typeof updateJobAtomic !== 'function') throw new Error('Atomic job update service is unavailable');
+          const saved = await updateJobAtomic(j.id,oldStatus + 1,j.updatedAt,{ status_id: newStatus + 1 });
+          j.updatedAt = saved.updated_at;
+        } catch (error) {
+          console.error('[Jobs] atomic status update failed:',error);
+          showToast('เปลี่ยนสถานะไม่สำเร็จ กรุณาโหลดข้อมูลใหม่แล้วลองอีกครั้ง', 'err');
+          return;
+        }
       }
+      j.status = newStatus;
       if (typeof addAuditLog === 'function') {
         addAuditLog('JOB_STATUS_CHANGE', 'job', j.id, j.no,
           { from: JOB_STATUS[oldStatus], to: JOB_STATUS[newStatus] });
@@ -598,10 +601,20 @@ function openJobDetail(jid) {
       }
     }
     if (urls.length) {
-      j.images = [...(j.images || []), ...urls];
-      if (useSupabase && j.id && typeof updateJob === 'function') {
-        updateJob(j.id, { images: j.images }).catch(() => {});
+      const images = [...(j.images || []),...urls];
+      if (useSupabase) {
+        try {
+          if (typeof updateJobAtomic !== 'function') throw new Error('Atomic job update service is unavailable');
+          const saved = await updateJobAtomic(j.id,j.status + 1,j.updatedAt,{ images });
+          j.updatedAt = saved.updated_at;
+        } catch (error) {
+          console.error('[Jobs] atomic image update failed:',error);
+          if (st) st.textContent = 'บันทึกรูปไม่สำเร็จ';
+          showToast('บันทึกรูปไม่สำเร็จ กรุณาลองใหม่', 'err');
+          return;
+        }
       }
+      j.images = images;
       await saveData();
       openJobDetail(jid);
       showToast(`เพิ่มรูป ${urls.length} รูปแล้ว`);
@@ -621,10 +634,19 @@ function openJobDetail(jid) {
   ov.querySelectorAll('[data-del-img]').forEach(btn => {
     btn.addEventListener('click', async () => {
       const idx = parseInt(btn.dataset.delImg);
-      j.images = (j.images || []).filter((_,i) => i !== idx);
-      if (useSupabase && j.id && typeof updateJob === 'function') {
-        updateJob(j.id, { images: j.images }).catch(() => {});
+      const images = (j.images || []).filter((_,i) => i !== idx);
+      if (useSupabase) {
+        try {
+          if (typeof updateJobAtomic !== 'function') throw new Error('Atomic job update service is unavailable');
+          const saved = await updateJobAtomic(j.id,j.status + 1,j.updatedAt,{ images });
+          j.updatedAt = saved.updated_at;
+        } catch (error) {
+          console.error('[Jobs] atomic image removal failed:',error);
+          showToast('ลบรูปไม่สำเร็จ กรุณาโหลดข้อมูลใหม่แล้วลองอีกครั้ง', 'err');
+          return;
+        }
       }
+      j.images = images;
       await saveData();
       openJobDetail(jid);
     });

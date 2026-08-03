@@ -590,7 +590,8 @@ function convertSupabaseToState(dbData) {
       status: (j.status_id || 1) - 1,
       note: j.note,
       requisitions: [],
-      createdAt: new Date(j.created_at).getTime()
+      createdAt: new Date(j.created_at).getTime(),
+      updatedAt: j.updated_at || null
     }));
   }
 

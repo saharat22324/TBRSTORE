@@ -399,24 +399,18 @@ async function addJob(vehicleId, customerId, complaint, assignTo, mileage, note,
   }
 }
 
-async function updateJob(jobId, updates) {
-  try {
-    const { data, error } = await getSupabase()
-      .from('jobs')
-      .update({
-        ...updates,
-        updated_at: new Date().toISOString()
-      })
-      .eq('id', jobId)
-      .select()
-      .single();
-    
-    if (error) throw error;
-    return data;
-  } catch (err) {
-    console.error('[Service] updateJob error:', err);
-    return null;
+async function updateJobAtomic(jobId, expectedStatusId, expectedUpdatedAt, updates) {
+  const { data, error } = await getSupabase().rpc('update_job_atomic', {
+    p_job_id: jobId,
+    p_expected_status_id: expectedStatusId,
+    p_expected_updated_at: expectedUpdatedAt || null,
+    p_updates: updates,
+  });
+  if (error) {
+    reportSupabaseWriteError(error, 'updateJobAtomic');
+    throw error;
   }
+  return data;
 }
 
 async function deleteJob(jobId) {
