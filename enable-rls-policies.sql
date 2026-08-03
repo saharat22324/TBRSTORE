@@ -1,7 +1,8 @@
 -- ════════════════════════════════════════════════════════════════════════════════
--- ENABLE RLS POLICIES for TBR Service Center
--- Production Security - Role-Based Access Control
 -- ════════════════════════════════════════════════════════════════════════════════
+-- Execution Guard
+\echo 'BLOCKED: legacy permissive RLS script is superseded by production-role-policies.sql.'
+\quit
 
 -- First, enable RLS on all tables
 ALTER TABLE "users" ENABLE ROW LEVEL SECURITY;

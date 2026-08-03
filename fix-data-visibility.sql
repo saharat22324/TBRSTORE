@@ -4,9 +4,9 @@
 -- ═══════════════════════════════════════════════════════════════════
 
 -- ─────────────────────────────────────────────────────────────────
--- 1. ตารางหลักที่ต้องให้ทุกคนในทีมเห็นร่วมกัน
---    → ปิด RLS หรือ อนุญาตให้ authenticated users อ่านได้ทุก row
--- ─────────────────────────────────────────────────────────────────
+-- Execution Guard
+\echo 'BLOCKED: legacy script can expose cross-user data and must not run in Production.'
+\quit
 
 -- invoices ─── ยอดขาย/บิล (สำคัญที่สุด)
 ALTER TABLE invoices ENABLE ROW LEVEL SECURITY;
