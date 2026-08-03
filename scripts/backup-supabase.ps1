@@ -33,7 +33,10 @@ $dumpPath = Join-Path $OutputDirectory "tbr-production-$stamp.dump"
 $manifestPath = Join-Path $OutputDirectory "tbr-production-$stamp.sha256"
 
 & $PgDumpPath $DatabaseUrl --format=custom --no-owner --no-acl --file=$dumpPath
-if ($LASTEXITCODE -ne 0) { throw "pg_dump failed with exit code $LASTEXITCODE" }
+if ($LASTEXITCODE -ne 0) {
+  Remove-Item $dumpPath -Force -ErrorAction SilentlyContinue
+  throw "pg_dump failed with exit code $LASTEXITCODE"
+}
 
 $hash = (Get-FileHash -Algorithm SHA256 -Path $dumpPath).Hash.ToLowerInvariant()
 "$hash  $([IO.Path]::GetFileName($dumpPath))" | Set-Content -Encoding ascii $manifestPath
