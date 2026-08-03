@@ -13,12 +13,18 @@ const TABS = [
   { id:'settings',  label:'ตั้งค่า',          icon:'<circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l-.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/>' },
 ];
 
+function canAccessTab(tabId) {
+  if (tabId === 'report') return hasPermission('canViewReports');
+  if (tabId === 'settings') return hasPermission('canManageTeam');
+  return true;
+}
+
 /* ── Render navigation tabs ── */
 function renderNav() {
   const lowStock = S.stockItems.filter(i => i.qty <= i.reorder).length;
   const openJobs = S.jobs.filter(j => j.status < 5).length;
 
-  document.getElementById('NT').innerHTML = TABS.map(t => {
+  document.getElementById('NT').innerHTML = TABS.filter(t => canAccessTab(t.id)).map(t => {
     let pip = '';
     if (t.id === 'stock'     && lowStock)                                    pip = `<span class="pip">${lowStock}</span>`;
     if (t.id === 'jobs'      && openJobs)                                    pip = `<span class="pip">${openJobs}</span>`;
@@ -73,6 +79,11 @@ function renderNav() {
 /* ── Route to the correct panel module ── */
 function renderPanel() {
   const root = document.getElementById('root');
+
+  if (!canAccessTab(currentTab)) {
+    currentTab = 'dash';
+    renderNav();
+  }
 
   switch (currentTab) {
     case 'dash':      root.innerHTML = dashboardHTML();  bindDashboard();  break;
