@@ -1138,32 +1138,9 @@ function mergeLocalStorageIntoS() {
     }
     // Always repair any invoice items where cost > sell (data entry errors)
     repairInvoiceCosts();
-    // Push corrected costs back to Supabase (repairs old invoices)
-    if (window.supabaseReady) {
-      pushCostsToSupabase().catch(e => console.warn('[DB] pushCostsToSupabase failed:', e));
-    }
   } catch (e) {
     console.warn('[DB] mergeLocalStorageIntoS error:', e);
   }
-}
-
-/**
- * Push corrected item costs from memory back to Supabase invoice_items.
- * Only updates rows where _itemId (Supabase UUID) is known and cost > 0.
- */
-async function pushCostsToSupabase() {
-  if (typeof updateInvoiceItemCosts !== 'function') return;
-  const updates = [];
-  for (const inv of (S.invoices || [])) {
-    for (const it of (inv.items || [])) {
-      if (it._itemId && it.cost > 0) {
-        updates.push({ id: it._itemId, cost_price: it.cost });
-      }
-    }
-  }
-  if (updates.length === 0) return;
-  const updated = await updateInvoiceItemCosts(updates);
-  if (updated > 0) console.log(`[DB] ✅ Pushed cost to ${updated} old invoice items in Supabase`);
 }
 
 /**
