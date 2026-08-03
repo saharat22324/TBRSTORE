@@ -24,15 +24,21 @@ jobs:
           base="https://tbrstore.vercel.app"
           login="$(curl --fail --silent --show-error --location --retry 2 --max-time 20 "$base/login.html")"
           nav="$(curl --fail --silent --show-error --retry 2 --max-time 20 "$base/js/nav.js?monitor=1")"
-          service="$(curl --fail --silent --show-error --retry 2 --max-time 20 "$base/js/supabaseService.js?v=35&monitor=1")"
+          service="$(curl --fail --silent --show-error --retry 2 --max-time 20 "$base/js/supabaseService.js?v=36&monitor=1")"
           jobs="$(curl --fail --silent --show-error --retry 2 --max-time 20 "$base/js/jobs.js?v=31&monitor=1")"
+          stock="$(curl --fail --silent --show-error --retry 2 --max-time 20 "$base/js/stock.js?v=32&monitor=1")"
+          purchasing="$(curl --fail --silent --show-error --retry 2 --max-time 20 "$base/js/purchasing.js?v=31&monitor=1")"
           grep -q 'id="loginUsername"' <<<"$login"
           grep -q 'function canAccessTab' <<<"$nav"
           grep -q "rpc('create_requisition_atomic'" <<<"$service"
+          grep -q "rpc('adjust_stock_atomic'" <<<"$service"
+          grep -q "rpc('receive_purchase_order_atomic'" <<<"$service"
           grep -q 'canManageStock' <<<"$service"
           grep -q 'await addRequisition' <<<"$jobs"
-          if grep -q 'updateStockBySku' <<<"$jobs"; then
-            echo "Unsafe direct stock synchronization detected in deployed jobs.js"
+          grep -q 'await adjustStockAtomic' <<<"$stock"
+          grep -q 'await receivePurchaseOrderAtomic' <<<"$purchasing"
+          if grep -q 'updateStockBySku' <<<"$jobs$stock$purchasing"; then
+            echo "Unsafe direct stock synchronization detected in a deployed workflow"
             exit 1
           fi
           echo "Production login and safety assets verified"
