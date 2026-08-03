@@ -364,39 +364,24 @@ async function deleteVehicle(vehicleId) {
  * === JOBS ===
  */
 
-async function addJob(vehicleId, customerId, complaint, assignTo, mileage, note, jobNo) {
-  try {
-    // ใช้เลขงานที่แอปสร้างไว้ก่อน → ถ้าไม่มี ค่อยลอง RPC → สุดท้าย gen เอง (กัน job_number = null ที่ทำให้ insert พัง)
-    const jobNum = jobNo || await getNextJobNumber() || ('JOB-' + Date.now());
-
-    // Validate UUIDs — local IDs must not be sent as FK references
-    const uuidRe = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-    const safeVehicleId  = vehicleId  && uuidRe.test(vehicleId)  ? vehicleId  : null;
-    const safeCustomerId = customerId && uuidRe.test(customerId) ? customerId : null;
-    const safeAssignTo   = assignTo   && uuidRe.test(assignTo)   ? assignTo   : null;
-    
-    const { data, error } = await getSupabase()
-      .from('jobs')
-      .insert([{
-        job_number: jobNum,
-        vehicle_id: safeVehicleId,
-        customer_id: safeCustomerId,
-        complaint,
-        assign_to: safeAssignTo,
-        mileage,
-        note,
-        status_id: 1, // เปิดงาน
-        created_by: currentUser?.id
-      }])
-      .select()
-      .single();
-    
-    if (error) throw error;
-    return data;
-  } catch (err) {
-    reportSupabaseWriteError(err, 'addJob');
-    return null;
+async function createJobAtomic(vehicleId,customerId,complaint,assignTo,mileage,note,jobNo) {
+  const uuidRe = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+  if (!uuidRe.test(vehicleId) || !uuidRe.test(customerId)) throw new Error('Job requires cloud vehicle and customer records');
+  const jobNumber = jobNo || await getNextJobNumber() || ('JOB-' + Date.now());
+  const { data, error } = await getSupabase().rpc('create_job_atomic', {
+    p_job_number: jobNumber,
+    p_vehicle_id: vehicleId,
+    p_customer_id: customerId,
+    p_complaint: complaint || null,
+    p_assign_to: uuidRe.test(assignTo) ? assignTo : null,
+    p_mileage: mileage ?? null,
+    p_note: note || null,
+  });
+  if (error) {
+    reportSupabaseWriteError(error, 'createJobAtomic');
+    throw error;
   }
+  return data;
 }
 
 async function updateJobAtomic(jobId, expectedStatusId, expectedUpdatedAt, updates) {

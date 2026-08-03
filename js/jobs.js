@@ -295,8 +295,8 @@ function openJobModal(jid, prefVid) {
           showToast('อัปเดตงานไม่สำเร็จ กรุณาโหลดข้อมูลใหม่แล้วลองอีกครั้ง', 'err');
           return;
         }
-      } else if (useSupabase && typeof addJob === 'function') {
-        const result = await addJob(data.vehicleId,data.custId,data.complaint,data.assignTo,data.mileage,data.note,j.no);
+      } else if (useSupabase && typeof createJobAtomic === 'function') {
+        const result = await createJobAtomic(data.vehicleId,data.custId,data.complaint,data.assignTo,data.mileage,data.note,j.no);
         if (!result?.id) return showToast('อัปเดตงานไม่สำเร็จ', 'err');
         j.id = result.id;
         data.updatedAt = result.updated_at;
@@ -312,17 +312,22 @@ function openJobModal(jid, prefVid) {
         requisitions: [],
         ...data,
       };
-      S.jobs.push(newJob);
-      // เขียนขึ้น Supabase ก่อน แล้วใช้ผลจริง (รอผล ไม่ใช่ fire-and-forget)
-      if (useSupabase && typeof addJob === 'function') {
+      if (useSupabase) {
         try {
-          const result = await addJob(data.vehicleId, data.custId, data.complaint, data.assignTo, data.mileage, data.note, no);
-          if (result?.id) {
-            newJob.id = result.id;     // ใช้ UUID จริงจาก Supabase
-            _newJobCloudOk = true;
-          }
-        } catch (e) { console.warn('[Jobs] addJob Supabase error:', e); }
+          if (typeof createJobAtomic !== 'function') throw new Error('Atomic job creation service is unavailable');
+          const result = await createJobAtomic(data.vehicleId,data.custId,data.complaint,data.assignTo,data.mileage,data.note,no);
+          if (!result?.id) throw new Error('Atomic job creation returned no job');
+          newJob.id = result.id;
+          newJob.updatedAt = result.updated_at;
+          _newJobCloudOk = true;
+        } catch (error) {
+          console.error('[Jobs] atomic creation failed:',error);
+          showToast('เปิดงานไม่สำเร็จ กรุณาลองใหม่', 'err');
+          return;
+        }
       }
+      S.jobs.push(newJob);
+      if (mile && v) v.mileage = mile;
     }
 
     await saveData();

@@ -200,6 +200,27 @@ def main() -> int:
         r"CREATE POLICY prod_jobs_update",
         "job updates must remain RPC-only",
     )
+    require(
+        "20260811_atomic_job_creation.sql",
+        r"CREATE OR REPLACE FUNCTION create_job_atomic[\s\S]*pg_advisory_xact_lock[\s\S]*FOR UPDATE[\s\S]*UPDATE vehicles[\s\S]*INSERT INTO jobs",
+        "job creation and vehicle mileage updates must be atomic",
+    )
+    require(
+        "js/jobs.js",
+        r"await createJobAtomic[\s\S]*S\.jobs\.push\(newJob\)",
+        "local job creation must follow server success",
+    )
+    for path in ("js/supabaseService.js", "js/jobs.js", "js/db.js"):
+        forbid(
+            path,
+            r"\baddJob\(",
+            "job creation must not use direct inserts",
+        )
+    forbid(
+        "production-role-policies.sql",
+        r"CREATE POLICY prod_jobs_insert",
+        "job creation must remain RPC-only",
+    )
 
     if ERRORS:
         print("Repository validation failed:")

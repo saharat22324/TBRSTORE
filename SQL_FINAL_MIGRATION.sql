@@ -360,11 +360,9 @@ DROP POLICY IF EXISTS "jobs_update" ON jobs;
 DROP POLICY IF EXISTS "jobs_delete" ON jobs;
 CREATE POLICY "jobs_select" ON jobs
   FOR SELECT USING (auth.uid() IS NOT NULL);
-CREATE POLICY "jobs_insert" ON jobs
-  FOR INSERT WITH CHECK (auth_role() IN ('admin', 'supervisor'));
 CREATE POLICY "jobs_delete" ON jobs
   FOR DELETE USING (auth_role() = 'admin');
--- Job updates use a SECURITY DEFINER atomic RPC.
+-- Job creation and updates use SECURITY DEFINER atomic RPCs.
 
 -- ▶ STOCK_ITEMS: all authenticated can read qty/name, admin/supervisor can modify
 DROP POLICY IF EXISTS "stock_items_select" ON stock_items;
