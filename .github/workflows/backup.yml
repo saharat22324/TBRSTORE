@@ -63,7 +63,7 @@ jobs:
           python scripts/backup-supabase.py "${args[@]}"
           test "$(find backups-ci -type f -name '*.dump' | wc -l)" -eq 0
           test "$(find backups-ci -type f -name '*.dump.gpg' | wc -l)" -eq 1
-          sha256sum --check backups-ci/*.sha256
+          (cd backups-ci && sha256sum --check *.sha256)
 
       - name: Store encrypted backup for 30 days
         uses: actions/upload-artifact@v4
