@@ -85,6 +85,21 @@ def main() -> int:
         r"updateStockBySku",
         "purchase-order receiving must not write quantity directly",
     )
+    require(
+        "js/stock.js",
+        r"await saveStockItemAtomic",
+        "stock item saves must await their atomic RPC",
+    )
+    forbid(
+        "js/stock.js",
+        r"upsertStockItemBySku",
+        "stock item UI must not use direct upserts",
+    )
+    forbid(
+        "production-role-policies.sql",
+        r"CREATE POLICY prod_stock_(insert|update)",
+        "stock item insert/update policies must remain RPC-only",
+    )
 
     if ERRORS:
         print("Repository validation failed:")

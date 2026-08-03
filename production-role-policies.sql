@@ -130,12 +130,12 @@ CREATE POLICY prod_invoice_items_update ON invoice_items FOR UPDATE TO authentic
 CREATE POLICY prod_invoice_items_delete ON invoice_items FOR DELETE TO authenticated
   USING (current_app_role() = 'admin' AND EXISTS (SELECT 1 FROM invoices i WHERE i.id = invoice_id AND i.status <> 'cancelled'));
 
+DROP POLICY IF EXISTS prod_stock_read ON stock_items;
+DROP POLICY IF EXISTS prod_stock_insert ON stock_items;
+DROP POLICY IF EXISTS prod_stock_update ON stock_items;
+DROP POLICY IF EXISTS prod_stock_delete ON stock_items;
 CREATE POLICY prod_stock_read ON stock_items FOR SELECT TO authenticated USING (TRUE);
-CREATE POLICY prod_stock_insert ON stock_items FOR INSERT TO authenticated
-  WITH CHECK (current_app_role() IN ('admin','supervisor'));
-CREATE POLICY prod_stock_update ON stock_items FOR UPDATE TO authenticated
-  USING (current_app_role() IN ('admin','supervisor'))
-  WITH CHECK (current_app_role() IN ('admin','supervisor'));
+-- Stock creation, metadata edits, and quantity changes use SECURITY DEFINER atomic RPCs.
 CREATE POLICY prod_stock_delete ON stock_items FOR DELETE TO authenticated
   USING (current_app_role() = 'admin');
 

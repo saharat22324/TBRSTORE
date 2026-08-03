@@ -568,6 +568,25 @@ async function upsertStockItemBySku(item) {
   }
 }
 
+async function saveStockItemAtomic(item, originalSku = null, expectedQuantity = null) {
+  const { data, error } = await getSupabase().rpc('save_stock_item_atomic', {
+    p_original_sku: originalSku,
+    p_sku: item.id,
+    p_name: item.name,
+    p_unit: item.unit || 'ชิ้น',
+    p_cost_price: item.cost || 0,
+    p_sell_price: item.sell || 0,
+    p_reorder_level: item.reorder || 0,
+    p_initial_quantity: originalSku ? 0 : (item.qty || 0),
+    p_expected_quantity: expectedQuantity,
+  });
+  if (error) {
+    reportSupabaseWriteError(error, 'saveStockItemAtomic');
+    throw error;
+  }
+  return data;
+}
+
 /**
  * Delete stock item by SKU
  */

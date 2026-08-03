@@ -376,7 +376,7 @@ function openStockItemModal(id) {
         <div class="fgrid c2">
           <div class="fld">
             <label>ยอดคงคลัง</label>
-            <input id="siQty" type="number" step="0.5" value="${m ? numFmt(m.qty) : 0}">
+            <input id="siQty" type="number" min="0" step="0.5" value="${m ? numFmt(m.qty) : 0}" ${m ? 'disabled' : ''}>
           </div>
           <div class="fld">
             <label>จุดสั่งซื้อ (reorder point)</label>
@@ -417,19 +417,24 @@ function openStockItemModal(id) {
       used:    m?.used ?? 0,
     };
 
-    if (m) {
-      Object.assign(m, data);
-      // Sync edit to Supabase
-      if (useSupabase && typeof upsertStockItemBySku === 'function') {
-        upsertStockItemBySku(data).catch(e => console.warn('[Stock] edit sync failed:', e));
+    const saveButton = ov.querySelector('#mOk');
+    saveButton.disabled = true;
+    try {
+      if (useSupabase) {
+        if (typeof saveStockItemAtomic !== 'function') throw new Error('Atomic stock item service is unavailable');
+        const saved = await saveStockItemAtomic(data, m?.id || null, m ? parseFloat(m.qty) || 0 : null);
+        data.qty = parseFloat(saved.quantity) || 0;
+        data._uuid = saved.id;
       }
-    } else {
-      S.stockItems.push(data);
-      // Sync new item to Supabase
-      if (useSupabase && typeof upsertStockItemBySku === 'function') {
-        upsertStockItemBySku(data).catch(e => console.warn('[Stock] add sync failed:', e));
-      }
+    } catch (error) {
+      console.error('[Stock] atomic item save failed:', error);
+      showToast('บันทึกรายการไม่สำเร็จ กรุณาโหลดข้อมูลใหม่แล้วลองอีกครั้ง', 'err');
+      saveButton.disabled = false;
+      return;
     }
+
+    if (m) Object.assign(m, data);
+    else S.stockItems.push(data);
 
     await saveData();
     closeMod();
