@@ -435,13 +435,7 @@ DROP POLICY IF EXISTS "purchase_orders_update" ON purchase_orders;
 DROP POLICY IF EXISTS "purchase_orders_delete" ON purchase_orders;
 CREATE POLICY "purchase_orders_select" ON purchase_orders
   FOR SELECT USING (auth_role() IN ('admin', 'supervisor'));
-CREATE POLICY "purchase_orders_insert" ON purchase_orders
-  FOR INSERT WITH CHECK (auth_role() IN ('admin', 'supervisor'));
-CREATE POLICY "purchase_orders_update" ON purchase_orders
-  FOR UPDATE USING (auth_role() IN ('admin', 'supervisor'))
-  WITH CHECK (auth_role() IN ('admin', 'supervisor'));
-CREATE POLICY "purchase_orders_delete" ON purchase_orders
-  FOR DELETE USING (auth_role() = 'admin');
+-- Purchase-order writes use SECURITY DEFINER atomic RPCs.
 
 -- ▶ EXPENSES (existing table): admin only
 DROP POLICY IF EXISTS "expenses_select" ON expenses;

@@ -1226,44 +1226,31 @@ async function getQuotes() {
 /* ══════════════════════════════════════
    PURCHASE ORDERS
 ══════════════════════════════════════ */
-async function addPO(no, supplier, items, total, note) {
-  try {
-    const row = {
-      no,
-      supplier:   supplier || null,
-      status:     'pending',
-      items:      items    || [],
-      total:      parseFloat(total) || 0,
-      note:       note     || null,
-      created_by: currentUser?.id || null,
-    };
-    const { data, error } = await getSupabase()
-      .from('purchase_orders')
-      .insert([row])
-      .select()
-      .single();
-    if (error) throw error;
-    return data;
-  } catch (err) {
-    console.error('[Service] addPO error:', err);
-    return null;
+async function createPurchaseOrderAtomic(no, supplier, items, total, note) {
+  const { data, error } = await getSupabase().rpc('create_purchase_order_atomic', {
+    p_no: no,
+    p_supplier: supplier,
+    p_items: items || [],
+    p_total: parseFloat(total) || 0,
+    p_note: note || null,
+  });
+  if (error) {
+    reportSupabaseWriteError(error, 'createPurchaseOrderAtomic');
+    throw error;
   }
+  return data;
 }
 
-async function updatePO(poId, updates) {
-  try {
-    const { data, error } = await getSupabase()
-      .from('purchase_orders')
-      .update(updates)
-      .eq('id', poId)
-      .select()
-      .single();
-    if (error) throw error;
-    return data;
-  } catch (err) {
-    console.error('[Service] updatePO error:', err);
-    return null;
+async function cancelPurchaseOrderAtomic(poId, reason = null) {
+  const { data, error } = await getSupabase().rpc('cancel_purchase_order_atomic', {
+    p_purchase_order_id: poId,
+    p_reason: reason,
+  });
+  if (error) {
+    reportSupabaseWriteError(error, 'cancelPurchaseOrderAtomic');
+    throw error;
   }
+  return data;
 }
 
 async function receivePurchaseOrderAtomic(poId, receipts, items, note) {
@@ -1278,20 +1265,6 @@ async function receivePurchaseOrderAtomic(poId, receipts, items, note) {
     throw error;
   }
   return data;
-}
-
-async function deletePO(poId) {
-  try {
-    const { error } = await getSupabase()
-      .from('purchase_orders')
-      .delete()
-      .eq('id', poId);
-    if (error) throw error;
-    return true;
-  } catch (err) {
-    console.error('[Service] deletePO error:', err);
-    return false;
-  }
 }
 
 async function getPOs() {

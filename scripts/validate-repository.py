@@ -135,6 +135,36 @@ def main() -> int:
         r"quantity NUMERIC\(12,3\)[\s\S]*WHERE s\.active",
         "secure stock reads must preserve fractions and hide archived items",
     )
+    require(
+        "20260809_atomic_purchase_order_lifecycle.sql",
+        r"CREATE OR REPLACE FUNCTION create_purchase_order_atomic[\s\S]*pg_advisory_xact_lock",
+        "purchase-order creation must be atomic and number locked",
+    )
+    require(
+        "20260809_atomic_purchase_order_lifecycle.sql",
+        r"CREATE OR REPLACE FUNCTION cancel_purchase_order_atomic[\s\S]*FOR UPDATE[\s\S]*status<>'pending'",
+        "purchase-order cancellation must lock and guard pending status",
+    )
+    require(
+        "js/purchasing.js",
+        r"await createPurchaseOrderAtomic[\s\S]*S\.purchaseOrders\.push\(po\)",
+        "local purchase-order creation must follow server success",
+    )
+    require(
+        "js/purchasing.js",
+        r"await cancelPurchaseOrderAtomic[\s\S]*po\.status = 'cancelled'",
+        "local purchase-order cancellation must follow server success",
+    )
+    forbid(
+        "js/purchasing.js",
+        r"\b(addPO|updatePO|deletePO)\(",
+        "purchase-order UI must not use direct writes",
+    )
+    forbid(
+        "production-role-policies.sql",
+        r"CREATE POLICY prod_purchase_orders_(insert|update|delete)",
+        "purchase-order writes must remain RPC-only",
+    )
 
     if ERRORS:
         print("Repository validation failed:")

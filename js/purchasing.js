@@ -320,20 +320,23 @@ function openNewPOModal() {
       receivedAt: null,
     };
 
+    const saveButton = sel('poSave');
+    saveButton.disabled = true;
+    try {
+      if (useSupabase) {
+        if (typeof createPurchaseOrderAtomic !== 'function') throw new Error('Atomic PO creation service is unavailable');
+        const saved = await createPurchaseOrderAtomic(po.no,po.supplier,po.items,po.total,po.note);
+        po.id = saved.id;
+      }
+    } catch (error) {
+      console.error('[PO] atomic creation failed:',error);
+      showToast('สร้าง PO ไม่สำเร็จ กรุณาลองใหม่', 'err');
+      saveButton.disabled = false;
+      return;
+    }
+
     if (!S.purchaseOrders) S.purchaseOrders = [];
     S.purchaseOrders.push(po);
-
-    // Save to Supabase
-    if (useSupabase && typeof addPO === 'function') {
-      addPO(po.no, po.supplier, po.items, po.total, po.note)
-        .then(result => {
-          if (result?.id) {
-            po.id = result.id;
-            localStorage.setItem(DB_KEY, JSON.stringify(S));
-          }
-        })
-        .catch(e => console.warn('[PO] Supabase save failed:', e));
-    }
 
     await saveData();
     closeMod();
@@ -420,14 +423,17 @@ function openPODetail(poId) {
 
   ov.querySelector('#cancelPOBtn')?.addEventListener('click', async () => {
     if (!confirm(`ยกเลิก PO ${po.no} ?`)) return;
-    po.status = 'cancelled';
-
-    if (useSupabase && typeof updatePO === 'function') {
-      const _uuidRe = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-      if (_uuidRe.test(po.id)) {
-        updatePO(po.id, { status: 'cancelled' }).catch(() => {});
+    try {
+      if (useSupabase) {
+        if (typeof cancelPurchaseOrderAtomic !== 'function') throw new Error('Atomic PO cancellation service is unavailable');
+        await cancelPurchaseOrderAtomic(po.id);
       }
+    } catch (error) {
+      console.error('[PO] atomic cancellation failed:',error);
+      showToast('ยกเลิก PO ไม่สำเร็จ กรุณาโหลดข้อมูลใหม่แล้วลองอีกครั้ง', 'err');
+      return;
     }
+    po.status = 'cancelled';
 
     await saveData();
     closeMod();

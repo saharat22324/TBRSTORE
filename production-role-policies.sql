@@ -11,6 +11,7 @@ ALTER TABLE invoices ENABLE ROW LEVEL SECURITY;
 ALTER TABLE invoice_items ENABLE ROW LEVEL SECURITY;
 ALTER TABLE stock_items ENABLE ROW LEVEL SECURITY;
 ALTER TABLE requisitions ENABLE ROW LEVEL SECURITY;
+ALTER TABLE purchase_orders ENABLE ROW LEVEL SECURITY;
 ALTER TABLE expenses ENABLE ROW LEVEL SECURITY;
 ALTER TABLE shop_config ENABLE ROW LEVEL SECURITY;
 ALTER TABLE audit_logs ENABLE ROW LEVEL SECURITY;
@@ -29,7 +30,7 @@ BEGIN
     WHERE schemaname = 'public'
       AND tablename IN (
         'customers', 'vehicles', 'jobs', 'invoices', 'invoice_items',
-        'stock_items', 'requisitions', 'expenses', 'shop_config', 'audit_logs'
+        'stock_items', 'requisitions', 'purchase_orders', 'expenses', 'shop_config', 'audit_logs'
       )
   LOOP
     EXECUTE format(
@@ -148,6 +149,10 @@ DROP POLICY IF EXISTS prod_requisitions_update ON requisitions;
 DROP POLICY IF EXISTS prod_requisitions_delete ON requisitions;
 CREATE POLICY prod_requisitions_read ON requisitions FOR SELECT TO authenticated USING (TRUE);
 -- Requisition writes use atomic RPCs so stock and ledger changes share a transaction.
+
+CREATE POLICY prod_purchase_orders_read ON purchase_orders FOR SELECT TO authenticated
+  USING (current_app_role() IN ('admin','supervisor'));
+-- Purchase-order create/receive/cancel operations use SECURITY DEFINER atomic RPCs.
 
 DROP POLICY IF EXISTS team_read_exp ON expenses;
 DROP POLICY IF EXISTS team_write_exp ON expenses;
