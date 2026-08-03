@@ -288,38 +288,57 @@ function bindDashboard() {
     _dashInterval = setInterval(async () => {
       if (currentTab === 'dash') {
         try {
-          const freshData = await getInvoices();
+          const [freshData, freshPayments] = await Promise.all([
+            getInvoices(),
+            typeof getInvoicePayments === 'function' ? getInvoicePayments() : Promise.resolve([]),
+          ]);
           if (freshData && freshData.length > 0) {
+            const paidByInvoice = new Map();
+            for (const payment of (freshPayments || [])) {
+              if (!payment.reversed_at) {
+                paidByInvoice.set(payment.invoice_id,
+                  (paidByInvoice.get(payment.invoice_id) || 0) + Number(payment.amount || 0));
+              }
+            }
             // Convert raw Supabase format to app state format
-            const converted = freshData.map(i => ({
-              id: i.id,
-              no: i.invoice_number,
-              ts: new Date(i.created_at).getTime(),
-              jobId: i.job_id,
-              cust: i.customer_name || i.customers?.name || '',
-              phone: i.phone || '',
-              plate: i.plate || i.vehicles?.plate || '',
-              model: i.car_model || i.model || '',
-              mileage: i.mileage,
-              ref: i.note || '',
-              paid: i.payment_status || false,
-              items: (i.invoice_items || []).map(it => ({
-                _itemId: it.id,
-                name: it.description,
-                unit: '',
-                qty: it.quantity,
-                price: it.unit_price,
-                cost: it.cost_price > 0 ? it.cost_price : 0,
-                itemType: it.item_type,
-                sid: it.stock_item_id,
-              })),
-              sub: i.subtotal,
-              disc: i.discount || 0,
-              vat: (i.vat > 0) ? fmt(Math.max(0, (i.subtotal || 0) - (i.discount || 0)) * 0.07) : 0,
-              grand: i.grand_total,
-              totalCost: 0,
-              note: i.note || ''
-            }));
+            const converted = freshData.map(i => {
+              const paidAmount = fmt(paidByInvoice.get(i.id) || 0);
+              const balance = fmt(Math.max(0, Number(i.grand_total || 0) - paidAmount));
+              return {
+                id: i.id,
+                no: i.invoice_number,
+                ts: new Date(i.created_at).getTime(),
+                jobId: i.job_id,
+                cust: i.customer_name || i.customers?.name || '',
+                phone: i.phone || '',
+                plate: i.plate || i.vehicles?.plate || '',
+                model: i.car_model || i.model || '',
+                mileage: i.mileage,
+                ref: i.note || '',
+                paid: Number(i.grand_total || 0) > 0 && balance <= 0.01,
+                paidAmount,
+                balance,
+                status: i.status || 'issued',
+                cancelledAt: i.cancelled_at ? new Date(i.cancelled_at).getTime() : null,
+                cancellationReason: i.cancellation_reason || '',
+                items: (i.invoice_items || []).map(it => ({
+                  _itemId: it.id,
+                  name: it.description,
+                  unit: '',
+                  qty: it.quantity,
+                  price: it.unit_price,
+                  cost: it.cost_price > 0 ? it.cost_price : 0,
+                  itemType: it.item_type,
+                  sid: it.stock_item_id,
+                })),
+                sub: i.subtotal,
+                disc: i.discount || 0,
+                vat: (i.vat > 0) ? fmt(Math.max(0, (i.subtotal || 0) - (i.discount || 0)) * 0.07) : 0,
+                grand: i.grand_total,
+                totalCost: 0,
+                note: i.note || ''
+              };
+            });
             // Preserve invoices that only exist in localStorage (not yet synced to Supabase)
             const supabaseNos = new Set(converted.map(i => i.no).filter(Boolean));
             const localOnly = S.invoices.filter(i => i.no && !supabaseNos.has(i.no));
