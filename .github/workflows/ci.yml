@@ -1,0 +1,41 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      - name: Validate repository invariants
+        run: python scripts/validate-repository.py
+
+      - name: Compile Python scripts
+        run: python -m compileall -q scripts
+
+      - name: Check browser JavaScript syntax
+        shell: bash
+        run: |
+          for file in js/*.js; do
+            node --check "$file"
+          done
+
+      - name: Check backup tooling
+        run: python scripts/backup-supabase.py --check
