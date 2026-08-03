@@ -205,7 +205,7 @@ CREATE TABLE IF NOT EXISTS stock_items (
   unit VARCHAR(50),
   cost_price DECIMAL(10, 2) NOT NULL,
   sell_price DECIMAL(10, 2) NOT NULL,
-  quantity INTEGER DEFAULT 0,
+  quantity NUMERIC(12, 3) DEFAULT 0,
   reorder_level INTEGER DEFAULT 10,
   supplier_id UUID REFERENCES suppliers(id),
   note TEXT,
@@ -224,7 +224,7 @@ CREATE TABLE IF NOT EXISTS stock_transactions (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   stock_item_id UUID NOT NULL REFERENCES stock_items(id) ON DELETE CASCADE,
   type VARCHAR(20) NOT NULL, -- 'in' | 'out' | 'adjust'
-  quantity INTEGER NOT NULL,
+  quantity NUMERIC(12, 3) NOT NULL,
   reference_type VARCHAR(50), -- 'job' | 'purchase' | 'adjustment' | 'requisition'
   reference_id UUID,
   note TEXT,
@@ -290,7 +290,7 @@ CREATE TABLE IF NOT EXISTS requisition_items (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   requisition_id UUID NOT NULL REFERENCES requisitions(id) ON DELETE CASCADE,
   stock_item_id UUID REFERENCES stock_items(id),
-  quantity INTEGER NOT NULL,
+  quantity NUMERIC(12, 3) NOT NULL,
   cost_price DECIMAL(10, 2),
   note TEXT,
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP

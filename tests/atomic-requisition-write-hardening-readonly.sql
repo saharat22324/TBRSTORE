@@ -35,6 +35,31 @@ BEGIN
   IF (SELECT COUNT(*) FROM pg_proc p JOIN pg_namespace n ON n.oid=p.pronamespace
       WHERE n.nspname='public' AND p.proname IN ('create_requisition_atomic','update_requisition_atomic','delete_requisition_atomic','delete_job_atomic')) <> 4
   THEN RAISE EXCEPTION 'Atomic requisition RPC is missing'; END IF;
+
+  IF EXISTS (
+    SELECT 1
+    FROM (VALUES
+      ('stock_items','quantity'),
+      ('stock_transactions','quantity'),
+      ('requisition_items','quantity')
+    ) expected(table_name,column_name)
+    LEFT JOIN information_schema.columns c
+      ON c.table_schema='public'
+     AND c.table_name=expected.table_name
+     AND c.column_name=expected.column_name
+    WHERE c.data_type<>'numeric'
+       OR c.numeric_precision<>12
+       OR c.numeric_scale<>3
+       OR c.column_name IS NULL
+  ) THEN RAISE EXCEPTION 'Fractional stock quantity column contract is invalid'; END IF;
+
+  IF EXISTS (
+    SELECT 1 FROM pg_proc p JOIN pg_namespace n ON n.oid=p.pronamespace
+    WHERE n.nspname='public'
+      AND p.proname IN ('create_requisition_atomic','update_requisition_atomic','delete_requisition_atomic')
+      AND (pg_get_functiondef(p.oid) ILIKE '%v_qty::INTEGER%'
+        OR pg_get_functiondef(p.oid) ILIKE '%positive whole number%')
+  ) THEN RAISE EXCEPTION 'Atomic requisition RPC still truncates fractional quantities'; END IF;
 END $$;
 
-SELECT 'atomic requisition and write hardening verified' AS result;
+SELECT 'atomic requisition, fractional quantity, and write hardening verified' AS result;

@@ -50,6 +50,16 @@ def main() -> int:
         r"updateStockBySku",
         "job requisitions must not update stock outside their RPC transaction",
     )
+    require(
+        "20260805_fractional_stock_quantities.sql",
+        r"ALTER COLUMN quantity TYPE NUMERIC\(12,3\)",
+        "fractional stock quantity migration is missing",
+    )
+    forbid(
+        "20260805_fractional_stock_quantities.sql",
+        r"v_qty::INTEGER|positive whole number",
+        "active requisition RPCs must preserve fractional quantities",
+    )
 
     if ERRORS:
         print("Repository validation failed:")
