@@ -496,7 +496,7 @@ function openReceivePOModal(poId) {
             </div>` : `<div style="font-size:.68rem;color:var(--fg3)">ไม่มีในสต๊อก (รับเข้าเฉยๆ)</div>`}
           </div>
           <div style="display:flex;align-items:center;gap:4px">
-            <input type="number" min="0" step="1" value="${it.recvQty}" data-ridx="${idx}"
+            <input type="number" min="0" step="${it.unit === 'ลิตร' ? '0.5' : '1'}" value="${it.recvQty}" data-ridx="${idx}"
                    style="width:70px;background:var(--ink);border:1px solid var(--ln2);
                           color:var(--fg);border-radius:7px;padding:6px 7px;font-size:.84rem;
                           outline:none;text-align:right">
@@ -529,6 +529,32 @@ function openReceivePOModal(poId) {
     const toReceive = recvItems.filter(it => it.recvQty > 0);
     if (!toReceive.length) return showToast('กรุณาระบุจำนวนที่รับอย่างน้อย 1 รายการ', 'err');
     const recvNote = sv('recvNote').trim();
+    const receivedItems = po.items.map(it => {
+      const received = toReceive.find(row => row.sid === it.sid && row.name === it.name);
+      return received ? { ...it, recvQty: received.recvQty } : it;
+    });
+    const receipts = toReceive.map(it => {
+      const stock = it.sid ? S.stockItems.find(row => row.id === it.sid) : null;
+      return {
+        sid: it.sid || null,
+        quantity: it.recvQty,
+        expected_quantity: stock ? parseFloat(stock.qty) || 0 : null,
+      };
+    });
+    const saveButton = sel('recvSave');
+    saveButton.disabled = true;
+
+    try {
+      if (useSupabase) {
+        if (typeof receivePurchaseOrderAtomic !== 'function') throw new Error('Atomic PO receiving service is unavailable');
+        await receivePurchaseOrderAtomic(po.id, receipts, receivedItems, recvNote);
+      }
+    } catch (error) {
+      console.error('[PO] atomic receive failed:', error);
+      showToast('รับสินค้าไม่สำเร็จ กรุณาโหลดข้อมูลใหม่แล้วลองอีกครั้ง', 'err');
+      saveButton.disabled = false;
+      return;
+    }
 
     /* Add qty to stock */
     for (const it of toReceive) {
@@ -538,36 +564,16 @@ function openReceivePOModal(poId) {
       st.qty  = fmt(parseFloat(st.qty) + parseFloat(it.recvQty));
       st.recv = fmt((st.recv || 0) + parseFloat(it.recvQty));
 
-      // Sync stock to Supabase
-      if (useSupabase && typeof updateStockBySku === 'function') {
-        updateStockBySku(st.id, st.qty).catch(() => {});
-      }
       // Record in ledger
       if (typeof addToLedger === 'function') {
-        addToLedger(st.id, 'in', it.recvQty, `รับตาม PO ${po.no}${recvNote ? ' — ' + recvNote : ''}`);
+        addToLedger(st.id, 'in', it.recvQty, `รับตาม PO ${po.no}${recvNote ? ' — ' + recvNote : ''}`, !useSupabase);
       }
     }
 
     /* Mark PO as received */
     po.status     = 'received';
     po.receivedAt = Date.now();
-    po.items      = po.items.map(it => {
-      const recv = toReceive.find(r => r.sid === it.sid && r.name === it.name);
-      return recv ? { ...it, recvQty: recv.recvQty } : it;
-    });
-
-    // Update Supabase
-    if (useSupabase && typeof updatePO === 'function') {
-      const _uuidRe = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-      if (_uuidRe.test(po.id)) {
-        updatePO(po.id, {
-          status:      'received',
-          received_at: new Date().toISOString(),
-          items:       po.items,
-          note:        recvNote || po.note || null,
-        }).catch(e => console.warn('[PO] receive sync failed:', e));
-      }
-    }
+    po.items      = receivedItems;
 
     await saveData();
     closeMod();

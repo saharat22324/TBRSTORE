@@ -60,6 +60,31 @@ def main() -> int:
         r"v_qty::INTEGER|positive whole number",
         "active requisition RPCs must preserve fractional quantities",
     )
+    require(
+        "20260806_atomic_stock_operations.sql",
+        r"CREATE OR REPLACE FUNCTION receive_purchase_order_atomic",
+        "atomic purchase-order receiving RPC is missing",
+    )
+    require(
+        "js/stock.js",
+        r"await adjustStockAtomic",
+        "manual stock adjustment must await its atomic RPC",
+    )
+    require(
+        "js/purchasing.js",
+        r"await receivePurchaseOrderAtomic",
+        "purchase-order receiving must await its atomic RPC",
+    )
+    forbid(
+        "js/stock.js",
+        r"updateStockBySku",
+        "manual stock adjustment must not write quantity directly",
+    )
+    forbid(
+        "js/purchasing.js",
+        r"updateStockBySku",
+        "purchase-order receiving must not write quantity directly",
+    )
 
     if ERRORS:
         print("Repository validation failed:")

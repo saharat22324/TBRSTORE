@@ -217,7 +217,7 @@ function bindStock() {
    STOCK ADJUSTMENT MODAL (รับเข้า / ตั้งยอด)
    + Log to Stock Ledger
 ══════════════════════════════════════ */
-function addToLedger(itemId, type, qty, note) {
+function addToLedger(itemId, type, qty, note, syncCloud = true) {
   const item = S.stockItems.find(i => i.id === itemId);
   if (!item) return;
 
@@ -235,7 +235,7 @@ function addToLedger(itemId, type, qty, note) {
   });
 
   // Save to Supabase in background (non-blocking)
-  if (window.useSupabase && typeof addStockLedgerEntry === 'function' && item._uuid) {
+  if (syncCloud && window.useSupabase && typeof addStockLedgerEntry === 'function' && item._uuid) {
     addStockLedgerEntry(item._uuid, type, qty, note).catch(e =>
       console.warn('[Stock] addStockLedgerEntry failed:', e)
     );
@@ -282,26 +282,41 @@ function openStockAdj(id, type) {
   ov.querySelector('#mOk').addEventListener('click', async () => {
     const q = parseFloat(sv('aQty')) || 0;
     const note = sv('aNote').trim();
-
-    if (type === 'in') {
-      m.qty  = fmt(m.qty + q);
-      m.recv = fmt((m.recv || 0) + q);
-      addToLedger(m.id, 'in', q, note);
-    } else {
-      const diff = q - m.qty;
-      if (diff > 0) {
-        m.recv = fmt((m.recv || 0) + diff);
-        addToLedger(m.id, 'in', diff, note);  // found MORE stock → ledger 'in'
-      } else if (diff < 0) {
-        m.used = fmt((m.used || 0) + Math.abs(diff));
-        addToLedger(m.id, 'out', Math.abs(diff), note);
-      }
-      m.qty = fmt(q);
+    if ((type === 'in' && q <= 0) || (type === 'count' && q < 0)) {
+      return showToast('กรุณาระบุจำนวนให้ถูกต้อง', 'err');
     }
 
-    // Sync quantity to Supabase
-    if (useSupabase && typeof updateStockBySku === 'function') {
-      updateStockBySku(m.id, m.qty).catch(e => console.warn('[Stock] qty sync failed:', e));
+    const oldQty = parseFloat(m.qty) || 0;
+    const saveButton = ov.querySelector('#mOk');
+    saveButton.disabled = true;
+    let newQty = type === 'in' ? oldQty + q : q;
+    try {
+      if (useSupabase) {
+        if (typeof adjustStockAtomic !== 'function') throw new Error('Atomic stock service is unavailable');
+        const updated = await adjustStockAtomic(m.id, type, q, oldQty, note);
+        newQty = parseFloat(updated.quantity);
+      }
+    } catch (error) {
+      console.error('[Stock] atomic adjustment failed:', error);
+      showToast('ปรับสต๊อกไม่สำเร็จ กรุณาโหลดข้อมูลใหม่แล้วลองอีกครั้ง', 'err');
+      saveButton.disabled = false;
+      return;
+    }
+
+    if (type === 'in') {
+      m.qty  = fmt(newQty);
+      m.recv = fmt((m.recv || 0) + q);
+      addToLedger(m.id, 'in', q, note, !useSupabase);
+    } else {
+      const diff = newQty - oldQty;
+      if (diff > 0) {
+        m.recv = fmt((m.recv || 0) + diff);
+        addToLedger(m.id, 'in', diff, note, !useSupabase);
+      } else if (diff < 0) {
+        m.used = fmt((m.used || 0) + Math.abs(diff));
+        addToLedger(m.id, 'out', Math.abs(diff), note, !useSupabase);
+      }
+      m.qty = fmt(newQty);
     }
 
     await saveData();

@@ -411,10 +411,10 @@ CREATE TABLE IF NOT EXISTS purchase_order_items (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   po_id UUID NOT NULL REFERENCES purchase_orders(id) ON DELETE CASCADE,
   stock_item_id UUID NOT NULL REFERENCES stock_items(id),
-  quantity INTEGER NOT NULL,
+  quantity NUMERIC(12, 3) NOT NULL,
   unit_price DECIMAL(10, 2) NOT NULL,
   total DECIMAL(10, 2) NOT NULL,
-  received_qty INTEGER DEFAULT 0,
+  received_qty NUMERIC(12, 3) DEFAULT 0,
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 

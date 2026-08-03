@@ -528,6 +528,21 @@ async function updateStockBySku(sku, newQty) {
   }
 }
 
+async function adjustStockAtomic(sku, mode, quantity, expectedQuantity, note) {
+  const { data, error } = await getSupabase().rpc('adjust_stock_atomic', {
+    p_sku: sku,
+    p_mode: mode,
+    p_quantity: quantity,
+    p_expected_quantity: expectedQuantity,
+    p_note: note || null,
+  });
+  if (error) {
+    reportSupabaseWriteError(error, 'adjustStockAtomic');
+    throw error;
+  }
+  return data;
+}
+
 /**
  * Upsert stock item by SKU (insert if not exists, update if exists)
  */
@@ -1216,6 +1231,20 @@ async function updatePO(poId, updates) {
     console.error('[Service] updatePO error:', err);
     return null;
   }
+}
+
+async function receivePurchaseOrderAtomic(poId, receipts, items, note) {
+  const { data, error } = await getSupabase().rpc('receive_purchase_order_atomic', {
+    p_purchase_order_id: poId,
+    p_receipts: receipts,
+    p_items: items,
+    p_note: note || null,
+  });
+  if (error) {
+    reportSupabaseWriteError(error, 'receivePurchaseOrderAtomic');
+    throw error;
+  }
+  return data;
 }
 
 async function deletePO(poId) {
