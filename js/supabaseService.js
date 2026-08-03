@@ -432,67 +432,31 @@ async function deleteJob(jobId) {
 
 async function getJobs() {
   try {
-    // If profiles join previously failed, skip straight to fallback
-    if (!getJobs._profilesJoinOk) {
-      const { data: data2, error: error2 } = await getSupabase()
-        .from('jobs')
-        .select('*, job_statuses(name, color), vehicles(plate, brand, model), customers(name)')
-        .order('created_at', { ascending: false });
-      if (error2) throw error2;
-
-      const uuids = [...new Set((data2 || []).map(j => j.assign_to).filter(Boolean))];
-      const nameMap = {};
-      if (uuids.length > 0) {
-        const { data: profiles } = await getSupabase()
-          .from('profiles')
-          .select('id, full_name')
-          .in('id', uuids);
-        (profiles || []).forEach(p => { if (p.full_name) nameMap[p.id] = p.full_name; });
-      }
-      return (data2 || []).map(j => ({
-        ...j,
-        profiles: nameMap[j.assign_to] ? { full_name: nameMap[j.assign_to] } : null,
-      }));
-    }
-
-    // Try with profiles join (requires FK constraint)
     const { data, error } = await getSupabase()
       .from('jobs')
-      .select('*, job_statuses(name, color), vehicles(plate, brand, model), customers(name), profiles!assign_to(full_name)')
+      .select('*, job_statuses(name, color), vehicles(plate, brand, model), customers(name)')
       .order('created_at', { ascending: false });
+    if (error) throw error;
 
-    if (error) {
-      // Mark join as broken — skip it on all future calls
-      getJobs._profilesJoinOk = false;
-      console.warn('[Service] getJobs profiles join failed (will skip in future):', error.message);
-      const { data: data2, error: error2 } = await getSupabase()
-        .from('jobs')
-        .select('*, job_statuses(name, color), vehicles(plate, brand, model), customers(name)')
-        .order('created_at', { ascending: false });
-      if (error2) throw error2;
-
-      const uuids = [...new Set((data2 || []).map(j => j.assign_to).filter(Boolean))];
-      const nameMap = {};
-      if (uuids.length > 0) {
-        const { data: profiles } = await getSupabase()
-          .from('profiles')
-          .select('id, full_name')
-          .in('id', uuids);
-        (profiles || []).forEach(p => { if (p.full_name) nameMap[p.id] = p.full_name; });
-      }
-      return (data2 || []).map(j => ({
-        ...j,
-        profiles: nameMap[j.assign_to] ? { full_name: nameMap[j.assign_to] } : null,
-      }));
+    const uuids = [...new Set((data || []).map(j => j.assign_to).filter(Boolean))];
+    const nameMap = {};
+    if (uuids.length > 0) {
+      const { data: profiles } = await getSupabase()
+        .from('profiles')
+        .select('id, full_name')
+        .in('id', uuids);
+      (profiles || []).forEach(p => { if (p.full_name) nameMap[p.id] = p.full_name; });
     }
-    getJobs._profilesJoinOk = true;
-    return data || [];
+
+    return (data || []).map(j => ({
+      ...j,
+      profiles: nameMap[j.assign_to] ? { full_name: nameMap[j.assign_to] } : null,
+    }));
   } catch (err) {
     console.error('[Service] getJobs error:', err);
     return [];
   }
 }
-getJobs._profilesJoinOk = true; // assume ok, flip to false on first failure
 
 /**
  * === STOCK ITEMS ===
