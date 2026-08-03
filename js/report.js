@@ -41,7 +41,7 @@ function reportHTML() {
 
   const mInvs = S.invoices.filter(i => {
     const d = new Date(i.ts);
-    return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}` === reportMonth;
+    return i.status !== 'cancelled' && `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}` === reportMonth;
   });
 
   // Calculate cost from invoice items (qty * cost per item) — more reliable than stored totalCost
@@ -62,7 +62,7 @@ function reportHTML() {
   /* ── Today revenue (ex-VAT) ── */
   const today   = new Date().toDateString();
   const todayRev= S.invoices
-    .filter(i => new Date(i.ts).toDateString() === today)
+    .filter(i => i.status !== 'cancelled' && new Date(i.ts).toDateString() === today)
     .reduce((s, i) => s + i.grand - (i.vat || 0), 0);
 
   const stockVal= S.stockItems.reduce((s, i) => s + i.qty * i.cost, 0);
@@ -78,7 +78,7 @@ function reportHTML() {
     S.invoices
       .filter(i => {
         const d = new Date(i.ts);
-        return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}` === m;
+        return i.status !== 'cancelled' && `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}` === m;
       })
       .reduce((s, i) => s + i.grand - (i.vat || 0), 0) // ex-VAT
   );
@@ -133,9 +133,9 @@ function reportHTML() {
             ${hasPermission('canViewCost') ? `<td class="r" style="font-size:.82rem;color:var(--bad)">${THB(invCost)}</td>` : ''}
             <td class="r" style="font-weight:700;color:${gp>=0?'var(--grn)':'var(--bad)'}">${THB(gp)}</td>
             <td class="c">
-              <span class="badge ${i.paid ? 'b-grn' : 'b-bad'}" style="cursor:pointer;font-size:.65rem"
-                    data-togglepaid="${i.no}">
-                ${i.paid ? 'ชำระแล้ว' : 'ค้างชำระ'}
+              <span class="badge ${i.status === 'cancelled' ? 'b-warn' : (i.paid ? 'b-grn' : 'b-bad')}" style="cursor:pointer;font-size:.65rem"
+                    ${i.status === 'cancelled' ? '' : `data-togglepaid="${i.no}"`}>
+                ${i.status === 'cancelled' ? 'ยกเลิกแล้ว' : (i.paid ? 'ชำระแล้ว' : 'ค้างชำระ')}
               </span>
             </td>
             <td class="c">
@@ -143,9 +143,9 @@ function reportHTML() {
                 <button class="btn-icon" data-vi="${i.no}" title="ดูใบเสร็จ">
                   ${svgI('<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>',13)}
                 </button>
-                ${hasPermission('canDeleteData') ? `<button class="btn-icon" data-dinv="${i.no}" title="ลบบิล (คืนสต๊อก)"
+                ${hasPermission('canCancelInvoice') && i.status !== 'cancelled' ? `<button class="btn-icon" data-dinv="${i.no}" title="ยกเลิกบิล (คืนสต๊อก)"
                   style="color:var(--bad);border-color:rgba(239,83,80,.3)">
-                  ${svgI('<path d="M3 6h18M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/>',13)}
+                  ${svgI('<path d="M18 6 6 18M6 6l12 12"/>',13)}
                 </button>` : ''}
               </div>
             </td>
@@ -536,6 +536,7 @@ function dailyTransactionHTML() {
 
   /* ── Filter invoices by date range + customer + plate ── */
   const filtered = S.invoices.filter(inv => {
+    if (inv.status === 'cancelled') return false;
     const d = new Date(inv.ts).toISOString().slice(0,10);
     if (d < from || d > to) return false;
     if (_dailyCust  && inv.cust  !== _dailyCust)  return false;
@@ -883,7 +884,7 @@ function bindReport() {
   sel('rPrintVAT')?.addEventListener('click', () => {
     const mInvs2 = S.invoices.filter(i => {
       const d = new Date(i.ts);
-      return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}` === reportMonth;
+      return i.status !== 'cancelled' && `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}` === reportMonth;
     });
     if (!mInvs2.length) return showToast('ไม่มีบิลในเดือนนี้', 'err');
 
@@ -991,7 +992,7 @@ function bindReport() {
   sel('rExportCSV')?.addEventListener('click', () => {
     const mInvs2 = S.invoices.filter(i => {
       const d = new Date(i.ts);
-      return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}` === reportMonth;
+      return i.status !== 'cancelled' && `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}` === reportMonth;
     });
     if (!mInvs2.length) return showToast('ไม่มีบิลในเดือนนี้', 'err');
     const header = 'เลขที่,วันที่,ลูกค้า,ทะเบียน,ยอดรวม (รวม VAT),ก่อน VAT,VAT 7%,ชำระ';
@@ -1008,19 +1009,13 @@ function bindReport() {
     showToast('ดาวน์โหลด CSV แล้ว', 'ok');
   });
 
-  /* Paid toggle */
+  /* Payment ledger */
   document.querySelectorAll('[data-togglepaid]').forEach(b =>
-    b.addEventListener('click', async (e) => {
+    b.addEventListener('click', (e) => {
       e.stopPropagation();
       const inv = S.invoices.find(x => x.no === b.dataset.togglepaid);
       if (!inv) return;
-      inv.paid = !inv.paid;
-      if (useSupabase && inv.id && typeof updateInvoicePaid === 'function') {
-        updateInvoicePaid(inv.id, inv.paid).catch(() => {});
-      }
-      await saveData();
-      renderPanel();
-      showToast(`บิล ${inv.no} ${inv.paid ? 'ชำระแล้ว ✓' : 'ยังไม่ชำระ'}`);
+      openPaymentModal(inv);
     })
   );
 
@@ -1049,25 +1044,25 @@ function bindReport() {
     })
   );
 
-  /* Delete invoice (with stock restore) */
+  /* Cancel invoice (with stock restore; document remains in history) */
   document.querySelectorAll('[data-dinv]').forEach(b =>
     b.addEventListener('click', async (e) => {
       e.stopPropagation();
       const inv = S.invoices.find(x => x.no === b.dataset.dinv);
       if (!inv) return;
 
-      if (!confirm(
-        `ลบใบเสร็จ ${inv.no} (${inv.cust||'ลูกค้า'}) ยอด ${THB(inv.grand)}?\n\n` +
-        `⚠ สต๊อกที่ตัดไปแล้วจะถูกคืนกลับ`
-      )) return;
+      const reason = prompt(
+        `ระบุเหตุผลยกเลิกใบเสร็จ ${inv.no} (${inv.cust||'ลูกค้า'}) ยอด ${THB(inv.grand)}\n\n` +
+        `สต๊อกจะถูกคืนและเอกสารจะยังอยู่ในประวัติ`
+      );
+      if (reason === null) return;
+      if (!reason.trim()) return showToast('กรุณาระบุเหตุผลการยกเลิก', 'err');
 
-      try {
-        /* Delete from Supabase if available */
-        if (useSupabase && inv.id && typeof deleteInvoice === 'function') {
-          await deleteInvoice(inv.id);
-        }
-      } catch (err) {
-        console.warn('[Report] Supabase delete failed (using localStorage):', err);
+      if (useSupabase) {
+        if (!inv.id || typeof cancelInvoiceAtomic !== 'function')
+          return showToast('ยังไม่สามารถยกเลิกบน Supabase ได้ กรุณาตรวจสอบ migration', 'err');
+        const cancelled = await cancelInvoiceAtomic(inv.id, reason.trim());
+        if (!cancelled) return showToast('ยกเลิกบิลไม่สำเร็จ ข้อมูลเดิมยังไม่ถูกเปลี่ยน', 'err');
       }
 
       /* Restore stock */
@@ -1077,13 +1072,9 @@ function bindReport() {
           if (m) {
             m.qty  = fmt(m.qty  + it.qty);
             m.used = fmt(Math.max(0, (m.used || 0) - it.qty));
-            // Sync restored qty to Supabase
-            if (useSupabase && typeof updateStockBySku === 'function') {
-              updateStockBySku(m.id, m.qty).catch(e => console.warn('[Report] stock restore sync:', e));
-            }
             // Record reversal in ledger
-            if (typeof addToLedger === 'function') {
-              addToLedger(m.id, 'in', it.qty, `ลบบิล ${inv.no}`);
+            if (!useSupabase && typeof addToLedger === 'function') {
+              addToLedger(m.id, 'in', it.qty, `ยกเลิกบิล ${inv.no}`);
             }
           }
         }
@@ -1095,11 +1086,16 @@ function bindReport() {
         if (j && j.status === 5) j.status = 4;
       }
 
-      S.invoices = S.invoices.filter(x => x.no !== b.dataset.dinv);
+      inv.status = 'cancelled';
+      inv.cancelledAt = Date.now();
+      inv.cancellationReason = reason.trim();
+      inv.paid = false;
       await saveData();
+      if (typeof addAuditLog === 'function')
+        addAuditLog('INVOICE_CANCEL', 'invoice', inv.id || null, inv.no, { reason: reason.trim() });
       renderPanel();
       renderNav();
-      showToast(`ลบใบเสร็จ ${inv.no} แล้ว · คืนสต๊อกเรียบร้อย`, 'inf');
+      showToast(`ยกเลิกใบเสร็จ ${inv.no} แล้ว · คืนสต๊อกเรียบร้อย`, 'inf');
     })
   );
 }

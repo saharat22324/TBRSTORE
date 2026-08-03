@@ -63,6 +63,19 @@ async function syncRemoteData(opts) {
         const ex = invById.get(inv.id);
         // ถ้าไม่มี _editedAt local ให้ Supabase override paid status
         if (!ex._editedAt && ex.paid !== inv.paid) { ex.paid = inv.paid; changed = true; }
+        if (ex.status !== inv.status || ex.cancelledAt !== inv.cancelledAt ||
+            ex.cancellationReason !== inv.cancellationReason) {
+          ex.status = inv.status;
+          ex.cancelledAt = inv.cancelledAt;
+          ex.cancellationReason = inv.cancellationReason;
+          if (inv.status === 'cancelled') ex.paid = false;
+          changed = true;
+        }
+        if (inv.taxBuyer && JSON.stringify(ex.taxBuyer || null) !== JSON.stringify(inv.taxBuyer)) {
+          ex.taxBuyer = inv.taxBuyer;
+          ex.invoiceType = inv.invoiceType;
+          changed = true;
+        }
         // sync jobId จาก Supabase ถ้า local มี ID ผิดรูปแบบ
         const _uuidRe = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
         if (inv.jobId && !_uuidRe.test(ex.jobId)) { ex.jobId = inv.jobId; changed = true; }
@@ -76,6 +89,14 @@ async function syncRemoteData(opts) {
       } else if (!invByNo.has(inv.no)) {
         S.invoices.push(inv); changed = true;
       }
+    }
+
+    // ── Payment ledger: immutable rows; merge by UUID ──
+    if (!S.invoicePayments) S.invoicePayments = [];
+    const paymentById = new Map(S.invoicePayments.map(p => [p.id, p]));
+    for (const payment of (newState.invoicePayments || [])) {
+      if (paymentById.has(payment.id)) Object.assign(paymentById.get(payment.id), payment);
+      else { S.invoicePayments.push(payment); changed = true; }
     }
 
     // ── Stock: sync quantity + เพิ่มสินค้าใหม่ ──
@@ -98,8 +119,13 @@ async function syncRemoteData(opts) {
       if (custById.has(c.id)) {
         const ex = custById.get(c.id);
         if (ex.name !== c.name || ex.phone !== c.phone || ex.email !== c.email ||
-            ex.address !== c.address || ex.note !== c.note || ex.line !== c.line) {
-          Object.assign(ex, { name: c.name, phone: c.phone, email: c.email, address: c.address, line: c.line, note: c.note });
+            ex.address !== c.address || ex.note !== c.note || ex.line !== c.line ||
+            ex.companyName !== c.companyName || ex.taxId !== c.taxId ||
+            ex.branchNo !== c.branchNo || ex.billingAddress !== c.billingAddress) {
+          Object.assign(ex, {
+            name: c.name, phone: c.phone, email: c.email, address: c.address, line: c.line, note: c.note,
+            companyName: c.companyName, taxId: c.taxId, branchNo: c.branchNo, billingAddress: c.billingAddress,
+          });
           changed = true;
         }
       } else {
@@ -352,7 +378,7 @@ function hasUnsyncedLocalRecords() {
     ...(S.vehicles  || []),
     ...(S.jobs      || []),
     ...(S.invoices  || []),
-  ].some(isLocal);
+  ].some(e => isLocal(e) || e?._syncPending || e?._taxSyncPending);
 }
 
 /**
@@ -525,6 +551,10 @@ function convertSupabaseToState(dbData) {
       email: c.email,
       line: c.line_id,
       address: c.address,
+      companyName: c.company_name || '',
+      taxId: c.tax_id || '',
+      branchNo: c.branch_no || '00000',
+      billingAddress: c.billing_address || c.address || '',
       note: c.note,
       createdAt: new Date(c.created_at).getTime()
     }));
@@ -656,7 +686,44 @@ function convertSupabaseToState(dbData) {
       totalCost: (i.invoice_items || []).reduce((s, it) => s + (it.quantity || 0) * (it.cost_price > 0 ? it.cost_price : (it.stock_item_id ? (costByUuid[it.stock_item_id] || 0) : 0)), 0),
       note: i.note || '',
       paid: i.payment_status || false,
+      status: i.status || (i.payment_status ? 'paid' : 'issued'),
+      cancelledAt: i.cancelled_at ? new Date(i.cancelled_at).getTime() : null,
+      cancellationReason: i.cancellation_reason || '',
+      invoiceType: i.invoice_type || 'receipt',
+      documentType: i.document_type || 'invoice',
+      originalInvoiceId: i.original_invoice_id || null,
+      version: i.version || 1,
+      taxBuyer: i.buyer_name ? {
+        name: i.buyer_name,
+        address: i.buyer_address || '',
+        taxId: i.buyer_tax_id || '',
+        branch: i.buyer_branch || 'สำนักงานใหญ่',
+      } : null,
     }));
+  }
+
+  if (dbData.invoicePayments) {
+    state.invoicePayments = dbData.invoicePayments.map(p => ({
+      id: p.id,
+      invoiceId: p.invoice_id,
+      amount: Number(p.amount || 0),
+      method: p.method,
+      reference: p.reference || '',
+      note: p.note || '',
+      paidAt: p.paid_at ? new Date(p.paid_at).getTime() : null,
+      reversedAt: p.reversed_at ? new Date(p.reversed_at).getTime() : null,
+      reversalReason: p.reversal_reason || '',
+    }));
+    const activePaidByInvoice = new Map();
+    for (const p of state.invoicePayments) {
+      if (!p.reversedAt) activePaidByInvoice.set(p.invoiceId, (activePaidByInvoice.get(p.invoiceId) || 0) + p.amount);
+    }
+    for (const inv of state.invoices) {
+      inv.paidAmount = fmt(activePaidByInvoice.get(inv.id) || 0);
+      inv.balance = fmt(Math.max(0, (inv.grand || 0) - inv.paidAmount));
+      if (inv.documentType === 'credit_note') continue;
+      inv.paid = inv.grand > 0 && inv.balance <= 0.01;
+    }
   }
 
   if (dbData.stockLedger && dbData.stockLedger.length > 0) {
@@ -835,14 +902,14 @@ async function saveData() {
 
     // If using Supabase, trigger background sync for any remaining local-ID entities
     if (useSupabase && window.supabaseReady) {
-      const hasLocalIds = [
+      const hasPendingSync = [
         ...(S.customers || []),
         ...(S.vehicles  || []),
         ...(S.jobs      || []),
         ...(S.invoices  || []),
-      ].some(e => e.id && (e.id.startsWith('C-') || e.id.startsWith('V-') || e.id.startsWith('J-') || e.id.startsWith('I-')));
+      ].some(e => (e.id && /^(C-|V-|J-|I-)/.test(e.id)) || e._syncPending || e._taxSyncPending);
 
-      if (hasLocalIds && typeof syncLocalToSupabase === 'function') {
+      if (hasPendingSync && typeof syncLocalToSupabase === 'function') {
         syncLocalToSupabase().catch(e => console.warn('[DB] background sync error:', e));
       }
       return;
@@ -1140,7 +1207,7 @@ async function syncLocalToSupabase(opts = {}) {
         }
         if ((c._syncTries || 0) >= MAX_TRIES) continue;
         try {
-          const result = await addCustomer(c.name || '', c.phone || '', c.email || '', c.line || '', c.address || '', c.note || '');
+          const result = await addCustomer(c.name || '', c.phone || '', c.email || '', c.line || '', c.address || '', c.note || '', c);
           if (result?.id) {
             idMap[c.id] = result.id;
             c.id = result.id;
@@ -1149,6 +1216,25 @@ async function syncLocalToSupabase(opts = {}) {
           } else { failedCount++; c._syncTries = (c._syncTries || 0) + 1; }
         } catch (e) { failedCount++; lastErr = e; c._syncTries = (c._syncTries || 0) + 1; }
       }
+    }
+
+    // Retry edits to existing customers that previously failed to sync.
+    for (const c of (S.customers || []).filter(x => x._syncPending && _uuid.test(x.id || ''))) {
+      const result = await updateCustomer(c.id, {
+        name: c.name || '', phone: c.phone || '', email: c.email || '', line_id: c.line || '',
+        address: c.address || null, note: c.note || null,
+        company_name: c.companyName || null, tax_id: c.taxId || null,
+        branch_no: c.branchNo || '00000', billing_address: c.billingAddress || null,
+      });
+      if (result) { delete c._syncPending; syncedCount++; }
+      else failedCount++;
+    }
+
+    // Retry tax-invoice snapshots for existing invoices.
+    for (const inv of (S.invoices || []).filter(x => x._taxSyncPending && x.taxBuyer && _uuid.test(x.id || ''))) {
+      const ok = await updateInvoiceTaxDetails(inv.id, inv.taxBuyer);
+      if (ok) { delete inv._taxSyncPending; syncedCount++; }
+      else failedCount++;
     }
 
     // Remap vehicle custIds to Supabase UUIDs

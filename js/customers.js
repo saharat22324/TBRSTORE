@@ -208,8 +208,9 @@ function openCustHistory(cid) {
     return S.jobs.some(j => i.jobId === j.id && vIds.includes(j.vehicleId));
   }).sort((a, b) => (b.ts || b.createdAt || 0) - (a.ts || a.createdAt || 0));
 
-  const totalSpent = cInvs.reduce((s, i) => s + i.grand, 0);
-  const pendingAmt = cInvs.filter(i => !i.paid).reduce((s, i) => s + i.grand, 0);
+  const activeInvs = cInvs.filter(i => i.status !== 'cancelled');
+  const totalSpent = activeInvs.reduce((s, i) => s + i.grand, 0);
+  const pendingAmt = activeInvs.filter(i => !i.paid).reduce((s, i) => s + i.grand, 0);
 
   const invRows = cInvs.length
     ? cInvs.map(i => `
@@ -220,8 +221,8 @@ function openCustHistory(cid) {
           <td style="font-size:.8rem">${esc(i.plate || '—')}</td>
           <td class="r money fc-gold">${THB(i.grand)}</td>
           <td class="c">
-            <span class="badge ${i.paid ? 'b-grn' : 'b-bad'}" style="font-size:.65rem">
-              ${i.paid ? 'ชำระแล้ว' : 'ค้างชำระ'}
+            <span class="badge ${i.status === 'cancelled' ? 'b-warn' : (i.paid ? 'b-grn' : 'b-bad')}" style="font-size:.65rem">
+              ${i.status === 'cancelled' ? 'ยกเลิกแล้ว' : (i.paid ? 'ชำระแล้ว' : 'ค้างชำระ')}
             </span>
           </td>
         </tr>`).join('')
@@ -359,6 +360,15 @@ function openCustModal(id) {
           <div class="fld"><label>LINE ID</label><input id="cLine" value="${esc(m?.line||'')}"></div>
           <div class="fld"><label>อีเมล</label><input id="cEmail" value="${esc(m?.email||'')}" type="email"></div>
         </div>
+        <div style="font-size:.76rem;font-weight:700;color:var(--gold);margin:14px 0 8px">ข้อมูลสำหรับออกใบกำกับภาษี</div>
+        <div class="fgrid c2 mb12">
+          <div class="fld"><label>ชื่อบริษัท / ชื่อผู้เสียภาษี</label><input id="cCompany" value="${esc(m?.companyName||'')}" placeholder="ถ้าไม่กรอกจะใช้ชื่อลูกค้า"></div>
+          <div class="fld"><label>เลขประจำตัวผู้เสียภาษี (13 หลัก)</label><input id="cTaxId" value="${esc(m?.taxId||'')}" maxlength="17" inputmode="numeric" placeholder="0-0000-00000-00-0"></div>
+        </div>
+        <div class="fgrid c2 mb12">
+          <div class="fld"><label>เลขสาขา</label><input id="cBranchNo" value="${esc(m?.branchNo||'00000')}" maxlength="5" inputmode="numeric" placeholder="00000 = สำนักงานใหญ่"></div>
+          <div class="fld"><label>ที่อยู่สำหรับออกใบกำกับภาษี</label><textarea id="cBillingAddr" rows="2" placeholder="บ้านเลขที่ ถนน แขวง/ตำบล เขต/อำเภอ จังหวัด รหัสไปรษณีย์">${esc(m?.billingAddress||m?.address||'')}</textarea></div>
+        </div>
         <div class="fld"><label>หมายเหตุ</label><textarea id="cNote" rows="2">${esc(m?.note||'')}</textarea></div>
       </div>
       <div class="modal-f">
@@ -374,9 +384,18 @@ function openCustModal(id) {
     const name = sv('cName').trim();
     if (!name) return showToast('กรุณากรอกชื่อลูกค้า', 'err');
 
+    const taxId = sv('cTaxId').replace(/\D/g, '');
+    const branchNo = sv('cBranchNo').replace(/\D/g, '') || '00000';
+    if (taxId && taxId.length !== 13)
+      return showToast('เลขประจำตัวผู้เสียภาษีต้องมี 13 หลัก', 'err');
+    if (branchNo.length !== 5)
+      return showToast('เลขสาขาต้องมี 5 หลัก (สำนักงานใหญ่ใช้ 00000)', 'err');
+
     const data = {
       name, phone: sv('cPhone'), line: sv('cLine'),
       email: sv('cEmail'), note: sv('cNote'),
+      companyName: sv('cCompany').trim(), taxId, branchNo,
+      billingAddress: sv('cBillingAddr').trim(),
     };
 
     try {
@@ -393,11 +412,16 @@ function openCustModal(id) {
               email:   data.email,
               line_id: data.line,   // local state uses 'line', DB uses 'line_id'
               note:    data.note,
+              company_name: data.companyName || null,
+              tax_id: data.taxId || null,
+              branch_no: data.branchNo,
+              billing_address: data.billingAddress || null,
             });
-            if (r) _custCloudOk = true;
+            if (r) { _custCloudOk = true; delete m._syncPending; }
+            else m._syncPending = true;
           } else {
             // Local ID → create in Supabase and replace local ID
-            const result = await addCustomer(data.name, data.phone, data.email, data.line, '', data.note);
+            const result = await addCustomer(data.name, data.phone, data.email, data.line, '', data.note, data);
             if (result) { m.id = result.id; _custCloudOk = true; }
           }
         }
@@ -406,7 +430,7 @@ function openCustModal(id) {
         // Add new
         const newCust = { id: 'C-' + Date.now(), createdAt: Date.now(), ...data };
         if (useSupabase && typeof addCustomer === 'function') {
-          const result = await addCustomer(data.name, data.phone, data.email, data.line, '', data.note);
+          const result = await addCustomer(data.name, data.phone, data.email, data.line, '', data.note, data);
           if (result) { newCust.id = result.id; _custCloudOk = true; }
         }
         S.customers.push(newCust);

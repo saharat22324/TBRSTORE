@@ -299,18 +299,23 @@ async function checkAuth() {
     const user = await window.getCurrentUser?.();
     
     if (user && user.id) {
+      let previousSession = {};
+      try { previousSession = JSON.parse(localStorage.getItem('tbr_user_session') || '{}'); } catch {}
       console.log(`✅ User authenticated (Supabase Auth): ${user.email} (${user.role})`);
       currentUser = {
         user_id: user.id,
         email: user.email,
         username: user.email.split('@')[0],
         role: user.role || 'technician',
-        full_name: user.full_name || user.email
+        full_name: user.full_name || user.email,
+        login_time: previousSession.login_time || new Date().toISOString(),
+        last_activity: Date.now()
       };
       currentUserRole = user.role || 'technician';
       
       // เก็บแบบ UI reference เพื่อ bootstrap หลังจาก loadData
       localStorage.setItem('tbr_user_session', JSON.stringify(currentUser));
+      startSessionSecurity();
       
       console.log('[Auth] ✅ checkAuth complete - user verified (Supabase Auth)');
       return true;
@@ -326,6 +331,44 @@ async function checkAuth() {
     window.location.href = 'login.html';
     return false;
   }
+}
+
+const SESSION_MAX_AGE_MS = 8 * 60 * 60 * 1000;
+const SESSION_IDLE_MS = 60 * 60 * 1000;
+let _sessionSecurityTimer = null;
+let _lastActivityWrite = 0;
+
+function startSessionSecurity() {
+  const recordActivity = () => {
+    const now = Date.now();
+    if (now - _lastActivityWrite < 30000) return;
+    _lastActivityWrite = now;
+    try {
+      const session = JSON.parse(localStorage.getItem('tbr_user_session') || '{}');
+      session.last_activity = now;
+      localStorage.setItem('tbr_user_session', JSON.stringify(session));
+    } catch {}
+  };
+
+  ['click', 'keydown', 'touchstart'].forEach(eventName =>
+    document.addEventListener(eventName, recordActivity, { passive: true })
+  );
+
+  if (_sessionSecurityTimer) clearInterval(_sessionSecurityTimer);
+  _sessionSecurityTimer = setInterval(async () => {
+    try {
+      const session = JSON.parse(localStorage.getItem('tbr_user_session') || '{}');
+      const loginAt = new Date(session.login_time || 0).getTime();
+      const lastActivity = Number(session.last_activity || loginAt || 0);
+      const now = Date.now();
+      if (!loginAt || now - loginAt > SESSION_MAX_AGE_MS || now - lastActivity > SESSION_IDLE_MS) {
+        if (typeof showToast === 'function') showToast('Session หมดอายุ กรุณาเข้าสู่ระบบใหม่', 'err');
+        await handleSignOut();
+      }
+    } catch {
+      await handleSignOut();
+    }
+  }, 60000);
 }
 
 /**

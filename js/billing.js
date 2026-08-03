@@ -14,11 +14,12 @@ function billingHTML() {
   const { sub, vat, grand } = bCalc();
   
   /* ── Stats ── */
-  const totalInv = S.invoices.length;
-  const totalGrand = S.invoices.reduce((s, i) => s + i.grand, 0);
-  const totalVat   = S.invoices.reduce((s, i) => s + (i.vat || 0), 0);
+  const activeInv = S.invoices.filter(i => i.status !== 'cancelled');
+  const totalInv = activeInv.length;
+  const totalGrand = activeInv.reduce((s, i) => s + i.grand, 0);
+  const totalVat   = activeInv.reduce((s, i) => s + (i.vat || 0), 0);
   const avgBill    = totalInv > 0 ? totalGrand / totalInv : 0;
-  const todayInv   = S.invoices.filter(i => new Date(i.ts).toDateString() === new Date().toDateString());
+  const todayInv   = activeInv.filter(i => new Date(i.ts).toDateString() === new Date().toDateString());
   const todayGrand = todayInv.reduce((s, i) => s + i.grand, 0);
 
   const stOpts  = S.stockItems.map(i =>
@@ -571,6 +572,7 @@ async function saveInvoice() {
   const ref   = sv('bRef');
   const note  = sv('bNote');
   const phone = sv('bPhone');
+  const selectedCustomer = S.customers.find(c => (c.name || '').trim() === cust.trim());
   const totalCost = bItems.reduce((s, it) => s + fmt(it.qty * (it.cost || 0)), 0);
 
   const newItems = bItems.map(it => ({
@@ -583,8 +585,38 @@ async function saveInvoice() {
   if (bEditInvNo) {
     const existing = S.invoices.find(x => x.no === bEditInvNo);
     if (!existing) { showToast('ไม่พบบิลที่ต้องการแก้ไข', 'err'); return; }
+    if (existing.status === 'cancelled') {
+      showToast('บิลนี้ถูกยกเลิกแล้ว ไม่สามารถแก้ไขได้', 'err');
+      return;
+    }
 
-    // 1. คืนสต๊อก items เดิมก่อน
+    // Supabase must commit header, items, stock and ledger together before the
+    // local cache is changed. This prevents partial invoice edits.
+    if (useSupabase) {
+      if (!existing.id || typeof updateInvoiceFull !== 'function') {
+        showToast('ไม่สามารถแก้ไขแบบ atomic บน Supabase ได้', 'err');
+        return;
+      }
+      const updated = await updateInvoiceFull(
+        existing.id,
+        { sub, disc: bDisc, vat, grand, cust, plate, phone, model, note },
+        bItems.map(it => ({
+          type: it.itemType || 'service',
+          stockItemId: it.itemType === 'stock'
+            ? (S.stockItems.find(s => s.id === it.sid)?._uuid || null)
+            : null,
+          serviceId: it.itemType === 'service' ? it.sid : null,
+          description: it.nm, quantity: it.qty, unitPrice: it.price,
+          costPrice: it.cost || 0, total: fmt(it.qty * it.price), note: '',
+        }))
+      );
+      if (!updated) {
+        showToast('แก้ไขบิลไม่สำเร็จ ข้อมูลและสต๊อกเดิมไม่เปลี่ยน', 'err');
+        return;
+      }
+    }
+
+    // 1. คืนสต๊อก items เดิมใน local cache
     (existing.items || []).forEach(it => {
       if (it.sid && it.itemType === 'stock') {
         const m = S.stockItems.find(x => x.id === it.sid);
@@ -602,10 +634,8 @@ async function saveInvoice() {
         if (m) {
           m.qty  = fmt(m.qty  - it.qty);
           m.used = fmt((m.used || 0) + it.qty);
-          if (typeof addToLedger === 'function')
+          if (!useSupabase && typeof addToLedger === 'function')
             addToLedger(m.id, 'out', it.qty, 'แก้ไขบิล ' + existing.no);
-          if (useSupabase && typeof updateStockBySku === 'function')
-            updateStockBySku(m.id, m.qty).catch(e => console.warn('[Billing] stock sync:', e));
         }
       }
     });
@@ -616,23 +646,6 @@ async function saveInvoice() {
       items: newItems, sub, disc: bDisc, vat, grand, totalCost,
       _editedAt: Date.now(),   // ใช้ตรวจสอบว่าเวอร์ชัน local ใหม่กว่า Supabase
     });
-
-    // 4. Sync to Supabase
-    if (useSupabase && existing.id && typeof updateInvoiceFull === 'function') {
-      updateInvoiceFull(
-        existing.id,
-        { sub, disc: bDisc, vat, grand, cust, plate, phone, model, note },
-        bItems.map(it => ({
-          type: it.itemType || 'service',
-          stockItemId: it.itemType === 'stock'
-            ? (S.stockItems.find(s => s.id === it.sid)?._uuid || null)
-            : null,
-          serviceId:   it.itemType === 'service' ? it.sid : null,
-          description: it.nm, quantity: it.qty, unitPrice: it.price,
-          costPrice: it.cost || 0, total: fmt(it.qty * it.price), note: '',
-        }))
-      ).catch(e => console.warn('[Billing] Supabase edit sync:', e));
-    }
 
     await saveData();
     showToast(`แก้ไขบิล ${existing.no} สำเร็จ ✓`, 'ok');
@@ -651,25 +664,6 @@ async function saveInvoice() {
   /* ── NEW INVOICE — ออกบิลใหม่ ── */
   const no = nextSeqNo('inv').replace('inv-','INV-');
 
-  /* Deduct Stock Items only */
-  bItems.forEach(it => {
-    if (it.sid && it.itemType === 'stock') {
-      const m = S.stockItems.find(x => x.id === it.sid);
-      if (m) {
-        m.qty  = fmt(m.qty  - it.qty);
-        m.used = fmt((m.used || 0) + it.qty);
-        // Auto-record to stock ledger
-        if (typeof addToLedger === 'function') {
-          addToLedger(m.id, 'out', it.qty, 'บิล ' + no);
-        }
-        // Sync new qty to Supabase
-        if (useSupabase && typeof updateStockBySku === 'function') {
-          updateStockBySku(m.id, m.qty).catch(e => console.warn('[Billing] stock qty sync failed:', e));
-        }
-      }
-    }
-  });
-
   /* Update vehicle mileage */
   if (bJobId && mile) {
     const j = S.jobs.find(x => x.id === bJobId);
@@ -681,10 +675,12 @@ async function saveInvoice() {
 
   const inv = {
     no, ts: Date.now(), jobId: bJobId,
+    custId: selectedCustomer?.id || null,
     cust, phone, plate, model, mileage: mile, ref,
     items: newItems,
     sub, disc: bDisc, vat, grand, totalCost, note,
-    paid: false,
+    paid: false, paidAmount: 0, balance: grand,
+    status: 'issued', documentType: 'invoice',
   };
 
   /* Close job if billing from job */
@@ -700,7 +696,7 @@ async function saveInvoice() {
       // ดึง UUID จริงจาก stock item (_uuid) เพื่อส่งเป็น FK ใน invoice_items
       const supaResult = await addInvoice(
         bJobId,
-        null, // customerId - can be null for now
+        selectedCustomer?.id || null,
         null, // vehicleId - can be null for now
         bItems.map(it => ({
           type: it.itemType || 'stock',
@@ -724,13 +720,31 @@ async function saveInvoice() {
     console.warn('[Billing] Supabase save failed (using localStorage):', err);
   }
 
+  if (useSupabase && !_invCloudOk) {
+    showToast(`ออกใบเสร็จ ${no} ไม่สำเร็จ · ข้อมูลและสต๊อกไม่ถูกเปลี่ยน`, 'err');
+    return;
+  }
+
+  /* Update local cache only after the atomic cloud transaction succeeds. */
+  bItems.forEach(it => {
+    if (it.sid && it.itemType === 'stock') {
+      const m = S.stockItems.find(x => x.id === it.sid);
+      if (m) {
+        m.qty = fmt(m.qty - it.qty);
+        m.used = fmt((m.used || 0) + it.qty);
+        if (!useSupabase && typeof addToLedger === 'function')
+          addToLedger(m.id, 'out', it.qty, 'บิล ' + no);
+      }
+    }
+  });
+
   S.invoices.push(inv);
   await saveData();
   if (typeof addAuditLog === 'function')
     addAuditLog('INVOICE_CREATE', 'invoice', inv.id || null, no, { grand });
   if (!useSupabase)     showToast(`ออกใบเสร็จ ${no} แล้ว`);
   else if (_invCloudOk) showToast(`ออกใบเสร็จ ${no} แล้ว · ขึ้นคลาวด์ ☁️`);
-  else                  showToast(`ออกใบเสร็จ ${no} — ยังไม่ขึ้นคลาวด์ ระบบจะซิงค์อัตโนมัติ`, 'err');
+  else                  showToast(`ออกใบเสร็จ ${no} ไม่สำเร็จ`, 'err');
 
   /* Reset billing state */
   bItems = []; bKey = 0; bDisc = 0; bVat = false; bJobId = null;

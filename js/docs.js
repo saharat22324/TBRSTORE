@@ -63,6 +63,15 @@ function showDoc(type, data) {
 ══════════════════════════════════════ */
 function buildInvoiceHTML(d) {
   const s        = S.shop;
+  const isCancelled = d.status === 'cancelled';
+  const documentType = d.documentType || 'invoice';
+  const documentTitle = documentType === 'credit_note' ? 'ใบลดหนี้'
+    : documentType === 'debit_note' ? 'ใบเพิ่มหนี้' : 'ใบเสร็จรับเงิน';
+  const documentTitleEn = documentType === 'credit_note' ? 'CREDIT NOTE'
+    : documentType === 'debit_note' ? 'DEBIT NOTE' : 'RECEIPT';
+  const original = d.originalInvoiceId ? S.invoices.find(i => i.id === d.originalInvoiceId) : null;
+  const paidAmount = Number(d.paidAmount || 0);
+  const balance = Math.max(0, Number(d.grand || 0) - paidAmount);
   const nextMile = d.mileage
     ? (parseInt(String(d.mileage).replace(/\D/g,'')) + 10000).toLocaleString('th-TH')
     : null;
@@ -93,13 +102,15 @@ function buildInvoiceHTML(d) {
     : '';
 
   return `
-    <div class="doc">
+    <div class="doc" style="position:relative">
+      ${isCancelled ? `<div style="position:absolute;z-index:5;inset:42% 0 auto;text-align:center;
+        transform:rotate(-18deg);font-size:4rem;font-weight:900;color:rgba(190,30,45,.18);pointer-events:none">ยกเลิก</div>` : ''}
       <!-- Header -->
       <div class="doc-hd">
         ${docLogoHTML()}
         <div class="doc-ta">
-          <div class="doc-tt">ใบเสร็จรับเงิน</div>
-          <div class="doc-te">RECEIPT / TAX INVOICE</div>
+          <div class="doc-tt">${documentTitle}</div>
+          <div class="doc-te">${documentTitleEn}</div>
         </div>
       </div>
       <div class="doc-stripe"></div>
@@ -110,10 +121,11 @@ function buildInvoiceHTML(d) {
         <div class="doc-ref">
           <span>เลขที่: <b>${d.no}</b></span>
           ${d.ref ? `<span>อ้างอิง: <b>${esc(d.ref)}</b></span>` : ''}
+          ${original ? `<span>อ้างอิงเอกสารเดิม: <b>${esc(original.no)}</b></span>` : ''}
           <span>วันที่: <b>${dateStr(d.ts)} ${timeStr(d.ts)}</b></span>
           <span style="background:${d.paid ? '#d4edda' : '#f8d7da'};color:${d.paid ? '#155724' : '#721c24'};
                       padding:2px 8px;border-radius:99px;font-size:.7rem;font-weight:700">
-            ${d.paid ? '✓ ชำระแล้ว' : '● ค้างชำระ'}
+            ${isCancelled ? '✕ ยกเลิกแล้ว' : (documentType === 'credit_note' ? 'เอกสารลดหนี้' : (d.paid ? '✓ ชำระแล้ว' : '● ค้างชำระ'))}
           </span>
         </div>
 
@@ -156,7 +168,7 @@ function buildInvoiceHTML(d) {
 
         <!-- Totals -->
         <div style="display:flex;justify-content:space-between;align-items:flex-end">
-          <div class="doc-words">(${bahtWords(d.grand)})</div>
+          <div class="doc-words">(${d.grand < 0 ? 'ลบ' : ''}${bahtWords(Math.abs(d.grand))})</div>
           <div style="display:flex;justify-content:flex-end">
             <div class="doc-sum-box">
               <div class="dsr"><span>จำนวนเงิน</span><span>${R(d.sub)}</span></div>
@@ -167,6 +179,8 @@ function buildInvoiceHTML(d) {
                 <span class="lbl">จำนวนเงินทั้งสิ้น</span>
                 <span class="lv">${R(d.grand)}</span>
               </div>
+              ${documentType !== 'credit_note' ? `<div class="dsr"><span>รับชำระแล้ว</span><span>${R(paidAmount)}</span></div>
+              <div class="dsr"><span>ยอดคงเหลือ</span><span>${R(balance)}</span></div>` : ''}
             </div>
           </div>
         </div>
@@ -184,37 +198,103 @@ function buildInvoiceHTML(d) {
 }
 
 function buildInvoiceActions(d) {
-  const paidBtn = d.paid
-    ? `<span style="background:#d4edda;color:#155724;padding:6px 14px;border-radius:8px;font-size:.84rem;font-weight:600">
-         ✓ ชำระแล้ว
-       </span>`
-    : `<button class="btn-cdoc" id="dPaid" style="background:#e8f5e9;color:#2e7d32;border-color:#a5d6a7">
-         ${svgI('<path d="M20 6 9 17l-5-5"/>')} ชำระแล้ว
-       </button>`;
+  const isCancelled = d.status === 'cancelled';
+  const documentType = d.documentType || 'invoice';
+  const isCredit = documentType === 'credit_note';
+  const isAdjustment = isCredit || documentType === 'debit_note';
+  const paidBtn = isCancelled || isCredit ? '' : `<button class="btn-cdoc" id="dPaid"
+    style="background:#e8f5e9;color:#2e7d32;border-color:#a5d6a7">
+    ${svgI('<path d="M20 6 9 17l-5-5"/>')} ${d.paid || !hasPermission('canRecordPayment') ? 'ประวัติรับชำระ' : 'รับชำระเงิน'}
+  </button>`;
   return `
     <div class="doc-acts">
       <button class="btn-cdoc" id="dCl">
         ${svgI('<path d="M18 6 6 18M6 6l12 12"/>')} ปิด
       </button>
-      <button class="btn-cdoc" id="dDel"
+      ${!isCancelled && hasPermission('canCancelInvoice') ? `<button class="btn-cdoc" id="dDel"
         style="background:#fde8e8;color:var(--bad)">
-        ${svgI('<path d="M3 6h18M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/>')} ลบบิล
-      </button>
-      <button class="btn-cdoc" id="dEditBill"
+        ${svgI('<path d="M18 6 6 18M6 6l12 12"/>')} ยกเลิกบิล
+      </button>` : ''}
+      ${!isCancelled && !isAdjustment && !(d.paidAmount > 0) && hasPermission('canEditIssuedInvoice') ? `<button class="btn-cdoc" id="dEditBill"
         style="background:#fff8e1;color:#f57f17;border-color:#ffe082">
         ${svgI('<path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 1 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/>')} แก้ไขบิล
-      </button>
+      </button>` : ''}
       ${paidBtn}
-      <button class="btn-cdoc" id="dTax"
+      ${!isCancelled && !isAdjustment && hasPermission('canCreateAdjustment') ? `<button class="btn-cdoc" id="dAdj"
+        style="background:#f3e5f5;color:#6a1b9a;border-color:#ce93d8">
+        ${svgI('<path d="M12 5v14M5 12h14"/>')} ลดหนี้ / เพิ่มหนี้
+      </button>` : ''}
+      ${!isCancelled && !isAdjustment ? `<button class="btn-cdoc" id="dTax"
         style="background:#e3f2fd;color:#1565c0;border-color:#90caf9">
         ${svgI('<path d="M9 12h6M9 16h6M9 8h2M14 2v6h6"/><path d="M4 2h10l6 6v12a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2z"/>')}
         ใบกำกับภาษี
-      </button>
+      </button>` : ''}
       <button class="btn-prt" id="dPr">
         ${svgI('<path d="M6 9V2h12v7M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><rect x="6" y="14" width="12" height="8"/>')}
         พิมพ์ใบเสร็จ
       </button>
     </div>`;
+}
+
+function invoicePaymentsFor(inv) {
+  return (S.invoicePayments || []).filter(p => p.invoiceId === inv.id)
+    .sort((a, b) => (b.paidAt || 0) - (a.paidAt || 0));
+}
+
+function openPaymentModal(inv) {
+  const ov = sel('mOv');
+  const canRecord = hasPermission('canRecordPayment');
+  const payments = invoicePaymentsFor(inv);
+  const paid = payments.filter(p => !p.reversedAt).reduce((sum, p) => sum + Number(p.amount || 0), 0);
+  const balance = Math.max(0, Number(inv.grand || 0) - paid);
+  const methodName = { cash:'เงินสด', transfer:'โอนเงิน', promptpay:'พร้อมเพย์', card:'บัตร', other:'อื่น ๆ' };
+  const rows = payments.length ? payments.map(p => `<div style="padding:8px 0;border-bottom:1px solid var(--ln);opacity:${p.reversedAt ? '.55' : '1'}">
+    <div class="fjb"><b>${THB(p.amount)} · ${methodName[p.method] || esc(p.method)}</b><span>${dateStr(p.paidAt)}</span></div>
+    <div style="font-size:.75rem;color:var(--fg2)">${esc(p.reference || p.note || '')}${p.reversedAt ? ` · ย้อนรายการ: ${esc(p.reversalReason)}` : ''}</div>
+    ${!p.reversedAt && hasPermission('canReversePayment') ? `<button class="btn btn-sm btn-ghost" data-reverse-payment="${p.id}" style="margin-top:5px;color:var(--bad)">ย้อนรายการรับชำระ</button>` : ''}
+  </div>`).join('') : '<div class="tbl-empty">ยังไม่มีรายการรับชำระ</div>';
+  ov.innerHTML = `<div class="modal md"><div class="modal-h"><h3>การรับชำระ — ${esc(inv.no)}</h3><button class="closex" id="mCl">×</button></div>
+    <div class="modal-b"><div class="fgrid c3 mb12"><div><small>ยอดเอกสาร</small><b class="money">${THB(inv.grand)}</b></div><div><small>รับแล้ว</small><b class="money fc-grn">${THB(paid)}</b></div><div><small>คงเหลือ</small><b class="money fc-bad">${THB(balance)}</b></div></div>
+    ${balance > .01 && canRecord ? `<div class="fgrid c2 mb12"><div class="fld"><label>จำนวนเงิน *</label><input id="payAmt" type="number" min="0.01" max="${balance}" value="${balance}"></div><div class="fld"><label>วิธีชำระ</label><select id="payMethod"><option value="cash">เงินสด</option><option value="transfer">โอนเงิน</option><option value="promptpay">พร้อมเพย์</option><option value="card">บัตร</option><option value="other">อื่น ๆ</option></select></div></div><div class="fgrid c2 mb12"><div class="fld"><label>เลขอ้างอิง</label><input id="payRef"></div><div class="fld"><label>หมายเหตุ</label><input id="payNote"></div></div>` : ''}
+    <h4 style="margin:12px 0 4px">ประวัติ</h4>${rows}</div><div class="modal-f"><button class="btn btn-ghost" id="mCl2">ปิด</button>${balance > .01 && canRecord ? '<button class="btn btn-gold" id="payOk">บันทึกรับชำระ</button>' : ''}</div></div>`;
+  openOv('mOv');
+  bindModalClose(ov, '#mCl', '#mCl2');
+  ov.querySelector('#payOk')?.addEventListener('click', async () => {
+    const amount = Number(sv('payAmt'));
+    if (!useSupabase || !inv.id) return showToast('ต้องเชื่อมต่อ Supabase เพื่อบันทึกรับชำระ', 'err');
+    if (!(amount > 0) || amount > balance + .01) return showToast('จำนวนเงินไม่ถูกต้อง', 'err');
+    const payment = await recordInvoicePayment(inv.id, amount, sv('payMethod'), sv('payRef'), sv('payNote'));
+    if (!payment) return showToast('บันทึกรับชำระไม่สำเร็จ', 'err');
+    S.invoicePayments.push({ id: payment.id, invoiceId: payment.invoice_id, amount:Number(payment.amount), method:payment.method, reference:payment.reference||'', note:payment.note||'', paidAt:new Date(payment.paid_at).getTime(), reversedAt:null, reversalReason:'' });
+    inv.paidAmount = fmt(paid + amount); inv.balance = fmt(Math.max(0, inv.grand - inv.paidAmount)); inv.paid = inv.balance <= .01; inv.status = inv.paid ? 'paid' : 'issued';
+    await saveData(); closeMod(); closeDoc(); renderPanel(); showToast('บันทึกรับชำระแล้ว', 'ok');
+  });
+  ov.querySelectorAll('[data-reverse-payment]').forEach(btn => btn.addEventListener('click', async () => {
+    const reason = prompt('ระบุเหตุผลย้อนรายการรับชำระ');
+    if (!reason?.trim()) return;
+    const reversed = await reverseInvoicePayment(btn.dataset.reversePayment, reason.trim());
+    if (!reversed) return showToast('ย้อนรายการไม่สำเร็จ', 'err');
+    const payment = (S.invoicePayments || []).find(p => p.id === btn.dataset.reversePayment);
+    if (payment) { payment.reversedAt = Date.now(); payment.reversalReason = reason.trim(); }
+    const active = invoicePaymentsFor(inv).filter(p => !p.reversedAt).reduce((s,p)=>s+Number(p.amount||0),0);
+    inv.paidAmount=fmt(active); inv.balance=fmt(Math.max(0,inv.grand-active)); inv.paid=inv.balance<=.01; inv.status=inv.paid?'paid':'issued';
+    await saveData(); closeMod(); closeDoc(); renderPanel(); showToast('ย้อนรายการรับชำระแล้ว', 'ok');
+  }));
+}
+
+function openAdjustmentModal(inv) {
+  if (!hasPermission('canCreateAdjustment')) return showToast('ไม่มีสิทธิ์ออกใบลดหนี้หรือใบเพิ่มหนี้', 'err');
+  const ov = sel('mOv');
+  ov.innerHTML = `<div class="modal sm"><div class="modal-h"><h3>ออกเอกสารปรับปรุง — ${esc(inv.no)}</h3><button class="closex" id="mCl">×</button></div><div class="modal-b"><div class="fld mb12"><label>ประเภท</label><select id="adjType"><option value="credit_note">ใบลดหนี้</option><option value="debit_note">ใบเพิ่มหนี้</option></select></div><div class="fld mb12"><label>จำนวนเงิน *</label><input id="adjAmt" type="number" min="0.01" value="${Math.abs(inv.grand)}"></div><div class="fld"><label>เหตุผล *</label><textarea id="adjReason" rows="3"></textarea></div></div><div class="modal-f"><button class="btn btn-ghost" id="mCl2">ยกเลิก</button><button class="btn btn-gold" id="adjOk">ออกเอกสาร</button></div></div>`;
+  openOv('mOv'); bindModalClose(ov, '#mCl', '#mCl2');
+  ov.querySelector('#adjOk').addEventListener('click', async () => {
+    const type=sv('adjType'), amount=Number(sv('adjAmt')), reason=sv('adjReason').trim();
+    if (!reason || !(amount>0)) return showToast('กรอกจำนวนเงินและเหตุผลให้ครบ', 'err');
+    if (!useSupabase || !inv.id) return showToast('ต้องเชื่อมต่อ Supabase', 'err');
+    const note=await createAdjustmentNote(inv.id,type,amount,reason);
+    if (!note) return showToast('ออกเอกสารไม่สำเร็จ', 'err');
+    await syncRemoteData({force:true}); closeMod(); closeDoc(); renderPanel(); showToast(`ออก${type==='credit_note'?'ใบลดหนี้':'ใบเพิ่มหนี้'} ${note.invoice_number} แล้ว`, 'ok');
+  });
 }
 
 /* ══════════════════════════════════════
@@ -233,9 +313,25 @@ function saveTaxBuyer(key, buyer) {
   try { localStorage.setItem(TAX_BUYERS_KEY, JSON.stringify(all)); } catch {}
 }
 
+function isValidThaiTaxId(value) {
+  const digits = String(value || '').replace(/\D/g, '');
+  if (digits.length !== 13) return false;
+  const sum = digits.slice(0, 12).split('').reduce((total, digit, index) =>
+    total + Number(digit) * (13 - index), 0);
+  return Number(digits[12]) === ((11 - (sum % 11)) % 10);
+}
+
 function openTaxInvoiceModal(d) {
   const ov    = sel('mOv');
-  const saved = loadTaxBuyers()[d.cust] || {};
+  const customer = S.customers.find(c => (c.name || '').trim() === (d.cust || '').trim());
+  const branchNo = customer?.branchNo || '00000';
+  const customerBuyer = customer ? {
+    name: customer.companyName || customer.name || '',
+    address: customer.billingAddress || customer.address || '',
+    taxId: customer.taxId || '',
+    branch: branchNo === '00000' ? 'สำนักงานใหญ่' : `สาขา ${branchNo}`,
+  } : {};
+  const saved = { ...customerBuyer, ...(loadTaxBuyers()[d.cust] || {}), ...(d.taxBuyer || {}) };
 
   ov.innerHTML = `
     <div class="modal md">
@@ -287,24 +383,56 @@ function openTaxInvoiceModal(d) {
     sel('txBranchNoWrap').style.display = e.target.value === 'สำนักงานใหญ่' ? 'none' : 'block';
   });
 
-  ov.querySelector('#txOk').addEventListener('click', () => {
+  ov.querySelector('#txOk').addEventListener('click', async () => {
     const name = sv('txName').trim();
     const addr = sv('txAddr').trim();
-    const taxId = sv('txTax').trim();
+    const taxId = sv('txTax').replace(/\D/g, '');
     if (!name)  return showToast('กรุณากรอกชื่อผู้ซื้อ', 'err');
     if (!addr)  return showToast('กรุณากรอกที่อยู่ผู้ซื้อ', 'err');
-    if (taxId.replace(/\D/g, '').length !== 13)
-      return showToast('เลขประจำตัวผู้เสียภาษีต้องมี 13 หลัก', 'err');
+    if (!isValidThaiTaxId(taxId))
+      return showToast('เลขประจำตัวผู้เสียภาษีไม่ถูกต้อง กรุณาตรวจสอบ 13 หลัก', 'err');
 
     const branchSel = sv('txBranch');
-    const branch = branchSel === 'สำนักงานใหญ่'
-      ? 'สำนักงานใหญ่'
-      : ('สาขา ' + (sv('txBranchNo').trim() || ''));
+    const enteredBranchNo = sv('txBranchNo').replace(/\D/g, '');
+    if (branchSel !== 'สำนักงานใหญ่' && enteredBranchNo.length !== 5)
+      return showToast('เลขสาขาต้องมี 5 หลัก', 'err');
+    const branch = branchSel === 'สำนักงานใหญ่' ? 'สำนักงานใหญ่' : `สาขา ${enteredBranchNo}`;
 
     const buyer = { name, address: addr, taxId, branch };
     saveTaxBuyer(d.cust, buyer);
+    d.invoiceType = 'tax_invoice';
+    d.taxBuyer = buyer;
+    d._taxSyncPending = useSupabase;
+    let cloudOk = !useSupabase;
+
+    if (customer) {
+      customer.companyName = name;
+      customer.billingAddress = addr;
+      customer.taxId = taxId;
+      customer.branchNo = branch === 'สำนักงานใหญ่' ? '00000' : enteredBranchNo;
+      if (useSupabase && typeof updateCustomer === 'function' && /^[0-9a-f-]{36}$/i.test(customer.id || '')) {
+        const customerResult = await updateCustomer(customer.id, {
+          company_name: customer.companyName,
+          billing_address: customer.billingAddress,
+          tax_id: customer.taxId,
+          branch_no: customer.branchNo,
+        });
+        customer._syncPending = !customerResult;
+      }
+    }
+
+    if (useSupabase && d.id && typeof updateInvoiceTaxDetails === 'function') {
+      cloudOk = await updateInvoiceTaxDetails(d.id, buyer);
+      d._taxSyncPending = !cloudOk;
+    }
+    await saveData();
     closeMod();
     showTaxDoc(d, buyer);
+    if (useSupabase) {
+      showToast(cloudOk
+        ? 'บันทึกใบกำกับภาษีขึ้น Supabase แล้ว ☁️'
+        : 'บันทึกในเครื่องแล้ว · รอซิงค์ Supabase อัตโนมัติ', cloudOk ? 'ok' : 'err');
+    }
   });
 }
 
@@ -559,6 +687,7 @@ function bindDocActions(type, data, dc) {
 
   /* Edit invoice — load into billing form */
   ov.querySelector('#dEditBill')?.addEventListener('click', () => {
+    if (!hasPermission('canEditIssuedInvoice')) return showToast('ไม่มีสิทธิ์แก้ไขบิลที่ออกแล้ว', 'err');
     const inv = S.invoices.find(x => x.no === data.no);
     if (!inv) return;
 
@@ -594,32 +723,28 @@ function bindDocActions(type, data, dc) {
     showToast(`แก้ไขบิล ${inv.no} — แก้รายการแล้วกด บันทึกการแก้ไข`, 'inf');
   });
 
-  /* Mark as paid */
-  ov.querySelector('#dPaid')?.addEventListener('click', async () => {
+  /* Payment ledger */
+  ov.querySelector('#dPaid')?.addEventListener('click', () => {
     const inv = S.invoices.find(x => x.no === data.no);
     if (!inv) return;
-    inv.paid = true;
-    if (useSupabase && inv.id && typeof updateInvoicePaid === 'function') {
-      updateInvoicePaid(inv.id, true).catch(e => console.warn('[Docs] paid sync:', e));
-    }
-    await saveData();
-    closeDoc();
-    renderPanel();
-    showToast(`บิล ${data.no} ชำระแล้ว ✓`, 'ok');
+    openPaymentModal(inv);
   });
 
-  /* Delete invoice */
+  ov.querySelector('#dAdj')?.addEventListener('click', () => openAdjustmentModal(data));
+
+  /* Cancel invoice — accounting documents remain in history */
   ov.querySelector('#dDel')?.addEventListener('click', async () => {
     if (type !== 'inv') return;
-    if (!confirm(`ลบใบเสร็จ ${data.no}?\n\n⚠ สต๊อกที่ตัดไปแล้วจะถูกคืนกลับ`)) return;
+    if (!hasPermission('canCancelInvoice')) return showToast('ไม่มีสิทธิ์ยกเลิกบิล', 'err');
+    const reason = prompt(`ระบุเหตุผลยกเลิกใบเสร็จ ${data.no}\n\nสต๊อกจะถูกคืนและเอกสารจะยังอยู่ในประวัติ`);
+    if (reason === null) return;
+    if (!reason.trim()) return showToast('กรุณาระบุเหตุผลการยกเลิก', 'err');
 
-    /* Delete from Supabase first */
-    try {
-      if (useSupabase && data.id && typeof deleteInvoice === 'function') {
-        await deleteInvoice(data.id);
-      }
-    } catch (err) {
-      console.warn('[Docs] Supabase deleteInvoice failed:', err);
+    if (useSupabase) {
+      if (!data.id || typeof cancelInvoiceAtomic !== 'function')
+        return showToast('ยังไม่สามารถยกเลิกบน Supabase ได้ กรุณาตรวจสอบ migration', 'err');
+      const cancelled = await cancelInvoiceAtomic(data.id, reason.trim());
+      if (!cancelled) return showToast('ยกเลิกบิลไม่สำเร็จ ข้อมูลเดิมยังไม่ถูกเปลี่ยน', 'err');
     }
 
     /* Restore stock */
@@ -639,12 +764,17 @@ function bindDocActions(type, data, dc) {
       if (j && j.status === 5) j.status = 4;
     }
 
-    S.invoices = S.invoices.filter(x => x.no !== data.no);
+    data.status = 'cancelled';
+    data.cancelledAt = Date.now();
+    data.cancellationReason = reason.trim();
+    data.paid = false;
     await saveData();
     closeDoc();
     renderNav();
     renderPanel();
-    showToast(`ลบใบเสร็จ ${data.no} แล้ว · คืนสต๊อกเรียบร้อย`, 'inf');
+    if (typeof addAuditLog === 'function')
+      addAuditLog('INVOICE_CANCEL', 'invoice', data.id || null, data.no, { reason: reason.trim() });
+    showToast(`ยกเลิกใบเสร็จ ${data.no} แล้ว · คืนสต๊อกเรียบร้อย`, 'inf');
   });
 
   /* Convert quotation → invoice */

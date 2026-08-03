@@ -61,7 +61,12 @@ const PERMISSIONS = {
     canViewReports: true,
     canAddCustomer: true,
     canDeleteData: true,
-    canDeleteJob: true
+    canDeleteJob: true,
+    canRecordPayment: true,
+    canCreateAdjustment: true,
+    canReversePayment: true,
+    canCancelInvoice: true,
+    canEditIssuedInvoice: true
   },
   2: { // Technician
     name: 'Technician',
@@ -72,7 +77,12 @@ const PERMISSIONS = {
     canViewReports: false,
     canAddCustomer: true,          // ✅ เพิ่มลูกค้าได้
     canDeleteData: false,
-    canDeleteJob: false
+    canDeleteJob: false,
+    canRecordPayment: false,
+    canCreateAdjustment: false,
+    canReversePayment: false,
+    canCancelInvoice: false,
+    canEditIssuedInvoice: false
   },
   4: { // Supervisor (หัวหน้าช่าง)
     name: 'Supervisor',
@@ -83,7 +93,12 @@ const PERMISSIONS = {
     canViewReports: true,
     canAddCustomer: true,          // ✅ เพิ่มลูกค้าได้
     canDeleteData: false,
-    canDeleteJob: true             // ✅ ลบ Job Card ได้ (เฉพาะงาน ไม่รวมลูกค้า/รถ/บิล)
+    canDeleteJob: true,            // ✅ ลบ Job Card ได้ (เฉพาะงาน ไม่รวมลูกค้า/รถ/บิล)
+    canRecordPayment: true,
+    canCreateAdjustment: true,
+    canReversePayment: false,
+    canCancelInvoice: false,
+    canEditIssuedInvoice: false
   }
 };
 
@@ -168,7 +183,7 @@ async function initSupabaseService() {
  * === CUSTOMERS ===
  */
 
-async function addCustomer(name, phone, email, lineId, address, note) {
+async function addCustomer(name, phone, email, lineId, address, note, taxDetails = {}) {
   try {
     const { data, error } = await getSupabase()
       .from('customers')
@@ -179,6 +194,10 @@ async function addCustomer(name, phone, email, lineId, address, note) {
         line_id: lineId,
         address,
         note,
+        company_name: taxDetails.companyName || null,
+        tax_id: taxDetails.taxId || null,
+        branch_no: taxDetails.branchNo || '00000',
+        billing_address: taxDetails.billingAddress || null,
         created_by: currentUser?.id
       }])
       .select()
@@ -587,6 +606,10 @@ async function deleteStockItemBySku(sku) {
 
 async function getStockItems() {
   try {
+    const { data: secureData, error: secureError } = await getSupabase().rpc('get_stock_items_secure');
+    if (!secureError && secureData) return secureData;
+    console.warn('[Service] secure stock RPC unavailable; using legacy query:', secureError?.message || secureError);
+
     // If product_categories join previously failed, skip straight to simple select
     if (!getStockItems._catJoinOk) {
       const { data, error } = await getSupabase()
@@ -689,52 +712,34 @@ async function addInvoice(jobId, customerId, vehicleId, items, subtotal, discoun
     const safeVehicleId  = vehicleId  && uuidRe.test(vehicleId)  ? vehicleId  : null;
     
     console.log('[Service] Creating invoice:', invNo, '| job:', safeJobId, '| cust:', safeCustomerId);
-    
-    // Create invoice
-    const { data: invoice, error: invErr } = await getSupabase()
-      .from('invoices')
-      .insert([{
-        invoice_number: invNo || '',
-        job_id: safeJobId,
-        customer_id: safeCustomerId,
-        vehicle_id: safeVehicleId,
-        customer_name: meta.cust || null,
-        plate: meta.plate || null,
-        phone: meta.phone || null,
-        car_model: meta.model || null,
-        subtotal,
-        discount,
-        vat,
-        grand_total: grandTotal,
-        note,
-        created_by: currentUser?.id
-      }])
-      .select()
-      .single();
-    
-    if (invErr) throw invErr;
 
-    // Add invoice items
-    const itemsData = items.map(item => ({
-      invoice_id: invoice.id,
-      item_type: item.type,
+    // Preferred path after production-hardening-phase-1.sql: invoice header and
+    // every line item are committed in one PostgreSQL transaction.
+    const atomicItems = items.map(item => ({
+      item_type: item.type || 'service',
       stock_item_id: item.stockItemId && uuidRe.test(item.stockItemId) ? item.stockItemId : null,
-      service_id:    item.serviceId   && uuidRe.test(item.serviceId)   ? item.serviceId   : null,
-      description: item.description,
+      service_id: item.serviceId && uuidRe.test(item.serviceId) ? item.serviceId : null,
+      description: item.description || '',
       quantity: item.quantity,
       unit_price: item.unitPrice,
       cost_price: item.costPrice || 0,
       total: item.total,
-      note: item.note
+      note: item.note || ''
     }));
-
-    const { error: itemsErr } = await getSupabase()
-      .from('invoice_items')
-      .insert(itemsData);
-    
-    if (itemsErr) throw itemsErr;
-
-    return invoice;
+    const { data: atomicInvoice, error: atomicErr } = await getSupabase().rpc('create_invoice_atomic', {
+      p_invoice: {
+        invoice_number: invNo || '', job_id: safeJobId, customer_id: safeCustomerId,
+        vehicle_id: safeVehicleId, customer_name: meta.cust || null,
+        plate: meta.plate || null, phone: meta.phone || null, car_model: meta.model || null,
+        subtotal, discount, vat, grand_total: grandTotal, note,
+        status: 'issued', document_type: 'invoice', invoice_type: 'receipt'
+      },
+      p_items: atomicItems
+    });
+    if (!atomicErr && atomicInvoice) {
+      return Array.isArray(atomicInvoice) ? atomicInvoice[0] : atomicInvoice;
+    }
+    throw atomicErr || new Error('Atomic invoice creation failed');
   } catch (err) {
     reportSupabaseWriteError(err, 'addInvoice');
     return null;
@@ -743,14 +748,56 @@ async function addInvoice(jobId, customerId, vehicleId, items, subtotal, discoun
 
 async function updateInvoicePaid(invId, paid) {
   try {
-    const { error } = await getSupabase()
+    let { error } = await getSupabase()
       .from('invoices')
-      .update({ payment_status: paid })
+      .update({ payment_status: paid, status: paid ? 'paid' : 'issued' })
       .eq('id', invId);
+    if (error && /status|column|schema cache/i.test(error.message || '')) {
+      ({ error } = await getSupabase()
+        .from('invoices')
+        .update({ payment_status: paid })
+        .eq('id', invId));
+    }
     if (error) throw error;
     return true;
   } catch (err) {
     console.warn('[Service] updateInvoicePaid:', err);
+    return false;
+  }
+}
+
+async function cancelInvoiceAtomic(invId, reason) {
+  try {
+    const { data, error } = await getSupabase().rpc('cancel_invoice_atomic', {
+      p_invoice_id: invId,
+      p_reason: reason
+    });
+    if (error) throw error;
+    return Array.isArray(data) ? data[0] : data;
+  } catch (err) {
+    reportSupabaseWriteError(err, 'cancelInvoiceAtomic');
+    return null;
+  }
+}
+
+async function updateInvoiceTaxDetails(invId, buyer) {
+  try {
+    const { error } = await getSupabase()
+      .from('invoices')
+      .update({
+        invoice_type: 'tax_invoice',
+        document_type: 'tax_invoice',
+        status: 'issued',
+        buyer_name: buyer.name,
+        buyer_address: buyer.address,
+        buyer_tax_id: String(buyer.taxId || '').replace(/\D/g, ''),
+        buyer_branch: buyer.branch || 'สำนักงานใหญ่'
+      })
+      .eq('id', invId);
+    if (error) throw error;
+    return true;
+  } catch (err) {
+    console.warn('[Service] updateInvoiceTaxDetails:', err);
     return false;
   }
 }
@@ -761,55 +808,91 @@ async function updateInvoicePaid(invId, paid) {
 async function updateInvoiceFull(invId, invoiceData, items) {
   const uuidRe = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
   try {
-    const { error: invErr } = await getSupabase()
-      .from('invoices')
-      .update({
-        subtotal:      invoiceData.sub,
-        discount:      invoiceData.disc,
-        vat:           invoiceData.vat > 0 ? 0.07 : 0,
-        grand_total:   invoiceData.grand,
-        customer_name: invoiceData.cust  || null,
-        plate:         invoiceData.plate || null,
-        phone:         invoiceData.phone || null,
-        car_model:     invoiceData.model || null,
-        note:          invoiceData.note  || null,
-      })
-      .eq('id', invId);
-    if (invErr) throw invErr;
-
-    // ลบ items เดิม (ถ้าไม่ได้รับอนุญาต RLS จะ skip แล้วล้างด้วย insert แทน)
-    try {
-      await getSupabase().from('invoice_items').delete().eq('invoice_id', invId);
-    } catch (delErr) {
-      console.warn('[Service] invoice_items delete skipped (RLS?):', delErr?.message);
-    }
-
-    // ใส่ items ใหม่
-    if (items.length > 0) {
-      const itemsData = items.map(item => ({
-        invoice_id:    invId,
+    const { data, error } = await getSupabase().rpc('update_invoice_atomic', {
+      p_invoice_id: invId,
+      p_invoice: {
+        subtotal: invoiceData.sub, discount: invoiceData.disc,
+        vat: invoiceData.vat > 0 ? 0.07 : 0, grand_total: invoiceData.grand,
+        customer_name: invoiceData.cust || null, plate: invoiceData.plate || null,
+        phone: invoiceData.phone || null, car_model: invoiceData.model || null,
+        note: invoiceData.note || null,
+      },
+      p_items: items.map(item => ({
         stock_item_id: item.stockItemId && uuidRe.test(item.stockItemId) ? item.stockItemId : null,
-        service_id:    item.serviceId   && uuidRe.test(item.serviceId)   ? item.serviceId   : null,
-        item_type:     item.type        || 'service',
-        description:   item.description || '',
-        quantity:      item.quantity,
-        unit_price:    item.unitPrice,
-        cost_price:    item.costPrice   || 0,
-        total:         item.total,
-        note:          item.note        || '',
-      }));
-      const { error: itemsErr } = await getSupabase().from('invoice_items').insert(itemsData);
-      if (itemsErr) throw itemsErr;
-    }
-    return true;
+        service_id: item.serviceId && uuidRe.test(item.serviceId) ? item.serviceId : null,
+        item_type: item.type || 'service', description: item.description || '',
+        quantity: item.quantity, unit_price: item.unitPrice,
+        cost_price: item.costPrice || 0, total: item.total, note: item.note || '',
+      })),
+    });
+    if (error) throw error;
+    return Array.isArray(data) ? data[0] : data;
   } catch (err) {
-    console.error('[Service] updateInvoiceFull error:', err);
-    return false;
+    reportSupabaseWriteError(err, 'updateInvoiceFull');
+    return null;
+  }
+}
+
+async function getInvoicePayments() {
+  try {
+    const { data, error } = await getSupabase().from('invoice_payments').select('*').order('paid_at', { ascending: false });
+    if (error) throw error;
+    return data || [];
+  } catch (err) {
+    console.error('[Service] getInvoicePayments:', err);
+    return [];
+  }
+}
+
+async function recordInvoicePayment(invId, amount, method, reference, note) {
+  try {
+    const { data, error } = await getSupabase().rpc('record_invoice_payment', {
+      p_invoice_id: invId, p_amount: amount, p_method: method,
+      p_reference: reference || null, p_note: note || null,
+    });
+    if (error) throw error;
+    return Array.isArray(data) ? data[0] : data;
+  } catch (err) {
+    reportSupabaseWriteError(err, 'recordInvoicePayment');
+    return null;
+  }
+}
+
+async function reverseInvoicePayment(paymentId, reason) {
+  try {
+    const { data, error } = await getSupabase().rpc('reverse_invoice_payment', {
+      p_payment_id: paymentId, p_reason: reason,
+    });
+    if (error) throw error;
+    return Array.isArray(data) ? data[0] : data;
+  } catch (err) {
+    reportSupabaseWriteError(err, 'reverseInvoicePayment');
+    return null;
+  }
+}
+
+async function createAdjustmentNote(originalInvoiceId, documentType, amount, reason) {
+  try {
+    const { data, error } = await getSupabase().rpc('create_adjustment_note_atomic', {
+      p_original_invoice_id: originalInvoiceId,
+      p_document_type: documentType,
+      p_amount: amount,
+      p_reason: reason,
+    });
+    if (error) throw error;
+    return Array.isArray(data) ? data[0] : data;
+  } catch (err) {
+    reportSupabaseWriteError(err, 'createAdjustmentNote');
+    return null;
   }
 }
 
 async function getInvoices() {
   try {
+    const { data: secureData, error: secureError } = await getSupabase().rpc('get_invoices_secure');
+    if (!secureError && secureData) return secureData;
+    console.warn('[Service] secure invoice RPC unavailable; using legacy query:', secureError?.message || secureError);
+
     const { data, error } = await getSupabase()
       .from('invoices')
       .select('*, invoice_items(*), customers(name), vehicles(plate)')
@@ -1283,12 +1366,18 @@ async function loadAllData() {
         const data = await getPOs();
         console.log('[Service] ✅ POs loaded:', data?.length || 0);
         return data;
+      })(),
+      (async () => {
+        console.log('[Service] Loading invoice payments...');
+        const data = await getInvoicePayments();
+        console.log('[Service] ✅ Invoice payments loaded:', data?.length || 0);
+        return data;
       })()
     ]);
 
     // Extract successful results
-    const [customers, vehicles, jobs, stockItems, invoices, services, shopConfig, stockLedger,
-           requisitions, expenses, quotes, purchaseOrders] = results.map((r, i) => {
+        const [customers, vehicles, jobs, stockItems, invoices, services, shopConfig, stockLedger,
+          requisitions, expenses, quotes, purchaseOrders, invoicePayments] = results.map((r, i) => {
       if (r.status === 'fulfilled') {
         return r.value;
       } else {
@@ -1311,6 +1400,7 @@ async function loadAllData() {
       expenses:       expenses        || [],
       quotes:         quotes          || [],
       purchaseOrders: purchaseOrders  || [],
+      invoicePayments: invoicePayments || [],
     };
   } catch (err) {
     console.error('[Service] loadAllData error:', err);

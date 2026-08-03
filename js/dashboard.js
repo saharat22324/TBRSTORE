@@ -13,7 +13,7 @@ function dashboardHTML() {
 
   const mInv     = S.invoices.filter(i => {
     const d = new Date(i.ts);
-    return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}` === ym;
+    return i.status !== 'cancelled' && `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}` === ym;
   });
   const mGrand   = fmt(mInv.reduce((s, i) => s + i.grand, 0));                // รวม VAT (ยอดบนบิล)
   const mVat     = fmt(mInv.reduce((s, i) => s + (i.vat || 0), 0));           // VAT นำส่ง
@@ -24,7 +24,7 @@ function dashboardHTML() {
 
   /* ── Today ── */
   const todayJobs = S.jobs.filter(j => new Date(j.createdAt).toDateString() === today);
-  const todayInv  = S.invoices.filter(i => new Date(i.ts).toDateString() === today);
+  const todayInv  = S.invoices.filter(i => i.status !== 'cancelled' && new Date(i.ts).toDateString() === today);
   const todayRev  = todayInv.reduce((s, i) => s + i.grand - (i.vat || 0), 0);
 
   /* ── Stock alerts ── */
@@ -35,7 +35,7 @@ function dashboardHTML() {
     .slice(0, 6);
 
   /* ── Unpaid invoices ── */
-  const unpaidInvs  = S.invoices.filter(i => !i.paid).sort((a,b) => (b.ts||0)-(a.ts||0));
+  const unpaidInvs  = S.invoices.filter(i => !i.paid && i.status !== 'cancelled').sort((a,b) => (b.ts||0)-(a.ts||0));
   const unpaidTotal = unpaidInvs.reduce((s, i) => s + i.grand, 0);
 
   /* ── Service due this week (no service > 80 days) ── */
@@ -61,7 +61,7 @@ function dashboardHTML() {
   const mSales = months.map(m =>
     S.invoices.filter(i => {
       const d = new Date(i.ts);
-      return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}` === m;
+      return i.status !== 'cancelled' && `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}` === m;
     }).reduce((s, i) => s + i.grand - (i.vat || 0), 0) // ex-VAT
   );
   const maxS = Math.max(...mSales, 1);
@@ -70,7 +70,7 @@ function dashboardHTML() {
   const monthBreakdown = months.map((m, i) => {
     const inv = S.invoices.filter(x => {
       const d = new Date(x.ts);
-      return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}` === m;
+      return x.status !== 'cancelled' && `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}` === m;
     });
     const rev = mSales[i];
     const cost = inv.reduce((s, x) => s + calcInvCost(x), 0);

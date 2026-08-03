@@ -225,12 +225,12 @@
 
   <!-- Other modules -->
   <script src="js/mobile.js?v=30"></script>
-  <script src="js/supabaseService.js?v=30"></script>
+  <script src="js/supabaseService.js?v=32"></script>
   <script src="js/auth.js?v=30"></script>
   
   <!-- Then Firebase (fallback) -->
-  <script src="js/firebaseService.js?v=30"></script>
-  <script src="js/db.js?v=30"></script>
+  <script src="js/firebaseService.js?v=31"></script>
+  <script src="js/db.js?v=31"></script>
   <script src="js/utils.js?v=30"></script>
   
   <!-- STATE.JS - INLINED TO TEST -->
@@ -313,6 +313,7 @@ function seedData() {
       { id:'SV21', name:'เปิดอ่าง + ฟลัชชิ่งเกียร์ (ครบชุด)', detail:'เปิดอ่างเกียร์ + น้ำยาคลีนนิ่งล้างสมองเกียร์ + ฟลัชชิ่งเกียร์', price:6800 },
     ],
     invoices:       [],
+    invoicePayments: [],
     quotes:         [],
     purchaseOrders: [],
     expenses: [],
@@ -326,6 +327,7 @@ function migrateData() {
   if (!S.stockItems)     S.stockItems     = seedData().stockItems;
   if (!S.services)       S.services       = seedData().services;
   if (!S.expenses)       S.expenses       = [];
+  if (!S.invoicePayments) S.invoicePayments = [];
   if (!S.purchaseOrders) S.purchaseOrders = [];
   if (!S.seq)            S.seq            = { job:1, inv:1, qt:1, po:1, rq:1 };
   if (!S.seq.rq)         S.seq.rq         = 1;
@@ -434,11 +436,11 @@ console.log('[nav.js] ✅ Loaded');
   <script src="js/customers.js?v=30"></script>
   <script src="js/jobs.js?v=30"></script>
   <script src="js/stock.js?v=30"></script>
-  <script src="js/billing.js?v=30"></script>
+  <script src="js/billing.js?v=31"></script>
   <script src="js/purchasing.js?v=30"></script>
-  <script src="js/report.js?v=30"></script>
+  <script src="js/report.js?v=32"></script>
   <script src="js/settings.js?v=30"></script>
-  <script src="js/docs.js?v=30"></script>
+  <script src="js/docs.js?v=32"></script>
   <script>
     (async () => {
       try {

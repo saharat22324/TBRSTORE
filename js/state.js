@@ -93,6 +93,7 @@ function seedData() {
 
     /* ── Documents ── */
     invoices:       [],
+    invoicePayments: [],
     quotes:         [],
     purchaseOrders: [],
 
@@ -111,6 +112,7 @@ function migrateData() {
   if (!S.stockItems)     S.stockItems     = seedData().stockItems;
   if (!S.services)       S.services       = seedData().services;
   if (!S.expenses)       S.expenses       = [];
+  if (!S.invoicePayments) S.invoicePayments = [];
   if (!S.purchaseOrders) S.purchaseOrders = [];
   if (!S.seq)            S.seq            = { job:1, inv:1, qt:1, po:1, rq:1 };
   if (!S.seq.rq)         S.seq.rq         = 1;

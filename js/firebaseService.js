@@ -48,17 +48,6 @@ async function initializeFirebase() {
   }
 }
 
-    isFirebaseReady = true;
-    console.log(`[Firebase] ✅ เชื่อมต่อ Firestore สำเร็จ`);
-    
-    return true;
-  } catch (err) {
-    console.error('[Firebase] Initialize error:', err);
-    console.log('[Firebase] ⚠️  ใช้ localStorage แทน');
-    return false;
-  }
-}
-
 /**
  * Save data to Cloud (Firebase Firestore) - Compat SDK
  */

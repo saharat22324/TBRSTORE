@@ -1,0 +1,6 @@
+backups/
+*.dump
+*.backup
+.env
+.env.*
+!.env.example
