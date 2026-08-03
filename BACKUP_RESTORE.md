@@ -22,6 +22,29 @@
 - ใช้ `scripts/apply-migration.ps1 -Migration <path> -Version <schema_migrations.version>` เมื่อติดตั้ง migration ผ่าน `psql`; หากชื่อไฟล์ตรงกับ version สามารถละ `-Version` ได้ สคริปต์จะบันทึก SHA-256 ลง `schema_migrations`
 - ไฟล์ในโฟลเดอร์ `backups` ต้องอยู่นอก Git และเก็บในพื้นที่เข้ารหัส
 
+## Backup อัตโนมัติบน GitHub Actions
+
+Workflow `.github/workflows/backup.yml` ทำงานทุกวันเวลา 01:15 น. ตามเวลาประเทศไทย และเก็บ encrypted artifact 30 วัน
+
+ตั้งค่า GitHub Actions secrets ก่อนเปิดใช้งาน:
+
+- `SUPABASE_DB_PASSWORD`: รหัสผ่านฐานข้อมูล Production
+- `BACKUP_ENCRYPTION_PASSPHRASE`: passphrase แยกจากรหัสฐานข้อมูลสำหรับ AES-256 encryption
+- `SUPABASE_DB_HOST`: database หรือ Supavisor host ที่ GitHub runner เชื่อมต่อได้ (ไม่บังคับ)
+- `SUPABASE_DB_PORT`: port ของ host ดังกล่าว (ไม่บังคับ)
+- `SUPABASE_DB_USER`: database user ของ host ดังกล่าว (ไม่บังคับ)
+
+Workflow จะหยุดทันทีเมื่อ secret บังคับไม่ครบ ตรวจ catalog ด้วย `pg_restore --list`, ลบ plaintext dump หลังเข้ารหัส และอัปโหลดเฉพาะ `.dump.gpg` กับ `.sha256`
+
+ก่อน restore ให้ตรวจ SHA-256 แล้วถอดรหัสในเครื่องที่ปลอดภัย:
+
+```powershell
+gpg --output tbr-production.dump --decrypt tbr-production.dump.gpg
+pg_restore --list tbr-production.dump
+```
+
+ห้ามส่ง passphrase ผ่าน command-line argument หรือเก็บไว้ร่วมกับ artifact
+
 ## รายการที่ต้องสำรอง
 
 - PostgreSQL schema และข้อมูลทุกตารางใน schema public

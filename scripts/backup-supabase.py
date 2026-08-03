@@ -40,10 +40,17 @@ def main() -> int:
     parser = argparse.ArgumentParser(description="Back up the TBR Supabase database")
     parser.add_argument("--check", action="store_true", help="verify PostgreSQL tools only")
     parser.add_argument("--output-directory", type=Path, default=Path("backups"))
+    parser.add_argument("--password-env", help="environment variable containing the database password")
+    parser.add_argument("--encrypt-passphrase-env", help="environment variable containing the GPG passphrase")
+    parser.add_argument("--host", default=os.environ.get("SUPABASE_DB_HOST", f"db.{PROJECT_REF}.supabase.co"))
+    parser.add_argument("--port", default=os.environ.get("SUPABASE_DB_PORT", "5432"))
+    parser.add_argument("--username", default=os.environ.get("SUPABASE_DB_USER", "postgres"))
+    parser.add_argument("--database", default=os.environ.get("SUPABASE_DB_NAME", "postgres"))
     args = parser.parse_args()
 
     pg_dump = find_postgres_tool("pg_dump")
     pg_restore = find_postgres_tool("pg_restore")
+    gpg = find_postgres_tool("gpg") if args.encrypt_passphrase_env else None
     version = subprocess.run(
         [pg_dump, "--version"],
         check=True,
@@ -54,7 +61,12 @@ def main() -> int:
     if args.check:
         return 0
 
-    password = getpass.getpass("Supabase database password: ")
+    password = os.environ.get(args.password_env, "") if args.password_env else getpass.getpass("Supabase database password: ")
+    if not password:
+        raise ValueError("Database password is empty")
+    encryption_passphrase = os.environ.get(args.encrypt_passphrase_env, "") if args.encrypt_passphrase_env else ""
+    if args.encrypt_passphrase_env and not encryption_passphrase:
+        raise ValueError("Backup encryption passphrase is empty")
     child_environment = os.environ.copy()
     child_environment["PGPASSWORD"] = password
     child_environment["PGSSLMODE"] = "require"
@@ -67,10 +79,10 @@ def main() -> int:
 
     command = [
         pg_dump,
-        f"--host=db.{PROJECT_REF}.supabase.co",
-        "--port=5432",
-        "--username=postgres",
-        "--dbname=postgres",
+        f"--host={args.host}",
+        f"--port={args.port}",
+        f"--username={args.username}",
+        f"--dbname={args.database}",
         "--format=custom",
         "--no-owner",
         "--no-acl",
@@ -90,11 +102,30 @@ def main() -> int:
     finally:
         child_environment.pop("PGPASSWORD", None)
 
-    checksum = sha256_file(dump_path)
-    manifest_path.write_text(f"{checksum}  {dump_path.name}\n", encoding="ascii")
-    print(f"Backup: {dump_path}")
+    final_path = dump_path
+    if gpg:
+        encrypted_path = dump_path.with_suffix(".dump.gpg")
+        try:
+            subprocess.run(
+                [gpg, "--batch", "--yes", "--pinentry-mode", "loopback", "--passphrase-fd", "0",
+                 "--symmetric", "--cipher-algo", "AES256", "--output", encrypted_path, dump_path],
+                input=encryption_passphrase,
+                text=True,
+                check=True,
+            )
+            final_path = encrypted_path
+        except (subprocess.CalledProcessError, OSError):
+            encrypted_path.unlink(missing_ok=True)
+            raise
+        finally:
+            dump_path.unlink(missing_ok=True)
+            encryption_passphrase = ""
+
+    checksum = sha256_file(final_path)
+    manifest_path.write_text(f"{checksum}  {final_path.name}\n", encoding="ascii")
+    print(f"Backup: {final_path}")
     print(f"SHA256: {checksum}")
-    print(f"Bytes: {dump_path.stat().st_size}")
+    print(f"Bytes: {final_path.stat().st_size}")
     return 0
 
 
