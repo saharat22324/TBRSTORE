@@ -17,7 +17,7 @@
 ## คำสั่งมาตรฐาน
 
 - ตั้งค่า `SUPABASE_DB_URL` ใน terminal เฉพาะ session ปัจจุบัน ห้ามบันทึกลงไฟล์
-- รัน `scripts/backup-supabase.ps1` เพื่อสร้าง custom-format logical dump และไฟล์ SHA-256
+- รัน `scripts/backup-supabase.ps1` เพื่อสร้าง custom-format logical dump และไฟล์ SHA-256 สคริปต์จะค้นหา `pg_dump` จาก PATH, โฟลเดอร์ติดตั้ง PostgreSQL มาตรฐาน และ portable binaries ใต้ `%LOCALAPPDATA%\PostgreSQL` โดยอัตโนมัติ หรือระบุ `-PgDumpPath` ได้
 - ตรวจ hash ก่อน restore ทุกครั้ง
 - ใช้ `scripts/apply-migration.ps1 -Migration <path> -Version <schema_migrations.version>` เมื่อติดตั้ง migration ผ่าน `psql`; หากชื่อไฟล์ตรงกับ version สามารถละ `-Version` ได้ สคริปต์จะบันทึก SHA-256 ลง `schema_migrations`
 - ไฟล์ในโฟลเดอร์ `backups` ต้องอยู่นอก Git และเก็บในพื้นที่เข้ารหัส
