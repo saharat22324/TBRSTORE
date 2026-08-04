@@ -312,6 +312,74 @@ def main() -> int:
         r"CREATE POLICY \"services_(insert|update|delete)\"",
         "authoritative migration must keep service writes RPC-only",
     )
+    require(
+        "20260815_atomic_customer_vehicle_lifecycle.sql",
+        r"CREATE OR REPLACE FUNCTION save_customer_atomic[\s\S]*FOR UPDATE[\s\S]*CUSTOMER_SAVE",
+        "customer saves must lock existing records and write an audit log",
+    )
+    require(
+        "20260815_atomic_customer_vehicle_lifecycle.sql",
+        r"CREATE OR REPLACE FUNCTION delete_unused_customer_atomic[\s\S]*Customer has business history[\s\S]*CUSTOMER_DELETE_UNUSED",
+        "customer deletion must reject records with business history",
+    )
+    require(
+        "20260815_atomic_customer_vehicle_lifecycle.sql",
+        r"CREATE OR REPLACE FUNCTION save_vehicle_atomic[\s\S]*pg_advisory_xact_lock[\s\S]*FOR KEY SHARE[\s\S]*VEHICLE_SAVE",
+        "vehicle saves must lock plates and validate customer ownership",
+    )
+    require(
+        "20260815_atomic_customer_vehicle_lifecycle.sql",
+        r"CREATE OR REPLACE FUNCTION delete_unused_vehicle_atomic[\s\S]*Vehicle has business history[\s\S]*VEHICLE_DELETE_UNUSED",
+        "vehicle deletion must reject records with business history",
+    )
+    for rpc in (
+        "save_customer_atomic",
+        "delete_unused_customer_atomic",
+        "save_vehicle_atomic",
+        "delete_unused_vehicle_atomic",
+    ):
+        require(
+            "js/supabaseService.js",
+            rf"rpc\('{rpc}'",
+            f"{rpc} frontend wrapper is missing",
+        )
+    for table in ("customers", "vehicles"):
+        forbid(
+            "js/supabaseService.js",
+            rf"\.from\('{table}'\)[\s\S]{{0,160}}\.(insert|update|delete)\(",
+            f"direct {table} writes must use atomic RPCs",
+        )
+    require(
+        "js/customers.js",
+        r"await addCustomer[\s\S]*S\.customers\.push\(newCust\)",
+        "local customer creation must follow server success",
+    )
+    require(
+        "js/customers.js",
+        r"await updateCustomer[\s\S]*Object\.assign\(m,\s*data\)",
+        "local customer edits must follow server success",
+    )
+    require(
+        "js/customers.js",
+        r"await addVehicle[\s\S]*S\.vehicles\.push\(newVeh\)",
+        "local vehicle creation must follow server success",
+    )
+    require(
+        "js/customers.js",
+        r"await updateVehicle[\s\S]*Object\.assign\(v,\s*data\)",
+        "local vehicle edits must follow server success",
+    )
+    require(
+        "js/docs.js",
+        r"await updateCustomer[\s\S]*Object\.assign\(customer,\s*customerUpdates\)",
+        "tax-document customer edits must follow server success",
+    )
+    for path in ("SQL_FINAL_MIGRATION.sql", "production-role-policies.sql"):
+        forbid(
+            path,
+            r"CREATE POLICY (?:\"|prod_)?(?:customers|vehicles)_(?:insert|update|delete)",
+            "authoritative migrations must keep customer and vehicle writes RPC-only",
+        )
 
     if ERRORS:
         print("Repository validation failed:")

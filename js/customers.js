@@ -399,39 +399,33 @@ function openCustModal(id) {
     };
 
     try {
-      let _custCloudOk = false;
       const isUUID = id => /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id);
       if (m) {
-        // Update existing
         if (useSupabase) {
           if (isUUID(m.id)) {
-            // Real Supabase ID → update (map JS field names to DB column names)
-            const r = await updateCustomer(m.id, {
+            await updateCustomer(m.id, {
               name:    data.name,
               phone:   data.phone,
               email:   data.email,
-              line_id: data.line,   // local state uses 'line', DB uses 'line_id'
+              line_id: data.line,
               note:    data.note,
               company_name: data.companyName || null,
               tax_id: data.taxId || null,
               branch_no: data.branchNo,
               billing_address: data.billingAddress || null,
             });
-            if (r) { _custCloudOk = true; delete m._syncPending; }
-            else m._syncPending = true;
+            delete m._syncPending;
           } else {
-            // Local ID → create in Supabase and replace local ID
             const result = await addCustomer(data.name, data.phone, data.email, data.line, '', data.note, data);
-            if (result) { m.id = result.id; _custCloudOk = true; }
+            m.id = result.id;
           }
         }
         Object.assign(m, data);
       } else {
-        // Add new
         const newCust = { id: 'C-' + Date.now(), createdAt: Date.now(), ...data };
         if (useSupabase && typeof addCustomer === 'function') {
           const result = await addCustomer(data.name, data.phone, data.email, data.line, '', data.note, data);
-          if (result) { newCust.id = result.id; _custCloudOk = true; }
+          newCust.id = result.id;
         }
         S.customers.push(newCust);
       }
@@ -439,19 +433,18 @@ function openCustModal(id) {
       closeMod();
       renderPanel();
       renderNav();
-      if (!useSupabase)      showToast(m ? 'อัปเดตลูกค้าแล้ว' : 'เพิ่มลูกค้าแล้ว');
-      else if (_custCloudOk) showToast((m ? 'อัปเดตลูกค้าแล้ว' : 'เพิ่มลูกค้าแล้ว') + ' · ขึ้นคลาวด์ ☁️');
-      else                   showToast((m ? 'อัปเดตลูกค้า' : 'เพิ่มลูกค้า') + ' — ยังไม่ขึ้นคลาวด์ ระบบจะซิงค์อัตโนมัติ', 'err');
+      showToast((m ? 'อัปเดตลูกค้าแล้ว' : 'เพิ่มลูกค้าแล้ว') + (useSupabase ? ' · ขึ้นคลาวด์ ☁️' : ''));
     } catch (err) {
       console.error('Save customer error:', err);
-      showToast('บันทึกลูกค้าไม่สำเร็จ', 'err');
+      showToast(err?.message || 'บันทึกลูกค้าไม่สำเร็จ', 'err');
     }
   });
 
   ov.querySelector('#delCust')?.addEventListener('click', async () => {
     if (!confirm('ลบลูกค้านี้?')) return;
     try {
-      if (useSupabase && typeof deleteCustomer === 'function') {
+      const isUUID = value => /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(value || '');
+      if (useSupabase && isUUID(id) && typeof deleteCustomer === 'function') {
         await deleteCustomer(id);
       }
       S.customers = S.customers.filter(c => c.id !== id);
@@ -462,7 +455,7 @@ function openCustModal(id) {
       showToast('ลบลูกค้าแล้ว');
     } catch (err) {
       console.error('Delete customer error:', err);
-      showToast('ลบลูกค้าไม่สำเร็จ', 'err');
+      showToast(err?.message || 'ลบลูกค้าไม่สำเร็จ', 'err');
     }
   });
 
@@ -533,14 +526,11 @@ function openVehModal(vid, prefCustId) {
     };
 
     try {
-      let _vehCloudOk = false;
       const isUUID = id => /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id);
       const safeCustId = isUUID(custId) ? custId : null;
       if (v) {
-        // Update existing
         if (useSupabase) {
           if (isUUID(v.id)) {
-            // Real Supabase ID → update (map JS field names to DB column names)
             const vUpdates = {
               plate:   data.plate,
               brand:   data.brand,
@@ -551,21 +541,18 @@ function openVehModal(vid, prefCustId) {
             };
             if (safeCustId)  vUpdates.customer_id    = safeCustId;
             if (data.vin)    vUpdates.chassis_number = data.vin;
-            const r = await updateVehicle(v.id, vUpdates);
-            if (r) _vehCloudOk = true;
+            await updateVehicle(v.id, vUpdates);
           } else {
-            // Local ID → create in Supabase and replace local ID
             const result = await addVehicle(safeCustId, data.plate, data.brand, data.model, data.year, data.color, data.mileage, '', data.vin, '');
-            if (result) { v.id = result.id; _vehCloudOk = true; }
+            v.id = result.id;
           }
         }
         Object.assign(v, data);
       } else {
-        // Add new
         const newVeh = { id: 'V-' + Date.now(), createdAt: Date.now(), custId, ...data };
         if (useSupabase && typeof addVehicle === 'function') {
           const result = await addVehicle(safeCustId, data.plate, data.brand, data.model, data.year, data.color, data.mileage, '', data.vin, '');
-          if (result) { newVeh.id = result.id; _vehCloudOk = true; }
+          newVeh.id = result.id;
         }
         S.vehicles.push(newVeh);
       }
@@ -573,19 +560,18 @@ function openVehModal(vid, prefCustId) {
       closeMod();
       renderPanel();
       renderNav();
-      if (!useSupabase)     showToast(v ? 'อัปเดตรถแล้ว' : 'เพิ่มรถแล้ว');
-      else if (_vehCloudOk) showToast((v ? 'อัปเดตรถแล้ว' : 'เพิ่มรถแล้ว') + ' · ขึ้นคลาวด์ ☁️');
-      else                  showToast((v ? 'อัปเดตรถ' : 'เพิ่มรถ') + ' — ยังไม่ขึ้นคลาวด์ ระบบจะซิงค์อัตโนมัติ', 'err');
+      showToast((v ? 'อัปเดตรถแล้ว' : 'เพิ่มรถแล้ว') + (useSupabase ? ' · ขึ้นคลาวด์ ☁️' : ''));
     } catch (err) {
       console.error('Save vehicle error:', err);
-      showToast('บันทึกรถไม่สำเร็จ', 'err');
+      showToast(err?.message || 'บันทึกรถไม่สำเร็จ', 'err');
     }
   });
 
   ov.querySelector('#delVeh')?.addEventListener('click', async () => {
     if (!confirm('ลบรถนี้?')) return;
     try {
-      if (useSupabase && typeof deleteVehicle === 'function') {
+      const isUUID = value => /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(value || '');
+      if (useSupabase && isUUID(vid) && typeof deleteVehicle === 'function') {
         await deleteVehicle(vid);
       }
       S.vehicles = S.vehicles.filter(x => x.id !== vid);
@@ -595,7 +581,7 @@ function openVehModal(vid, prefCustId) {
       showToast('ลบรถแล้ว');
     } catch (err) {
       console.error('Delete vehicle error:', err);
-      showToast('ลบรถไม่สำเร็จ', 'err');
+      showToast(err?.message || 'ลบรถไม่สำเร็จ', 'err');
     }
   });
 

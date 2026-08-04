@@ -57,9 +57,7 @@ DROP POLICY IF EXISTS prod_customers_insert ON customers;
 DROP POLICY IF EXISTS prod_customers_update ON customers;
 DROP POLICY IF EXISTS prod_customers_delete ON customers;
 CREATE POLICY prod_customers_read ON customers FOR SELECT TO authenticated USING (TRUE);
-CREATE POLICY prod_customers_insert ON customers FOR INSERT TO authenticated WITH CHECK (created_by IS NULL OR created_by = auth.uid());
-CREATE POLICY prod_customers_update ON customers FOR UPDATE TO authenticated USING (TRUE) WITH CHECK (TRUE);
-CREATE POLICY prod_customers_delete ON customers FOR DELETE TO authenticated USING (current_app_role() = 'admin');
+-- Customer writes use 20260815_atomic_customer_vehicle_lifecycle.sql RPCs.
 
 DROP POLICY IF EXISTS team_read_vehicles ON vehicles;
 DROP POLICY IF EXISTS team_write_vehicles ON vehicles;
@@ -74,9 +72,7 @@ DROP POLICY IF EXISTS prod_vehicles_insert ON vehicles;
 DROP POLICY IF EXISTS prod_vehicles_update ON vehicles;
 DROP POLICY IF EXISTS prod_vehicles_delete ON vehicles;
 CREATE POLICY prod_vehicles_read ON vehicles FOR SELECT TO authenticated USING (TRUE);
-CREATE POLICY prod_vehicles_insert ON vehicles FOR INSERT TO authenticated WITH CHECK (created_by IS NULL OR created_by = auth.uid());
-CREATE POLICY prod_vehicles_update ON vehicles FOR UPDATE TO authenticated USING (TRUE) WITH CHECK (TRUE);
-CREATE POLICY prod_vehicles_delete ON vehicles FOR DELETE TO authenticated USING (current_app_role() = 'admin');
+-- Vehicle writes use 20260815_atomic_customer_vehicle_lifecycle.sql RPCs.
 
 DROP POLICY IF EXISTS team_read_jobs ON jobs;
 DROP POLICY IF EXISTS team_write_jobs ON jobs;

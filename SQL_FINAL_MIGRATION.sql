@@ -330,13 +330,7 @@ DROP POLICY IF EXISTS "customers_update" ON customers;
 DROP POLICY IF EXISTS "customers_delete" ON customers;
 CREATE POLICY "customers_select" ON customers
   FOR SELECT USING (auth.uid() IS NOT NULL);
-CREATE POLICY "customers_insert" ON customers
-  FOR INSERT WITH CHECK (auth_role() IN ('admin', 'supervisor'));
-CREATE POLICY "customers_update" ON customers
-  FOR UPDATE USING (auth_role() IN ('admin', 'supervisor'))
-  WITH CHECK (auth_role() IN ('admin', 'supervisor'));
-CREATE POLICY "customers_delete" ON customers
-  FOR DELETE USING (auth_role() = 'admin');
+-- Customer writes use 20260815_atomic_customer_vehicle_lifecycle.sql RPCs.
 
 -- ▶ VEHICLES: all authenticated can read, admin/supervisor can modify
 DROP POLICY IF EXISTS "vehicles_select" ON vehicles;
@@ -345,13 +339,7 @@ DROP POLICY IF EXISTS "vehicles_update" ON vehicles;
 DROP POLICY IF EXISTS "vehicles_delete" ON vehicles;
 CREATE POLICY "vehicles_select" ON vehicles
   FOR SELECT USING (auth.uid() IS NOT NULL);
-CREATE POLICY "vehicles_insert" ON vehicles
-  FOR INSERT WITH CHECK (auth_role() IN ('admin', 'supervisor'));
-CREATE POLICY "vehicles_update" ON vehicles
-  FOR UPDATE USING (auth_role() IN ('admin', 'supervisor'))
-  WITH CHECK (auth_role() IN ('admin', 'supervisor'));
-CREATE POLICY "vehicles_delete" ON vehicles
-  FOR DELETE USING (auth_role() = 'admin');
+-- Vehicle writes use 20260815_atomic_customer_vehicle_lifecycle.sql RPCs.
 
 -- ▶ JOBS: all authenticated can read, admin/supervisor can modify
 DROP POLICY IF EXISTS "jobs_select" ON jobs;

@@ -1160,14 +1160,19 @@ async function syncLocalToSupabase(opts = {}) {
 
     // Retry edits to existing customers that previously failed to sync.
     for (const c of (S.customers || []).filter(x => x._syncPending && _uuid.test(x.id || ''))) {
-      const result = await updateCustomer(c.id, {
-        name: c.name || '', phone: c.phone || '', email: c.email || '', line_id: c.line || '',
-        address: c.address || null, note: c.note || null,
-        company_name: c.companyName || null, tax_id: c.taxId || null,
-        branch_no: c.branchNo || '00000', billing_address: c.billingAddress || null,
-      });
-      if (result) { delete c._syncPending; syncedCount++; }
-      else failedCount++;
+      try {
+        await updateCustomer(c.id, {
+          name: c.name || '', phone: c.phone || '', email: c.email || '', line_id: c.line || '',
+          address: c.address || null, note: c.note || null,
+          company_name: c.companyName || null, tax_id: c.taxId || null,
+          branch_no: c.branchNo || '00000', billing_address: c.billingAddress || null,
+        });
+        delete c._syncPending;
+        syncedCount++;
+      } catch (e) {
+        failedCount++;
+        lastErr = e;
+      }
     }
 
     // Retry tax-invoice snapshots for existing invoices.

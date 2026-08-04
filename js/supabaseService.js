@@ -188,9 +188,9 @@ async function initSupabaseService() {
 
 async function addCustomer(name, phone, email, lineId, address, note, taxDetails = {}) {
   try {
-    const { data, error } = await getSupabase()
-      .from('customers')
-      .insert([{
+    const { data, error } = await getSupabase().rpc('save_customer_atomic', {
+      p_customer_id: null,
+      p_customer: {
         name,
         phone,
         email,
@@ -200,34 +200,28 @@ async function addCustomer(name, phone, email, lineId, address, note, taxDetails
         company_name: taxDetails.companyName || null,
         tax_id: taxDetails.taxId || null,
         branch_no: taxDetails.branchNo || '00000',
-        billing_address: taxDetails.billingAddress || null,
-        created_by: currentUser?.id
-      }])
-      .select()
-      .single();
-    
+        billing_address: taxDetails.billingAddress || null
+      }
+    });
     if (error) throw error;
     return data;
   } catch (err) {
     reportSupabaseWriteError(err, 'addCustomer');
-    return null;
+    throw err;
   }
 }
 
 async function updateCustomer(customerId, updates) {
   try {
-    const { data, error } = await getSupabase()
-      .from('customers')
-      .update(updates)
-      .eq('id', customerId)
-      .select()
-      .single();
-    
+    const { data, error } = await getSupabase().rpc('save_customer_atomic', {
+      p_customer_id: customerId,
+      p_customer: updates
+    });
     if (error) throw error;
     return data;
   } catch (err) {
-    console.error('[Service] updateCustomer error:', err);
-    return null;
+    reportSupabaseWriteError(err, 'updateCustomer');
+    throw err;
   }
 }
 
@@ -248,16 +242,14 @@ async function getCustomers() {
 
 async function deleteCustomer(customerId) {
   try {
-    const { error } = await getSupabase()
-      .from('customers')
-      .delete()
-      .eq('id', customerId);
-    
+    const { data, error } = await getSupabase().rpc('delete_unused_customer_atomic', {
+      p_customer_id: customerId
+    });
     if (error) throw error;
-    return true;
+    return data;
   } catch (err) {
-    console.error('[Service] deleteCustomer error:', err);
-    return false;
+    reportSupabaseWriteError(err, 'deleteCustomer');
+    throw err;
   }
 }
 
@@ -269,64 +261,40 @@ async function addVehicle(customerId, plate, brand, model, year, color, mileage,
   try {
     const uuidRe = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
     const safeCustomerId = customerId && uuidRe.test(customerId) ? customerId : null;
-    // year/mileage เป็นคอลัมน์ integer ในคลาวด์ — ค่าว่าง "" จะทำให้ insert fail (22P02)
-    // แปลงเป็นตัวเลข ถ้าว่าง/ไม่ใช่ตัวเลข → null
-    const toInt = (x) => {
-      if (x === null || x === undefined || x === '') return null;
-      const n = parseInt(String(x).replace(/[^\d-]/g, ''), 10);
-      return Number.isFinite(n) ? n : null;
-    };
-
-    const { data, error } = await getSupabase()
-      .from('vehicles')
-      .insert([{
+    const { data, error } = await getSupabase().rpc('save_vehicle_atomic', {
+      p_vehicle_id: null,
+      p_vehicle: {
         customer_id: safeCustomerId,
         plate,
         brand,
         model,
-        year: toInt(year),
+        year,
         color,
-        mileage: toInt(mileage),
+        mileage,
         engine_number: engineNumber,
         chassis_number: chassisNumber,
-        note,
-        created_by: currentUser?.id
-      }])
-      .select()
-      .single();
-    
+        note
+      }
+    });
     if (error) throw error;
     return data;
   } catch (err) {
     reportSupabaseWriteError(err, 'addVehicle');
-    return null;
+    throw err;
   }
 }
 
 async function updateVehicle(vehicleId, updates) {
   try {
-    // year/mileage เป็น integer ในคลาวด์ — กันค่าว่าง "" ที่ทำให้ update fail (22P02)
-    const u = { ...updates };
-    const toInt = (x) => {
-      if (x === null || x === undefined || x === '') return null;
-      const n = parseInt(String(x).replace(/[^\d-]/g, ''), 10);
-      return Number.isFinite(n) ? n : null;
-    };
-    if ('year' in u) u.year = toInt(u.year);
-    if ('mileage' in u) u.mileage = toInt(u.mileage);
-
-    const { data, error } = await getSupabase()
-      .from('vehicles')
-      .update(u)
-      .eq('id', vehicleId)
-      .select()
-      .single();
-    
+    const { data, error } = await getSupabase().rpc('save_vehicle_atomic', {
+      p_vehicle_id: vehicleId,
+      p_vehicle: updates
+    });
     if (error) throw error;
     return data;
   } catch (err) {
-    console.error('[Service] updateVehicle error:', err);
-    return null;
+    reportSupabaseWriteError(err, 'updateVehicle');
+    throw err;
   }
 }
 
@@ -347,16 +315,14 @@ async function getVehicles() {
 
 async function deleteVehicle(vehicleId) {
   try {
-    const { error } = await getSupabase()
-      .from('vehicles')
-      .delete()
-      .eq('id', vehicleId);
-    
+    const { data, error } = await getSupabase().rpc('delete_unused_vehicle_atomic', {
+      p_vehicle_id: vehicleId
+    });
     if (error) throw error;
-    return true;
+    return data;
   } catch (err) {
-    console.error('[Service] deleteVehicle error:', err);
-    return false;
+    reportSupabaseWriteError(err, 'deleteVehicle');
+    throw err;
   }
 }
 

@@ -399,32 +399,34 @@ function openTaxInvoiceModal(d) {
     const branch = branchSel === 'สำนักงานใหญ่' ? 'สำนักงานใหญ่' : `สาขา ${enteredBranchNo}`;
 
     const buyer = { name, address: addr, taxId, branch };
-    saveTaxBuyer(d.cust, buyer);
-    d.invoiceType = 'tax_invoice';
-    d.taxBuyer = buyer;
-    d._taxSyncPending = useSupabase;
     let cloudOk = !useSupabase;
 
     if (customer) {
-      customer.companyName = name;
-      customer.billingAddress = addr;
-      customer.taxId = taxId;
-      customer.branchNo = branch === 'สำนักงานใหญ่' ? '00000' : enteredBranchNo;
+      const customerUpdates = {
+        companyName: name,
+        billingAddress: addr,
+        taxId,
+        branchNo: branch === 'สำนักงานใหญ่' ? '00000' : enteredBranchNo,
+      };
       if (useSupabase && typeof updateCustomer === 'function' && /^[0-9a-f-]{36}$/i.test(customer.id || '')) {
-        const customerResult = await updateCustomer(customer.id, {
-          company_name: customer.companyName,
-          billing_address: customer.billingAddress,
-          tax_id: customer.taxId,
-          branch_no: customer.branchNo,
+        await updateCustomer(customer.id, {
+          company_name: customerUpdates.companyName,
+          billing_address: customerUpdates.billingAddress,
+          tax_id: customerUpdates.taxId,
+          branch_no: customerUpdates.branchNo,
         });
-        customer._syncPending = !customerResult;
+        delete customer._syncPending;
       }
+      Object.assign(customer, customerUpdates);
     }
 
     if (useSupabase && d.id && typeof updateInvoiceTaxDetails === 'function') {
       cloudOk = await updateInvoiceTaxDetails(d.id, buyer);
-      d._taxSyncPending = !cloudOk;
     }
+    saveTaxBuyer(d.cust, buyer);
+    d.invoiceType = 'tax_invoice';
+    d.taxBuyer = buyer;
+    d._taxSyncPending = useSupabase && !cloudOk;
     await saveData();
     closeMod();
     showTaxDoc(d, buyer);
