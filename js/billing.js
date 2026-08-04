@@ -664,14 +664,8 @@ async function saveInvoice() {
   /* ── NEW INVOICE — ออกบิลใหม่ ── */
   const no = nextSeqNo('inv').replace('inv-','INV-');
 
-  /* Update vehicle mileage */
-  if (bJobId && mile) {
-    const j = S.jobs.find(x => x.id === bJobId);
-    if (j) {
-      const v = S.vehicles.find(x => x.id === j.vehicleId);
-      if (v) v.mileage = parseInt(mile) || v.mileage;
-    }
-  }
+  const billedJob = bJobId ? S.jobs.find(x => x.id === bJobId) : null;
+  const billedVehicle = billedJob ? S.vehicles.find(x => x.id === billedJob.vehicleId) : null;
 
   const inv = {
     no, ts: Date.now(), jobId: bJobId,
@@ -683,13 +677,8 @@ async function saveInvoice() {
     status: 'issued', documentType: 'invoice',
   };
 
-  /* Close job if billing from job */
-  if (bJobId) {
-    const j = S.jobs.find(x => x.id === bJobId);
-    if (j) j.status = 5;
-  }
-
   let _invCloudOk = false;
+  let invoiceError = null;
   try {
     // Try to save to Supabase
     if (useSupabase && typeof addInvoice === 'function') {
@@ -717,15 +706,19 @@ async function saveInvoice() {
       if (supaResult) { inv.id = supaResult.id; _invCloudOk = true; }
     }
   } catch (err) {
-    console.warn('[Billing] Supabase save failed (using localStorage):', err);
+    invoiceError = err;
+    console.error('[Billing] atomic invoice creation failed:',err);
   }
 
   if (useSupabase && !_invCloudOk) {
-    showToast(`ออกใบเสร็จ ${no} ไม่สำเร็จ · ข้อมูลและสต๊อกไม่ถูกเปลี่ยน`, 'err');
+    const reason = String(invoiceError?.message || '').replace(/^.*?:\s*/, '').slice(0,120);
+    showToast(`ออกใบเสร็จ ${no} ไม่สำเร็จ${reason ? ` · ${reason}` : ''}`, 'err');
     return;
   }
 
   /* Update local cache only after the atomic cloud transaction succeeds. */
+  if (billedVehicle && mile) billedVehicle.mileage = parseInt(mile) || billedVehicle.mileage;
+  if (billedJob) billedJob.status = 5;
   bItems.forEach(it => {
     if (it.sid && it.itemType === 'stock') {
       const m = S.stockItems.find(x => x.id === it.sid);

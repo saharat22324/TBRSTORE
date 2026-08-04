@@ -64,11 +64,10 @@ BEGIN
       SELECT * INTO v_stock FROM stock_items
       WHERE id = (v_item->>'stock_item_id')::UUID FOR UPDATE;
       IF NOT FOUND THEN RAISE EXCEPTION 'Stock item not found'; END IF;
-      IF v_qty <> TRUNC(v_qty) THEN RAISE EXCEPTION 'Stock quantity must be a whole number'; END IF;
       IF COALESCE(v_stock.quantity,0) < v_qty THEN
         RAISE EXCEPTION 'Insufficient stock for % (available %, requested %)', v_stock.sku, v_stock.quantity, v_qty;
       END IF;
-      UPDATE stock_items SET quantity = quantity - v_qty::INTEGER, updated_at = NOW()
+      UPDATE stock_items SET quantity = quantity - v_qty, updated_at = NOW()
       WHERE id = v_stock.id;
       INSERT INTO stock_ledger(stock_item_id,type,qty,ref_type,ref_id,note,created_by)
       VALUES(v_stock.id,'out',v_qty,'invoice',v_invoice.id,'ออกตามบิล '||v_invoice.invoice_number,auth.uid());
@@ -125,7 +124,7 @@ BEGIN
   FOR v_old IN SELECT stock_item_id,SUM(quantity) qty FROM invoice_items
     WHERE invoice_id=p_invoice_id AND stock_item_id IS NOT NULL GROUP BY stock_item_id
   LOOP
-    UPDATE stock_items SET quantity=quantity+v_old.qty::INTEGER,updated_at=NOW() WHERE id=v_old.stock_item_id;
+    UPDATE stock_items SET quantity=quantity+v_old.qty,updated_at=NOW() WHERE id=v_old.stock_item_id;
     INSERT INTO stock_ledger(stock_item_id,type,qty,ref_type,ref_id,note,created_by)
     VALUES(v_old.stock_item_id,'in',v_old.qty,'invoice_edit',p_invoice_id,'คืนก่อนแก้ไขบิล '||v_invoice.invoice_number,auth.uid());
   END LOOP;
@@ -135,10 +134,9 @@ BEGIN
     v_qty:=COALESCE((v_item->>'quantity')::NUMERIC,0);
     IF v_qty<=0 THEN RAISE EXCEPTION 'Item quantity must be positive'; END IF;
     IF NULLIF(v_item->>'stock_item_id','') IS NOT NULL THEN
-      IF v_qty<>TRUNC(v_qty) THEN RAISE EXCEPTION 'Stock quantity must be a whole number'; END IF;
       SELECT * INTO v_stock FROM stock_items WHERE id=(v_item->>'stock_item_id')::UUID FOR UPDATE;
       IF NOT FOUND OR COALESCE(v_stock.quantity,0)<v_qty THEN RAISE EXCEPTION 'Insufficient stock'; END IF;
-      UPDATE stock_items SET quantity=quantity-v_qty::INTEGER,updated_at=NOW() WHERE id=v_stock.id;
+      UPDATE stock_items SET quantity=quantity-v_qty,updated_at=NOW() WHERE id=v_stock.id;
       INSERT INTO stock_ledger(stock_item_id,type,qty,ref_type,ref_id,note,created_by)
       VALUES(v_stock.id,'out',v_qty,'invoice_edit',p_invoice_id,'ตัดใหม่หลังแก้ไขบิล '||v_invoice.invoice_number,auth.uid());
     END IF;
@@ -238,7 +236,7 @@ DECLARE v_invoice invoices; v_item RECORD; BEGIN
   FOR v_item IN SELECT stock_item_id,SUM(quantity) qty FROM invoice_items
     WHERE invoice_id=p_invoice_id AND stock_item_id IS NOT NULL GROUP BY stock_item_id
   LOOP
-    UPDATE stock_items SET quantity=quantity+v_item.qty::INTEGER,updated_at=NOW() WHERE id=v_item.stock_item_id;
+    UPDATE stock_items SET quantity=quantity+v_item.qty,updated_at=NOW() WHERE id=v_item.stock_item_id;
     INSERT INTO stock_ledger(stock_item_id,type,qty,ref_type,ref_id,note,created_by)
     VALUES(v_item.stock_item_id,'in',v_item.qty,'invoice_cancel',p_invoice_id,'คืนจากยกเลิกบิล '||v_invoice.invoice_number,auth.uid());
   END LOOP;

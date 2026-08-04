@@ -221,6 +221,31 @@ def main() -> int:
         r"CREATE POLICY prod_jobs_insert",
         "job creation must remain RPC-only",
     )
+    require(
+        "20260812_fractional_invoice_stock.sql",
+        r"v_qty NUMERIC\(12,3\)[\s\S]*quantity=quantity-v_qty[\s\S]*quantity=quantity\+v_old\.qty[\s\S]*quantity=quantity\+v_item\.qty",
+        "invoice create, edit and cancellation must preserve fractional stock",
+    )
+    forbid(
+        "20260812_fractional_invoice_stock.sql",
+        r"TRUNC\(|::INTEGER|whole number",
+        "invoice stock quantities must not be truncated to integers",
+    )
+    forbid(
+        "production-accounting-completion.sql",
+        r"v_(qty|old\.qty|item\.qty)::INTEGER|Stock quantity must be a whole number",
+        "authoritative invoice lifecycle must preserve fractional stock",
+    )
+    require(
+        "js/supabaseService.js",
+        r"reportSupabaseWriteError\(err, 'addInvoice'\);\s*throw err;",
+        "invoice RPC errors must reach the billing workflow",
+    )
+    require(
+        "js/billing.js",
+        r"if \(useSupabase && !_invCloudOk\)[\s\S]*return;[\s\S]*if \(billedJob\) billedJob\.status = 5",
+        "job closure must follow successful invoice creation",
+    )
 
     if ERRORS:
         print("Repository validation failed:")

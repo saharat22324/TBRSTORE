@@ -735,7 +735,7 @@ async function addInvoice(jobId, customerId, vehicleId, items, subtotal, discoun
     throw atomicErr || new Error('Atomic invoice creation failed');
   } catch (err) {
     reportSupabaseWriteError(err, 'addInvoice');
-    return null;
+    throw err;
   }
 }
 
