@@ -1374,37 +1374,30 @@ async function getServices() {
   }
 }
 
-async function upsertService(svc) {
-  try {
-    const { error } = await getSupabase()
-      .from('services')
-      .upsert({
-        service_code: svc.id,
-        name:         svc.name,
-        description:  svc.detail || '',
-        price:        svc.price  || 0,
-        active:       true,
-      }, { onConflict: 'service_code' });
-    if (error) throw error;
-    return true;
-  } catch (err) {
-    console.warn('[Service] upsertService error:', err);
-    return false;
+async function saveServiceAtomic(originalCode,svc) {
+  const { data,error } = await getSupabase().rpc('save_service_atomic', {
+    p_original_code: originalCode || null,
+    p_service: {
+      service_code: svc.id,
+      name: svc.name,
+      description: svc.detail || '',
+      price: parseFloat(svc.price) || 0,
+    },
+  });
+  if (error) {
+    reportSupabaseWriteError(error,'saveServiceAtomic');
+    throw error;
   }
+  return data;
 }
 
-async function deleteServiceByCode(code) {
-  try {
-    const { error } = await getSupabase()
-      .from('services')
-      .update({ active: false })
-      .eq('service_code', code);
-    if (error) throw error;
-    return true;
-  } catch (err) {
-    console.warn('[Service] deleteService error:', err);
-    return false;
+async function archiveServiceAtomic(code) {
+  const { data,error } = await getSupabase().rpc('archive_service_atomic', { p_service_code: code });
+  if (error) {
+    reportSupabaseWriteError(error,'archiveServiceAtomic');
+    throw error;
   }
+  return data;
 }
 
 /* ══════════════════════════════════════

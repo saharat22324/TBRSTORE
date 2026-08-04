@@ -24,12 +24,14 @@ jobs:
           base="https://tbrstore.vercel.app"
           login="$(curl --fail --silent --show-error --location --retry 2 --max-time 20 "$base/login.html")"
           nav="$(curl --fail --silent --show-error --retry 2 --max-time 20 "$base/js/nav.js?monitor=1")"
-          service="$(curl --fail --silent --show-error --retry 2 --max-time 20 "$base/js/supabaseService.js?v=43&monitor=1")"
+          service="$(curl --fail --silent --show-error --retry 2 --max-time 20 "$base/js/supabaseService.js?v=44&monitor=1")"
+          db="$(curl --fail --silent --show-error --retry 2 --max-time 20 "$base/js/db.js?v=35&monitor=1")"
           jobs="$(curl --fail --silent --show-error --retry 2 --max-time 20 "$base/js/jobs.js?v=33&monitor=1")"
           stock="$(curl --fail --silent --show-error --retry 2 --max-time 20 "$base/js/stock.js?v=34&monitor=1")"
           purchasing="$(curl --fail --silent --show-error --retry 2 --max-time 20 "$base/js/purchasing.js?v=32&monitor=1")"
           billing="$(curl --fail --silent --show-error --retry 2 --max-time 20 "$base/js/billing.js?v=33&monitor=1")"
           docs="$(curl --fail --silent --show-error --retry 2 --max-time 20 "$base/js/docs.js?v=33&monitor=1")"
+          settings="$(curl --fail --silent --show-error --retry 2 --max-time 20 "$base/js/settings.js?v=31&monitor=1")"
           grep -q 'id="loginUsername"' <<<"$login"
           grep -q 'function canAccessTab' <<<"$nav"
           grep -q "rpc('create_requisition_atomic'" <<<"$service"
@@ -44,6 +46,8 @@ jobs:
           grep -q "rpc('create_invoice_atomic'" <<<"$service"
           grep -q "rpc('create_quote_atomic'" <<<"$service"
           grep -q "rpc('convert_quote_atomic'" <<<"$service"
+          grep -q "rpc('save_service_atomic'" <<<"$service"
+          grep -q "rpc('archive_service_atomic'" <<<"$service"
           grep -q "reportSupabaseWriteError(err, 'addInvoice')" <<<"$service"
           grep -q 'canManageStock' <<<"$service"
           grep -q 'await addRequisition' <<<"$jobs"
@@ -66,6 +70,12 @@ jobs:
           grep -q 'if (billedJob) billedJob.status = 5' <<<"$billing"
           grep -q 'await createQuoteAtomic(qt)' <<<"$billing"
           grep -q 'await convertQuoteAtomic(q.id)' <<<"$docs"
+          grep -q 'await saveServiceAtomic' <<<"$settings"
+          grep -q 'await archiveServiceAtomic' <<<"$settings"
+          if grep -q 'syncSeedServicesToSupabase' <<<"$db"; then
+            echo "Unsafe login-time service overwrite detected"
+            exit 1
+          fi
           if grep -Eq '\b(addQuote|updateQuote|deleteQuote)\(' <<<"$service$billing$docs"; then
             echo "Unsafe direct quotation write detected in deployed workflow"
             exit 1

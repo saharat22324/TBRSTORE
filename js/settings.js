@@ -407,15 +407,18 @@ function openSvcModal(id) {
 
     const data = { id: nId, name, detail: sv('svDet'), price: parseFloat(sv('svPrice')) || 0 };
 
-    if (s) {
-      Object.assign(s, data);
-    } else {
-      S.services.push(data);
+    if (useSupabase) {
+      try {
+        if (typeof saveServiceAtomic !== 'function') throw new Error('Atomic service catalog is unavailable');
+        await saveServiceAtomic(s?.id || null,data);
+      } catch (error) {
+        console.error('[Settings] atomic service save failed:',error);
+        showToast(`บันทึก Package ไม่สำเร็จ · ${String(error?.message || 'กรุณาลองใหม่').slice(0,120)}`,'err');
+        return;
+      }
     }
-
-    if (useSupabase && typeof upsertService === 'function') {
-      upsertService(data).catch(e => console.warn('[Settings] service sync:', e));
-    }
+    if (s) Object.assign(s,data);
+    else S.services.push(data);
     await saveData();
     closeMod();
     renderPanel();
@@ -424,10 +427,17 @@ function openSvcModal(id) {
 
   ov.querySelector('#delSvc')?.addEventListener('click', async () => {
     if (!confirm('ลบ Package นี้?')) return;
-    S.services = S.services.filter(x => x.id !== id);
-    if (useSupabase && typeof deleteServiceByCode === 'function') {
-      deleteServiceByCode(id).catch(e => console.warn('[Settings] service delete sync:', e));
+    if (useSupabase) {
+      try {
+        if (typeof archiveServiceAtomic !== 'function') throw new Error('Atomic service catalog is unavailable');
+        await archiveServiceAtomic(id);
+      } catch (error) {
+        console.error('[Settings] atomic service archive failed:',error);
+        showToast(`ลบ Package ไม่สำเร็จ · ${String(error?.message || 'กรุณาลองใหม่').slice(0,120)}`,'err');
+        return;
+      }
     }
+    S.services = S.services.filter(x => x.id !== id);
     await saveData();
     closeMod();
     renderPanel();

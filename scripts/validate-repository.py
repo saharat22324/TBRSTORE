@@ -276,6 +276,42 @@ def main() -> int:
         r"CREATE POLICY \"quotes_(insert|update|delete)\"",
         "authoritative migration must keep quotation writes RPC-only",
     )
+    require(
+        "20260814_atomic_service_catalog.sql",
+        r"CREATE OR REPLACE FUNCTION save_service_atomic[\s\S]*pg_advisory_xact_lock[\s\S]*FOR UPDATE",
+        "service saves must lock codes and existing records",
+    )
+    require(
+        "20260814_atomic_service_catalog.sql",
+        r"CREATE OR REPLACE FUNCTION archive_service_atomic[\s\S]*FOR UPDATE[\s\S]*active=FALSE",
+        "service removal must use a locked archive operation",
+    )
+    require(
+        "js/settings.js",
+        r"await saveServiceAtomic\(s\?\.id \|\| null,data\)[\s\S]*Object\.assign\(s,data\)",
+        "local service saves must follow server success",
+    )
+    require(
+        "js/settings.js",
+        r"await archiveServiceAtomic\(id\)[\s\S]*S\.services = S\.services\.filter",
+        "local service archives must follow server success",
+    )
+    for path in ("js/supabaseService.js", "js/db.js"):
+        forbid(
+            path,
+            r"\.from\('services'\)[\s\S]{0,160}\.(upsert|insert|update|delete)\(",
+            "service catalog writes must use atomic RPCs",
+        )
+    forbid(
+        "js/db.js",
+        r"syncSeedServicesToSupabase",
+        "login must not overwrite configured services with seed data",
+    )
+    forbid(
+        "SQL_FINAL_MIGRATION.sql",
+        r"CREATE POLICY \"services_(insert|update|delete)\"",
+        "authoritative migration must keep service writes RPC-only",
+    )
 
     if ERRORS:
         print("Repository validation failed:")

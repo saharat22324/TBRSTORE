@@ -386,13 +386,7 @@ DROP POLICY IF EXISTS "services_update" ON services;
 DROP POLICY IF EXISTS "services_delete" ON services;
 CREATE POLICY "services_select" ON services
   FOR SELECT USING (auth.uid() IS NOT NULL);
-CREATE POLICY "services_insert" ON services
-  FOR INSERT WITH CHECK (auth_role() IN ('admin', 'supervisor'));
-CREATE POLICY "services_update" ON services
-  FOR UPDATE USING (auth_role() IN ('admin', 'supervisor'))
-  WITH CHECK (auth_role() IN ('admin', 'supervisor'));
-CREATE POLICY "services_delete" ON services
-  FOR DELETE USING (auth_role() = 'admin');
+-- Service catalog writes are RPC-only; see 20260814_atomic_service_catalog.sql.
 
 -- ▶ REQUISITIONS: all authenticated can read, admin/supervisor can modify
 DROP POLICY IF EXISTS "requisitions_select" ON requisitions;
