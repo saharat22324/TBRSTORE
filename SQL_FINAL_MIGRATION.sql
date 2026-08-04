@@ -596,13 +596,7 @@ DROP POLICY IF EXISTS "quotes_delete" ON quotes;
 
 CREATE POLICY "quotes_select" ON quotes
   FOR SELECT USING (auth.uid() IS NOT NULL);
-CREATE POLICY "quotes_insert" ON quotes
-  FOR INSERT WITH CHECK (auth_role() IN ('admin', 'supervisor'));
-CREATE POLICY "quotes_update" ON quotes
-  FOR UPDATE USING (auth_role() IN ('admin', 'supervisor'))
-  WITH CHECK (auth_role() IN ('admin', 'supervisor'));
-CREATE POLICY "quotes_delete" ON quotes
-  FOR DELETE USING (auth_role() = 'admin');
+-- Quotation writes are RPC-only; see 20260813_atomic_quote_lifecycle.sql.
 
 -- ▶ STOCK_LEDGER
 DROP POLICY IF EXISTS "stock_ledger_select" ON stock_ledger;

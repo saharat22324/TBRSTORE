@@ -1130,62 +1130,37 @@ async function getExpenses() {
 /* ══════════════════════════════════════
    QUOTES
 ══════════════════════════════════════ */
-async function addQuote(quoteData) {
-  try {
-    const sb = getSupabase();
-    const row = {
-      no:         quoteData.no       || null,
-      cust_name:  quoteData.cust     || null,
-      phone:      quoteData.phone    || null,
-      plate:      quoteData.plate    || null,
-      car_model:  quoteData.model    || null,
-      items:      quoteData.items    || [],
-      sub:        parseFloat(quoteData.sub)   || 0,
-      disc:       parseFloat(quoteData.disc)  || 0,
-      vat:        parseFloat(quoteData.vat)   || 0,
-      grand:      parseFloat(quoteData.grand) || 0,
-      note:       quoteData.note     || null,
-      ref:        quoteData.ref      || null,
-      converted:  quoteData.converted || false,
-      created_by: currentUser?.id    || null,
-    };
-    const { data, error } = await sb.from('quotes').insert([row]).select().single();
-    if (error) throw error;
-    return data;
-  } catch (err) {
-    console.error('[Service] addQuote error:', err);
-    return null;
+async function createQuoteAtomic(quoteData) {
+  const { data, error } = await getSupabase().rpc('create_quote_atomic', {
+    p_quote: {
+      no: quoteData.no,
+      cust_name: quoteData.cust || null,
+      phone: quoteData.phone || null,
+      plate: quoteData.plate || null,
+      car_model: quoteData.model || null,
+      items: quoteData.items || [],
+      sub: parseFloat(quoteData.sub) || 0,
+      disc: parseFloat(quoteData.disc) || 0,
+      vat: parseFloat(quoteData.vat) || 0,
+      grand: parseFloat(quoteData.grand) || 0,
+      note: quoteData.note || null,
+      ref: quoteData.ref || null,
+    },
+  });
+  if (error) {
+    reportSupabaseWriteError(error, 'createQuoteAtomic');
+    throw error;
   }
+  return data;
 }
 
-async function updateQuote(quoteId, updates) {
-  try {
-    const { data, error } = await getSupabase()
-      .from('quotes')
-      .update(updates)
-      .eq('id', quoteId)
-      .select()
-      .single();
-    if (error) throw error;
-    return data;
-  } catch (err) {
-    console.error('[Service] updateQuote error:', err);
-    return null;
+async function convertQuoteAtomic(quoteId) {
+  const { data, error } = await getSupabase().rpc('convert_quote_atomic', { p_quote_id: quoteId });
+  if (error) {
+    reportSupabaseWriteError(error, 'convertQuoteAtomic');
+    throw error;
   }
-}
-
-async function deleteQuote(quoteId) {
-  try {
-    const { error } = await getSupabase()
-      .from('quotes')
-      .delete()
-      .eq('id', quoteId);
-    if (error) throw error;
-    return true;
-  } catch (err) {
-    console.error('[Service] deleteQuote error:', err);
-    return false;
-  }
+  return data;
 }
 
 async function getQuotes() {

@@ -782,15 +782,17 @@ function bindDocActions(type, data, dc) {
     const q = S.quotes.find(x => x.no === data.no);
     if (!q) return;
 
-    q.converted = true;
-
-    // Update converted status in Supabase
-    if (useSupabase && q.id && typeof updateQuote === 'function') {
-      const _uuidRe = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-      if (_uuidRe.test(q.id)) {
-        updateQuote(q.id, { converted: true }).catch(e => console.warn('[Quote] Supabase convert failed:', e));
+    if (useSupabase) {
+      try {
+        if (typeof convertQuoteAtomic !== 'function') throw new Error('Atomic quotation conversion service is unavailable');
+        await convertQuoteAtomic(q.id);
+      } catch (error) {
+        console.error('[Quote] atomic conversion failed:',error);
+        showToast(`แปลงใบเสนอราคาไม่สำเร็จ · ${String(error?.message || 'กรุณาลองใหม่').slice(0,120)}`, 'err');
+        return;
       }
     }
+    q.converted = true;
 
     /* Load QT items into billing */
     bItems = data.items.map(it => ({

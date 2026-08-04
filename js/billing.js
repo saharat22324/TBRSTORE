@@ -767,20 +767,20 @@ async function saveQuote() {
     sub, disc: bDisc, vat, grand, converted: false,
   };
 
-  S.quotes.push(qt);
-
-  // Save to Supabase
-  if (useSupabase && typeof addQuote === 'function') {
-    addQuote(qt)
-      .then(result => {
-        if (result?.id) {
-          qt.id = result.id;
-          localStorage.setItem(DB_KEY, JSON.stringify(S));
-        }
-      })
-      .catch(e => console.warn('[Quote] Supabase save failed:', e));
+  if (useSupabase) {
+    try {
+      if (typeof createQuoteAtomic !== 'function') throw new Error('Atomic quotation service is unavailable');
+      const result = await createQuoteAtomic(qt);
+      if (!result?.id) throw new Error('Quotation creation returned no record');
+      qt.id = result.id;
+    } catch (error) {
+      console.error('[Quote] atomic creation failed:',error);
+      showToast(`ออกใบเสนอราคา ${no} ไม่สำเร็จ · ${String(error?.message || 'กรุณาลองใหม่').slice(0,120)}`, 'err');
+      return;
+    }
   }
 
+  S.quotes.push(qt);
   await saveData();
   showToast(`ออกใบเสนอราคา ${no} แล้ว`);
 

@@ -246,6 +246,36 @@ def main() -> int:
         r"if \(useSupabase && !_invCloudOk\)[\s\S]*return;[\s\S]*if \(billedJob\) billedJob\.status = 5",
         "job closure must follow successful invoice creation",
     )
+    require(
+        "20260813_atomic_quote_lifecycle.sql",
+        r"CREATE OR REPLACE FUNCTION create_quote_atomic[\s\S]*pg_advisory_xact_lock[\s\S]*INSERT INTO quotes",
+        "quotation creation must be atomic and number locked",
+    )
+    require(
+        "20260813_atomic_quote_lifecycle.sql",
+        r"CREATE OR REPLACE FUNCTION convert_quote_atomic[\s\S]*FOR UPDATE[\s\S]*already converted",
+        "quotation conversion must lock and guard the current state",
+    )
+    require(
+        "js/billing.js",
+        r"await createQuoteAtomic\(qt\)[\s\S]*S\.quotes\.push\(qt\)",
+        "local quotation creation must follow server success",
+    )
+    require(
+        "js/docs.js",
+        r"await convertQuoteAtomic\(q\.id\)[\s\S]*q\.converted = true",
+        "local quotation conversion must follow server success",
+    )
+    forbid(
+        "js/supabaseService.js",
+        r"\b(addQuote|updateQuote|deleteQuote)\(",
+        "quotation writes must use atomic RPCs",
+    )
+    forbid(
+        "SQL_FINAL_MIGRATION.sql",
+        r"CREATE POLICY \"quotes_(insert|update|delete)\"",
+        "authoritative migration must keep quotation writes RPC-only",
+    )
 
     if ERRORS:
         print("Repository validation failed:")
