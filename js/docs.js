@@ -421,7 +421,12 @@ function openTaxInvoiceModal(d) {
     }
 
     if (useSupabase && d.id && typeof updateInvoiceTaxDetails === 'function') {
-      cloudOk = await updateInvoiceTaxDetails(d.id, buyer);
+      try {
+        cloudOk = Boolean(await updateInvoiceTaxDetails(d.id, buyer));
+      } catch (err) {
+        console.error('Save invoice tax details error:', err);
+        cloudOk = false;
+      }
     }
     saveTaxBuyer(d.cust, buyer);
     d.invoiceType = 'tax_invoice';

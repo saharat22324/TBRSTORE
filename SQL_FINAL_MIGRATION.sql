@@ -398,13 +398,7 @@ DROP POLICY IF EXISTS "invoices_update" ON invoices;
 DROP POLICY IF EXISTS "invoices_delete" ON invoices;
 CREATE POLICY "invoices_select" ON invoices
   FOR SELECT USING (auth.uid() IS NOT NULL);
-CREATE POLICY "invoices_insert" ON invoices
-  FOR INSERT WITH CHECK (auth_role() IN ('admin', 'supervisor'));
-CREATE POLICY "invoices_update" ON invoices
-  FOR UPDATE USING (auth_role() IN ('admin', 'supervisor'))
-  WITH CHECK (auth_role() IN ('admin', 'supervisor'));
-CREATE POLICY "invoices_delete" ON invoices
-  FOR DELETE USING (auth_role() = 'admin');
+-- Invoice and invoice-item writes use atomic lifecycle and maintenance RPCs.
 
 -- ▶ PURCHASE_ORDERS (existing table): admin/supervisor only
 DROP POLICY IF EXISTS "purchase_orders_select" ON purchase_orders;

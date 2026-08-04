@@ -418,7 +418,7 @@ async function loadData() {
           }
 
           // ALWAYS merge localStorage records not yet in Supabase (safety net)
-          mergeLocalStorageIntoS();
+          await mergeLocalStorageIntoS();
           // รีเซ็ตตัวนับ retry ทุกครั้งที่โหลดหน้า — กัน record ที่เคย fail ชั่วคราว
           // ค้างไม่ขึ้นคลาวด์ถาวร (auto-push จะลองดันขึ้นใหม่ทุก session)
           [...(S.customers||[]), ...(S.vehicles||[]), ...(S.jobs||[]), ...(S.invoices||[])]
@@ -911,7 +911,7 @@ function clearData() {
  * Matches jobs by job number (no), invoices by invoice number (no),
  * customers by phone, vehicles by plate.
  */
-function mergeLocalStorageIntoS() {
+async function mergeLocalStorageIntoS() {
   const raw = localStorage.getItem(DB_KEY);
   if (!raw) return;
   try {
@@ -967,14 +967,16 @@ function mergeLocalStorageIntoS() {
         if (!sInv.jobId || !_invUuidRe.test(sInv.jobId)) {
           const resolved = resolveJobIdToUuid(inv.jobId, inv.ref, local.jobs);
           if (resolved && _invUuidRe.test(resolved)) {
-            sInv.jobId = resolved;
-            // Fix job_id in Supabase in background
-            if (typeof getSupabase === 'function' && sInv.id && _invUuidRe.test(sInv.id)) {
-              getSupabase().from('invoices').update({ job_id: resolved }).eq('id', sInv.id)
-                .then(() => console.log('[DB] ✅ Fixed job_id for', sInv.no, '→', resolved))
-                .catch(() => {});
+            if (hasPermission('canDeleteData') && typeof repairInvoiceJobLinkAtomic === 'function' && sInv.id && _invUuidRe.test(sInv.id)) {
+              try {
+                await repairInvoiceJobLinkAtomic(sInv.id, resolved);
+                sInv.jobId = resolved;
+                console.log('[DB] ✅ Fixed job_id for', sInv.no, '→', resolved);
+                merged++;
+              } catch (err) {
+                console.warn('[DB] Invoice job_id repair rejected:', err);
+              }
             }
-            merged++;
           }
         }
 
@@ -1177,9 +1179,14 @@ async function syncLocalToSupabase(opts = {}) {
 
     // Retry tax-invoice snapshots for existing invoices.
     for (const inv of (S.invoices || []).filter(x => x._taxSyncPending && x.taxBuyer && _uuid.test(x.id || ''))) {
-      const ok = await updateInvoiceTaxDetails(inv.id, inv.taxBuyer);
-      if (ok) { delete inv._taxSyncPending; syncedCount++; }
-      else failedCount++;
+      try {
+        await updateInvoiceTaxDetails(inv.id, inv.taxBuyer);
+        delete inv._taxSyncPending;
+        syncedCount++;
+      } catch (e) {
+        failedCount++;
+        lastErr = e;
+      }
     }
 
     // Remap vehicle custIds to Supabase UUIDs

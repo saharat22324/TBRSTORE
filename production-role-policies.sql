@@ -101,10 +101,7 @@ DROP POLICY IF EXISTS prod_invoices_read ON invoices;
 DROP POLICY IF EXISTS prod_invoices_insert ON invoices;
 DROP POLICY IF EXISTS prod_invoices_update ON invoices;
 CREATE POLICY prod_invoices_read ON invoices FOR SELECT TO authenticated USING (TRUE);
-CREATE POLICY prod_invoices_update ON invoices FOR UPDATE TO authenticated
-  USING (current_app_role() = 'admin' AND status <> 'cancelled')
-  WITH CHECK (current_app_role() = 'admin' AND status <> 'cancelled');
--- Header creation and cancellation use SECURITY DEFINER atomic RPCs.
+-- Header creation, edits, cancellation and maintenance use SECURITY DEFINER atomic RPCs.
 
 DROP POLICY IF EXISTS team_read_invoice_items ON invoice_items;
 DROP POLICY IF EXISTS team_write_invoice_items ON invoice_items;
@@ -118,13 +115,7 @@ DROP POLICY IF EXISTS prod_invoice_items_insert ON invoice_items;
 DROP POLICY IF EXISTS prod_invoice_items_update ON invoice_items;
 DROP POLICY IF EXISTS prod_invoice_items_delete ON invoice_items;
 CREATE POLICY prod_invoice_items_read ON invoice_items FOR SELECT TO authenticated USING (TRUE);
-CREATE POLICY prod_invoice_items_insert ON invoice_items FOR INSERT TO authenticated
-  WITH CHECK (current_app_role() = 'admin');
-CREATE POLICY prod_invoice_items_update ON invoice_items FOR UPDATE TO authenticated
-  USING (current_app_role() = 'admin' AND EXISTS (SELECT 1 FROM invoices i WHERE i.id = invoice_id AND i.status <> 'cancelled'))
-  WITH CHECK (current_app_role() = 'admin');
-CREATE POLICY prod_invoice_items_delete ON invoice_items FOR DELETE TO authenticated
-  USING (current_app_role() = 'admin' AND EXISTS (SELECT 1 FROM invoices i WHERE i.id = invoice_id AND i.status <> 'cancelled'));
+-- Invoice item writes use SECURITY DEFINER atomic invoice lifecycle RPCs.
 
 DROP POLICY IF EXISTS prod_stock_read ON stock_items;
 DROP POLICY IF EXISTS prod_stock_insert ON stock_items;

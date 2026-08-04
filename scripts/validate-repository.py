@@ -380,6 +380,53 @@ def main() -> int:
             r"CREATE POLICY (?:\"|prod_)?(?:customers|vehicles)_(?:insert|update|delete)",
             "authoritative migrations must keep customer and vehicle writes RPC-only",
         )
+    require(
+        "20260816_atomic_invoice_maintenance.sql",
+        r"CREATE OR REPLACE FUNCTION update_invoice_tax_details_atomic[\s\S]*13 digits[\s\S]*FOR UPDATE[\s\S]*INVOICE_TAX_DETAILS_UPDATE",
+        "invoice tax updates must lock, validate and audit the issued document",
+    )
+    require(
+        "20260816_atomic_invoice_maintenance.sql",
+        r"CREATE OR REPLACE FUNCTION repair_invoice_job_link_atomic[\s\S]*FOR UPDATE[\s\S]*FOR KEY SHARE[\s\S]*job_id IS NULL[\s\S]*INVOICE_JOB_LINK_REPAIR",
+        "invoice job-link repairs must lock, validate and audit both records",
+    )
+    require(
+        "js/supabaseService.js",
+        r"rpc\('update_invoice_tax_details_atomic'",
+        "invoice tax details must use the guarded RPC",
+    )
+    require(
+        "js/supabaseService.js",
+        r"rpc\('repair_invoice_job_link_atomic'",
+        "invoice job-link repair must use the guarded RPC",
+    )
+    for path in ("js/supabaseService.js", "js/db.js"):
+        forbid(
+            path,
+            r"\.from\('(invoices|invoice_items)'\)[\s\S]{0,220}\.(insert|update|upsert|delete)\(",
+            "invoice and invoice-item writes must use atomic RPCs",
+        )
+    forbid(
+        "js/supabaseService.js",
+        r"function (updateInvoicePaid|updateInvoiceItemCosts|deleteInvoice)\(",
+        "unused direct invoice maintenance helpers must remain removed",
+    )
+    require(
+        "js/db.js",
+        r"await repairInvoiceJobLinkAtomic\(sInv\.id,\s*resolved\)[\s\S]*sInv\.jobId = resolved",
+        "local invoice job-link repair must follow server success",
+    )
+    require(
+        "js/db.js",
+        r"await updateInvoiceTaxDetails[\s\S]*delete inv\._taxSyncPending",
+        "pending invoice tax snapshots must clear only after server success",
+    )
+    for path in ("SQL_FINAL_MIGRATION.sql", "production-role-policies.sql"):
+        forbid(
+            path,
+            r"CREATE POLICY (?:\"|prod_)?(?:invoices|invoice_items)_(?:insert|update|delete)",
+            "authoritative migrations must keep invoice writes RPC-only",
+        )
 
     if ERRORS:
         print("Repository validation failed:")

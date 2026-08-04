@@ -705,26 +705,6 @@ async function addInvoice(jobId, customerId, vehicleId, items, subtotal, discoun
   }
 }
 
-async function updateInvoicePaid(invId, paid) {
-  try {
-    let { error } = await getSupabase()
-      .from('invoices')
-      .update({ payment_status: paid, status: paid ? 'paid' : 'issued' })
-      .eq('id', invId);
-    if (error && /status|column|schema cache/i.test(error.message || '')) {
-      ({ error } = await getSupabase()
-        .from('invoices')
-        .update({ payment_status: paid })
-        .eq('id', invId));
-    }
-    if (error) throw error;
-    return true;
-  } catch (err) {
-    console.warn('[Service] updateInvoicePaid:', err);
-    return false;
-  }
-}
-
 async function cancelInvoiceAtomic(invId, reason) {
   try {
     const { data, error } = await getSupabase().rpc('cancel_invoice_atomic', {
@@ -741,23 +721,34 @@ async function cancelInvoiceAtomic(invId, reason) {
 
 async function updateInvoiceTaxDetails(invId, buyer) {
   try {
-    const { error } = await getSupabase()
-      .from('invoices')
-      .update({
-        invoice_type: 'tax_invoice',
-        document_type: 'tax_invoice',
-        status: 'issued',
-        buyer_name: buyer.name,
-        buyer_address: buyer.address,
-        buyer_tax_id: String(buyer.taxId || '').replace(/\D/g, ''),
-        buyer_branch: buyer.branch || 'สำนักงานใหญ่'
-      })
-      .eq('id', invId);
+    const { data, error } = await getSupabase().rpc('update_invoice_tax_details_atomic', {
+      p_invoice_id: invId,
+      p_buyer: {
+        name: buyer.name,
+        address: buyer.address,
+        tax_id: String(buyer.taxId || '').replace(/\D/g, ''),
+        branch: buyer.branch || 'สำนักงานใหญ่'
+      }
+    });
     if (error) throw error;
-    return true;
+    return Array.isArray(data) ? data[0] : data;
   } catch (err) {
-    console.warn('[Service] updateInvoiceTaxDetails:', err);
-    return false;
+    reportSupabaseWriteError(err, 'updateInvoiceTaxDetails');
+    throw err;
+  }
+}
+
+async function repairInvoiceJobLinkAtomic(invId, jobId) {
+  try {
+    const { data, error } = await getSupabase().rpc('repair_invoice_job_link_atomic', {
+      p_invoice_id: invId,
+      p_job_id: jobId
+    });
+    if (error) throw error;
+    return Array.isArray(data) ? data[0] : data;
+  } catch (err) {
+    reportSupabaseWriteError(err, 'repairInvoiceJobLinkAtomic');
+    throw err;
   }
 }
 
@@ -876,49 +867,6 @@ async function getNextInvoiceNumber() {
   } catch (err) {
     console.error('[Service] getNextInvoiceNumber error:', err);
     return null;
-  }
-}
-
-/**
- * Update cost_price on existing invoice_items rows.
- * @param {Array<{id: string, cost_price: number}>} updates
- * @returns {number} count of rows updated
- */
-async function updateInvoiceItemCosts(updates) {
-  if (!updates || updates.length === 0) return 0;
-  let count = 0;
-  // Batch in groups of 50 to avoid request size limits
-  for (let i = 0; i < updates.length; i += 50) {
-    const batch = updates.slice(i, i + 50);
-    // Update each item individually — Supabase upsert by id
-    for (const u of batch) {
-      const { error } = await getSupabase()
-        .from('invoice_items')
-        .update({ cost_price: u.cost_price })
-        .eq('id', u.id)
-        .eq('cost_price', 0); // Only update rows that still have cost=0 (avoid overwriting good data)
-      if (!error) count++;
-    }
-  }
-  return count;
-}
-
-async function deleteInvoice(invoiceId) {
-  try {
-    // Delete invoice items first
-    await getSupabase().from('invoice_items').delete().eq('invoice_id', invoiceId);
-    
-    // Delete invoice
-    const { error } = await getSupabase()
-      .from('invoices')
-      .delete()
-      .eq('id', invoiceId);
-    
-    if (error) throw error;
-    return true;
-  } catch (err) {
-    console.error('[Service] deleteInvoice error:', err);
-    return false;
   }
 }
 
