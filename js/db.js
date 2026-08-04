@@ -197,6 +197,7 @@ async function syncRemoteData(opts) {
     if (S.requisitions.length !== prevReqLen) { changed = true; console.log(`[DB] 🗑 Removed ${prevReqLen - S.requisitions.length} deleted requisition(s)`); }
 
     // ── Expenses ──
+    S._voidedExpenseIds = newState._voidedExpenseIds || [];
     const expById = new Map(S.expenses.map(e => [e.id, e]));
     for (const e of newState.expenses) {
       if (!expById.has(e.id)) { S.expenses.push(e); changed = true; }
@@ -726,7 +727,8 @@ function convertSupabaseToState(dbData) {
   }
 
   if (dbData.expenses && dbData.expenses.length > 0) {
-    state.expenses = dbData.expenses.map(e => ({
+    state._voidedExpenseIds = dbData.expenses.filter(e => e.voided_at).map(e => e.id);
+    state.expenses = dbData.expenses.filter(e => !e.voided_at).map(e => ({
       id:     e.id,
       label:  e.description || e.label || '',
       amount: parseFloat(e.amount) || 0,
@@ -1065,8 +1067,9 @@ async function mergeLocalStorageIntoS() {
 
     // Expenses: merge local ones not yet in Supabase (by id — local ids like 'EX-...')
     const sbExpIds2 = new Set(S.expenses.map(e => e.id).filter(Boolean));
+    const voidedExpIds = new Set(S._voidedExpenseIds || []);
     for (const e of (local.expenses || [])) {
-      if (e.id && !sbExpIds2.has(e.id)) {
+      if (e.id && !sbExpIds2.has(e.id) && !voidedExpIds.has(e.id)) {
         S.expenses.push(e);
         merged++;
       }

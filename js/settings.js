@@ -261,28 +261,33 @@ function bindSettings() {
 
   /* ── Shop settings ── */
   sel('saveShopBtn')?.addEventListener('click', async () => {
-    Object.assign(S.shop, {
+    const shopUpdates = {
       name:  sv('sNm'),
       addr:  sv('sAd'),
       phone: sv('sPh'),
       line:  sv('sLn'),
       tax:   sv('sTx'),
       note:  sv('sNt'),
-    });
-    // Sync shop config to Supabase (map JS field names → DB column names)
-    if (useSupabase && typeof updateShopConfig === 'function') {
-      updateShopConfig({
-        name:    S.shop.name,
-        address: S.shop.addr,
-        phone:   S.shop.phone,
-        line_id: S.shop.line,
-        tax_id:  S.shop.tax,
-        note:    S.shop.note,
-      }).catch(e => console.warn('[Settings] shop config sync failed:', e));
+    };
+    try {
+      if (useSupabase && typeof saveShopConfigAtomic === 'function') {
+        await saveShopConfigAtomic({
+          name: shopUpdates.name,
+          address: shopUpdates.addr,
+          phone: shopUpdates.phone,
+          line_id: shopUpdates.line,
+          tax_id: shopUpdates.tax,
+          note: shopUpdates.note,
+        });
+      }
+      Object.assign(S.shop, shopUpdates);
+      await saveData();
+      renderNav();
+      showToast('บันทึกข้อมูลร้านแล้ว' + (useSupabase ? ' · ขึ้นคลาวด์ ☁️' : ''));
+    } catch (err) {
+      console.error('[Settings] shop config save failed:', err);
+      showToast(err?.message || 'บันทึกข้อมูลร้านไม่สำเร็จ', 'err');
     }
-    await saveData();
-    renderNav();
-    showToast('บันทึกข้อมูลร้านแล้ว');
   });
 
   /* ── Service Package ── */

@@ -427,6 +427,69 @@ def main() -> int:
             r"CREATE POLICY (?:\"|prod_)?(?:invoices|invoice_items)_(?:insert|update|delete)",
             "authoritative migrations must keep invoice writes RPC-only",
         )
+    require(
+        "20260817_atomic_shop_expense_lifecycle.sql",
+        r"CREATE OR REPLACE FUNCTION save_shop_config_atomic[\s\S]*pg_advisory_xact_lock[\s\S]*FOR UPDATE[\s\S]*SHOP_CONFIG_SAVE",
+        "shop configuration saves must lock and audit the singleton record",
+    )
+    require(
+        "20260817_atomic_shop_expense_lifecycle.sql",
+        r"CREATE OR REPLACE FUNCTION create_expense_atomic[\s\S]*positive amount[\s\S]*EXPENSE_CREATE",
+        "expense creation must validate and audit accounting data",
+    )
+    require(
+        "20260817_atomic_shop_expense_lifecycle.sql",
+        r"CREATE OR REPLACE FUNCTION void_expense_atomic[\s\S]*FOR UPDATE[\s\S]*voided_at=NOW\(\)[\s\S]*EXPENSE_VOID",
+        "expense removal must use an audited void operation",
+    )
+    forbid(
+        "20260817_atomic_shop_expense_lifecycle.sql",
+        r"DELETE FROM expenses",
+        "issued expense records must never be deleted",
+    )
+    for rpc in ("save_shop_config_atomic", "create_expense_atomic", "void_expense_atomic"):
+        require(
+            "js/supabaseService.js",
+            rf"rpc\('{rpc}'",
+            f"{rpc} frontend wrapper is missing",
+        )
+    for table in ("shop_config", "expenses"):
+        forbid(
+            "js/supabaseService.js",
+            rf"\.from\('{table}'\)[\s\S]{{0,180}}\.(insert|update|upsert|delete)\(",
+            f"direct {table} writes must use atomic RPCs",
+        )
+    forbid(
+        "js/supabaseService.js",
+        r"function (updateShopConfig|deleteExpense)\(",
+        "legacy direct shop and expense helpers must remain removed",
+    )
+    require(
+        "js/settings.js",
+        r"await saveShopConfigAtomic[\s\S]*Object\.assign\(S\.shop,\s*shopUpdates\)",
+        "local shop configuration must follow server success",
+    )
+    require(
+        "js/report.js",
+        r"await addExpense[\s\S]*S\.expenses\.push\(exp\)",
+        "local expense creation must follow server success",
+    )
+    require(
+        "js/report.js",
+        r"await voidExpenseAtomic[\s\S]*S\.expenses = S\.expenses\.filter",
+        "local expense removal must follow server void success",
+    )
+    require(
+        "js/db.js",
+        r"_voidedExpenseIds[\s\S]*voidedExpIds[\s\S]*!voidedExpIds\.has\(e\.id\)",
+        "localStorage merge must not resurrect voided expenses",
+    )
+    for path in ("SQL_FINAL_MIGRATION.sql", "production-role-policies.sql"):
+        forbid(
+            path,
+            r"CREATE POLICY (?:\"|prod_)?(?:expenses|shop)_(?:insert|update|delete)",
+            "authoritative migrations must keep shop and expense writes RPC-only",
+        )
 
     if ERRORS:
         print("Repository validation failed:")

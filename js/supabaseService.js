@@ -890,23 +890,16 @@ async function getShopConfig() {
   }
 }
 
-async function updateShopConfig(updates) {
+async function saveShopConfigAtomic(updates) {
   try {
-    const { data, error } = await getSupabase()
-      .from('shop_config')
-      .update({
-        ...updates,
-        updated_at: new Date().toISOString()
-      })
-      .eq('id', 1)
-      .select()
-      .single();
-    
+    const { data, error } = await getSupabase().rpc('save_shop_config_atomic', {
+      p_config: updates
+    });
     if (error) throw error;
     return data;
   } catch (err) {
-    console.error('[Service] updateShopConfig error:', err);
-    return null;
+    reportSupabaseWriteError(err, 'saveShopConfigAtomic');
+    throw err;
   }
 }
 
@@ -994,36 +987,31 @@ async function getRequisitions() {
 ══════════════════════════════════════ */
 async function addExpense(label, amount, date, note) {
   try {
-    const sb = getSupabase();
-    // map app fields → real DB columns (category/description/expense_date NOT NULL)
-    const row = {
-      category:     'ทั่วไป',
-      description:  label || '',
-      amount:       parseFloat(amount) || 0,
-      expense_date: date || new Date().toISOString().slice(0, 10),
-      reference:    note || null,
-      created_by:   currentUser?.id || null,
-    };
-    const { data, error } = await sb.from('expenses').insert([row]).select().single();
+    const { data, error } = await getSupabase().rpc('create_expense_atomic', {
+      p_label: label,
+      p_amount: parseFloat(amount) || 0,
+      p_date: date || new Date().toISOString().slice(0, 10),
+      p_note: note || null
+    });
     if (error) throw error;
     return data;
   } catch (err) {
     reportSupabaseWriteError(err, 'addExpense');
-    return null;
+    throw err;
   }
 }
 
-async function deleteExpense(expId) {
+async function voidExpenseAtomic(expId, reason) {
   try {
-    const { error } = await getSupabase()
-      .from('expenses')
-      .delete()
-      .eq('id', expId);
+    const { data, error } = await getSupabase().rpc('void_expense_atomic', {
+      p_expense_id: expId,
+      p_reason: reason
+    });
     if (error) throw error;
-    return true;
+    return data;
   } catch (err) {
-    console.error('[Service] deleteExpense error:', err);
-    return false;
+    reportSupabaseWriteError(err, 'voidExpenseAtomic');
+    throw err;
   }
 }
 

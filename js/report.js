@@ -1023,16 +1023,21 @@ function bindReport() {
   document.querySelectorAll('[data-dex]').forEach(b =>
     b.addEventListener('click', async () => {
       const expId = b.dataset.dex;
-      S.expenses = S.expenses.filter(e => e.id !== expId);
-      // Delete from Supabase
-      if (useSupabase && typeof deleteExpense === 'function') {
-        const _uuidRe = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-        if (_uuidRe.test(expId)) {
-          deleteExpense(expId).catch(e => console.warn('[Exp] Supabase delete failed:', e));
+      const reason = prompt('ระบุเหตุผลที่ยกเลิกรายจ่าย');
+      if (!reason?.trim()) return;
+      try {
+        if (useSupabase && typeof voidExpenseAtomic === 'function') {
+          const _uuidRe = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+          if (_uuidRe.test(expId)) await voidExpenseAtomic(expId, reason.trim());
         }
+        S.expenses = S.expenses.filter(e => e.id !== expId);
+        await saveData();
+        renderPanel();
+        showToast('ยกเลิกรายจ่ายแล้ว');
+      } catch (err) {
+        console.error('[Exp] Expense void failed:', err);
+        showToast(err?.message || 'ยกเลิกรายจ่ายไม่สำเร็จ', 'err');
       }
-      await saveData();
-      renderPanel();
     })
   );
 
@@ -1147,23 +1152,21 @@ function openExpModal() {
       amount: amt,
       date:   sv('eDt'),
     };
-    S.expenses.push(exp);
 
-    // Save to Supabase (รอผล — ยืนยันขึ้นคลาวด์จริง)
-    let _expCloudOk = false;
-    if (useSupabase && typeof addExpense === 'function') {
-      try {
+    try {
+      if (useSupabase && typeof addExpense === 'function') {
         const result = await addExpense(label, amt, exp.date);
-        if (result?.id) { exp.id = result.id; _expCloudOk = true; }
-      } catch (e) { console.warn('[Exp] Supabase save failed:', e); }
+        exp.id = result.id;
+      }
+      S.expenses.push(exp);
+      await saveData();
+      closeMod();
+      renderPanel();
+      showToast(`เพิ่ม ${label} ${THB(amt)}` + (useSupabase ? ' · ขึ้นคลาวด์ ☁️' : ''));
+    } catch (err) {
+      console.error('[Exp] Expense save failed:', err);
+      showToast(err?.message || 'เพิ่มรายจ่ายไม่สำเร็จ', 'err');
     }
-
-    await saveData();
-    closeMod();
-    renderPanel();
-    if (!useSupabase)     showToast(`เพิ่ม ${label} ${THB(amt)}`);
-    else if (_expCloudOk) showToast(`เพิ่ม ${label} ${THB(amt)} · ขึ้นคลาวด์ ☁️`);
-    else                  showToast(`เพิ่ม ${label} ${THB(amt)} — ยังไม่ขึ้นคลาวด์ ระบบจะซิงค์อัตโนมัติ`, 'err');
   });
 
   bindModalClose(ov, '#mCl', '#mCl2');

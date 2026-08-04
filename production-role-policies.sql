@@ -149,9 +149,7 @@ DROP POLICY IF EXISTS prod_expenses_insert ON expenses;
 DROP POLICY IF EXISTS prod_expenses_update ON expenses;
 DROP POLICY IF EXISTS prod_expenses_delete ON expenses;
 CREATE POLICY prod_expenses_read ON expenses FOR SELECT TO authenticated USING (current_app_role() IN ('admin','supervisor'));
-CREATE POLICY prod_expenses_insert ON expenses FOR INSERT TO authenticated WITH CHECK (current_app_role() IN ('admin','supervisor'));
-CREATE POLICY prod_expenses_update ON expenses FOR UPDATE TO authenticated USING (current_app_role() = 'admin') WITH CHECK (current_app_role() = 'admin');
-CREATE POLICY prod_expenses_delete ON expenses FOR DELETE TO authenticated USING (current_app_role() = 'admin');
+-- Expense creation and voiding use 20260817_atomic_shop_expense_lifecycle.sql RPCs.
 
 DROP POLICY IF EXISTS team_read_shop ON shop_config;
 DROP POLICY IF EXISTS team_update_shop ON shop_config;
@@ -160,8 +158,7 @@ DROP POLICY IF EXISTS prod_shop_read ON shop_config;
 DROP POLICY IF EXISTS prod_shop_insert ON shop_config;
 DROP POLICY IF EXISTS prod_shop_update ON shop_config;
 CREATE POLICY prod_shop_read ON shop_config FOR SELECT TO authenticated USING (TRUE);
-CREATE POLICY prod_shop_insert ON shop_config FOR INSERT TO authenticated WITH CHECK (current_app_role() = 'admin');
-CREATE POLICY prod_shop_update ON shop_config FOR UPDATE TO authenticated USING (current_app_role() = 'admin') WITH CHECK (current_app_role() = 'admin');
+-- Shop configuration writes use 20260817_atomic_shop_expense_lifecycle.sql RPCs.
 
 DROP POLICY IF EXISTS team_read_audit ON audit_logs;
 DROP POLICY IF EXISTS team_write_audit ON audit_logs;

@@ -24,15 +24,16 @@ jobs:
           base="https://tbrstore.vercel.app"
           login="$(curl --fail --silent --show-error --location --retry 2 --max-time 20 "$base/login.html")"
           nav="$(curl --fail --silent --show-error --retry 2 --max-time 20 "$base/js/nav.js?monitor=1")"
-          service="$(curl --fail --silent --show-error --retry 2 --max-time 20 "$base/js/supabaseService.js?v=46&monitor=1")"
-          db="$(curl --fail --silent --show-error --retry 2 --max-time 20 "$base/js/db.js?v=37&monitor=1")"
+          service="$(curl --fail --silent --show-error --retry 2 --max-time 20 "$base/js/supabaseService.js?v=47&monitor=1")"
+          db="$(curl --fail --silent --show-error --retry 2 --max-time 20 "$base/js/db.js?v=38&monitor=1")"
           jobs="$(curl --fail --silent --show-error --retry 2 --max-time 20 "$base/js/jobs.js?v=33&monitor=1")"
           stock="$(curl --fail --silent --show-error --retry 2 --max-time 20 "$base/js/stock.js?v=34&monitor=1")"
           purchasing="$(curl --fail --silent --show-error --retry 2 --max-time 20 "$base/js/purchasing.js?v=32&monitor=1")"
           billing="$(curl --fail --silent --show-error --retry 2 --max-time 20 "$base/js/billing.js?v=33&monitor=1")"
           docs="$(curl --fail --silent --show-error --retry 2 --max-time 20 "$base/js/docs.js?v=35&monitor=1")"
-          settings="$(curl --fail --silent --show-error --retry 2 --max-time 20 "$base/js/settings.js?v=31&monitor=1")"
+          settings="$(curl --fail --silent --show-error --retry 2 --max-time 20 "$base/js/settings.js?v=32&monitor=1")"
           customers="$(curl --fail --silent --show-error --retry 2 --max-time 20 "$base/js/customers.js?v=31&monitor=1")"
+          report="$(curl --fail --silent --show-error --retry 2 --max-time 20 "$base/js/report.js?v=33&monitor=1")"
           grep -q 'id="loginUsername"' <<<"$login"
           grep -q 'function canAccessTab' <<<"$nav"
           grep -q "rpc('create_requisition_atomic'" <<<"$service"
@@ -55,6 +56,9 @@ jobs:
           grep -q "rpc('delete_unused_vehicle_atomic'" <<<"$service"
           grep -q "rpc('update_invoice_tax_details_atomic'" <<<"$service"
           grep -q "rpc('repair_invoice_job_link_atomic'" <<<"$service"
+          grep -q "rpc('save_shop_config_atomic'" <<<"$service"
+          grep -q "rpc('create_expense_atomic'" <<<"$service"
+          grep -q "rpc('void_expense_atomic'" <<<"$service"
           grep -q "reportSupabaseWriteError(err, 'addInvoice')" <<<"$service"
           grep -q 'canManageStock' <<<"$service"
           grep -q 'await addRequisition' <<<"$jobs"
@@ -85,6 +89,10 @@ jobs:
           grep -q 'await deleteVehicle' <<<"$customers"
           grep -q 'await repairInvoiceJobLinkAtomic' <<<"$db"
           grep -q 'await updateInvoiceTaxDetails' <<<"$docs"
+          grep -q 'await saveShopConfigAtomic' <<<"$settings"
+          grep -q 'await addExpense' <<<"$report"
+          grep -q 'await voidExpenseAtomic' <<<"$report"
+          grep -q 'voidedExpIds' <<<"$db"
           if grep -q 'syncSeedServicesToSupabase' <<<"$db"; then
             echo "Unsafe login-time service overwrite detected"
             exit 1
@@ -95,6 +103,10 @@ jobs:
           fi
           if grep -Eq 'function (updateInvoicePaid|updateInvoiceItemCosts|deleteInvoice)\(' <<<"$service"; then
             echo "Unsafe legacy invoice maintenance helper detected"
+            exit 1
+          fi
+          if grep -Eq 'function (updateShopConfig|deleteExpense)\(' <<<"$service"; then
+            echo "Unsafe legacy shop or expense helper detected"
             exit 1
           fi
           if grep -Eq '\b(addPO|updatePO|deletePO)\(' <<<"$purchasing"; then

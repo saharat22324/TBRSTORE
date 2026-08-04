@@ -416,13 +416,7 @@ DROP POLICY IF EXISTS "expenses_update" ON expenses;
 DROP POLICY IF EXISTS "expenses_delete" ON expenses;
 CREATE POLICY "expenses_select" ON expenses
   FOR SELECT USING (auth_role() = 'admin');
-CREATE POLICY "expenses_insert" ON expenses
-  FOR INSERT WITH CHECK (auth_role() = 'admin');
-CREATE POLICY "expenses_update" ON expenses
-  FOR UPDATE USING (auth_role() = 'admin')
-  WITH CHECK (auth_role() = 'admin');
-CREATE POLICY "expenses_delete" ON expenses
-  FOR DELETE USING (auth_role() = 'admin');
+-- Expense creation and voiding use 20260817_atomic_shop_expense_lifecycle.sql RPCs.
 
 
 -- ─────────────────────────────────────────────────────────────────────────────
