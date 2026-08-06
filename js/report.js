@@ -5,11 +5,12 @@
    - กราฟ 6 เดือน
    - ค่าใช้จ่ายร้าน (เพิ่ม/ลบได้)
    - ตารางบิลพร้อมปุ่มลบ (คืนสต๊อก)
-   - รายการรับ-จ่ายรายวัน (Daily Transaction Log)
+  - รายการรับ-จ่ายรายวัน (Daily Transaction Log)
+  - สรุปการใช้ของเหลวรายวันและรายเดือน
    ============================================================ */
 
 let reportMonth = nowYM(); // yyyy-MM ที่แสดงอยู่
-let reportTab   = 'summary'; // 'summary' | 'daily'
+let reportTab   = 'summary'; // 'summary' | 'daily' | 'liquid'
 
 /* ── Daily tab filter state ── */
 let _dailyFrom   = '';
@@ -19,6 +20,15 @@ let _dailyCust   = '';    // customer name filter
 let _dailyPlate  = '';    // vehicle plate filter
 let _bonusHeads  = 0;     // จำนวนช่างที่หาร (0 = ดึงจาก profiles)
 
+function isLiquidStockItem(item) {
+  const itemName = String(item.name || '').trim().toLowerCase();
+  const stockItem = S.stockItems.find(stock => stock.id === item.sid)
+    || S.stockItems.find(stock => String(stock.name || '').trim().toLowerCase() === itemName);
+  const isStock = item.itemType === 'stock' || Boolean(stockItem);
+  const unit = String(item.unit || stockItem?.unit || '').trim().toLowerCase();
+  return isStock && (unit === 'ลิตร' || unit === 'liter' || unit === 'litre' || unit === 'l');
+}
+
 /* ══════════════════════════════════════
    HTML
 ══════════════════════════════════════ */
@@ -26,7 +36,7 @@ function reportHTML() {
 
   /* ── Tab bar ── */
   const tabBar = `
-    <div class="flex gap8 mb16" style="border-bottom:1px solid var(--ln);padding-bottom:0">
+    <div class="flex gap8 mb16" style="border-bottom:1px solid var(--ln);padding-bottom:0;flex-wrap:wrap">
       <button class="btn btn-sm ${reportTab==='summary'?'btn-red':'btn-ghost'}"
               data-rtab="summary" style="border-radius:8px 8px 0 0;border-bottom:none">
         ${svgI('<path d="M18 20V10M12 20V4M6 20v-6"/>',14)} รายงาน & บัญชี
@@ -35,9 +45,14 @@ function reportHTML() {
               data-rtab="daily" style="border-radius:8px 8px 0 0;border-bottom:none">
         ${svgI('<path d="M3 3h18v4H3zM5 7v13a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1V7M9 12h6"/>',14)} รายการรับ-จ่ายรายวัน
       </button>
+      <button class="btn btn-sm ${reportTab==='liquid'?'btn-red':'btn-ghost'}"
+              data-rtab="liquid" style="border-radius:8px 8px 0 0;border-bottom:none">
+        ${svgI('<path d="M12 2.5S6 9.2 6 14a6 6 0 0 0 12 0c0-4.8-6-11.5-6-11.5Z"/>',14)} สรุปการใช้ของเหลว
+      </button>
     </div>`;
 
   if (reportTab === 'daily') return tabBar + dailyTransactionHTML();
+  if (reportTab === 'liquid') return tabBar + liquidUsageHTML();
 
   const mInvs = S.invoices.filter(i => {
     const d = new Date(i.ts);
@@ -260,32 +275,36 @@ function reportHTML() {
     </div>`;
 
   /* ── กำไรแยกตามประเภทสินค้า (เดือนนี้) ── */
+  const [categoryYear, categoryMonth] = reportMonth.split('-').map(Number);
+  const categoryPeriodLabel = new Date(categoryYear, categoryMonth - 1, 1)
+    .toLocaleDateString('th-TH', { month: 'long', year: 'numeric' });
   const TYPE_LABEL = { stock: 'น้ำมัน / สต๊อก', order: 'อะไหล่สั่ง', service: 'ค่าแรง / บริการ', other: 'อื่นๆ' };
   const TYPE_COLOR = { stock: 'var(--teal)', order: 'var(--gold)', service: 'var(--grn)', other: 'var(--fg2)' };
   const typeMap = {};
   for (const inv of mInvs) {
-    for (const it of (inv.items || [])) {
+    const invItems = inv.items || [];
+    const itemSubtotal = invItems.reduce((sum, it) => sum + (it.qty || 0) * (it.price || 0), 0);
+    const invoiceRevenue = Math.max(0, (inv.grand || 0) - (inv.vat || 0));
+    const revenueFactor = itemSubtotal > 0 ? invoiceRevenue / itemSubtotal : 0;
+    for (const it of invItems) {
       const t = it.itemType || 'other';
       const _desc = it.desc || it.name || '(ไม่มีชื่อ)';
-      // น้ำมัน/สต็อก ที่ price=0 → ตัดสต็อกอย่างเดียว รายได้อยู่ใน "บริการ"
-      // → โอนต้นทุนไปหักกำไรของ service category แทน
-      if (it.itemType === 'stock' && (it.price || 0) === 0) {
-        if (!typeMap['service']) typeMap['service'] = { rev: 0, cost: 0, qty: 0, items: {} };
-        typeMap['service'].cost += (it.qty || 0) * (it.cost || 0);
-        const k = _desc + ' (ต้นทุนน้ำมัน)';
-        if (!typeMap['service'].items[k]) typeMap['service'].items[k] = { qty: 0, rev: 0, cost: 0 };
-        typeMap['service'].items[k].qty  += (it.qty || 0);
-        typeMap['service'].items[k].cost += (it.qty || 0) * (it.cost || 0);
-        continue;
-      }
+      const lineRevenue = (it.qty || 0) * (it.price || 0) * revenueFactor;
       if (!typeMap[t]) typeMap[t] = { rev: 0, cost: 0, qty: 0, items: {} };
-      typeMap[t].rev  += (it.qty || 0) * (it.price || 0);
+      typeMap[t].rev  += lineRevenue;
       typeMap[t].cost += (it.qty || 0) * (it.cost  || 0);
       typeMap[t].qty  += (it.qty || 0);
       if (!typeMap[t].items[_desc]) typeMap[t].items[_desc] = { qty: 0, rev: 0, cost: 0 };
       typeMap[t].items[_desc].qty  += (it.qty || 0);
-      typeMap[t].items[_desc].rev  += (it.qty || 0) * (it.price || 0);
+      typeMap[t].items[_desc].rev  += lineRevenue;
       typeMap[t].items[_desc].cost += (it.qty || 0) * (it.cost  || 0);
+    }
+    if (itemSubtotal <= 0 && invoiceRevenue > 0) {
+      const adjustmentDesc = 'ยอดบิลไม่มีรายละเอียดรายการ';
+      if (!typeMap.other) typeMap.other = { rev: 0, cost: 0, qty: 0, items: {} };
+      typeMap.other.rev += invoiceRevenue;
+      if (!typeMap.other.items[adjustmentDesc]) typeMap.other.items[adjustmentDesc] = { qty: 0, rev: 0, cost: 0 };
+      typeMap.other.items[adjustmentDesc].rev += invoiceRevenue;
     }
   }
   const typeOrder = ['stock', 'order', 'service', 'other'];
@@ -332,7 +351,7 @@ function reportHTML() {
     <div class="card" style="margin-top:16px">
       <div class="card-h">
         ${svgI('<path d="M21.21 15.89A10 10 0 1 1 8 2.83"/><path d="M22 12A10 10 0 0 0 12 2v10z"/>')}
-        <h2>กำไรแยกตามประเภท — เดือนนี้</h2>
+        <h2>กำไรแยกตามประเภท — ${categoryPeriodLabel}</h2>
       </div>
       <div class="tbl-wrap">
         <table class="tbl">
@@ -512,15 +531,6 @@ function reportHTML() {
 ══════════════════════════════════════ */
 function dailyTransactionHTML() {
 
-  /* ── Determine if a stock item is oil ── */
-  const isOilItem = (item) => {
-    const si    = S.stockItems.find(s => s.id === item.sid);
-    const cat   = (si?.cat || '').toLowerCase();
-    const name  = (item.name || '').toLowerCase();
-    return cat.includes('น้ำมัน') || cat.includes('oil') || cat.includes('fluid')
-        || name.includes('น้ำมัน') || name.includes('น้ำยา');
-  };
-
   /* ── Default date range: current month ── */
   const today   = new Date();
   const fromDef = `${today.getFullYear()}-${String(today.getMonth()+1).padStart(2,'0')}-01`;
@@ -553,7 +563,7 @@ function dailyTransactionHTML() {
     const jobNo   = job?.no  || '—';
 
     for (const item of (inv.items || [])) {
-      const isOil  = isOilItem(item);
+      const isOil  = isLiquidStockItem(item);
       if (_dailyType === 'oil'   && !isOil) continue;
       if (_dailyType === 'parts' &&  isOil) continue;
 
@@ -786,6 +796,157 @@ function dailyTransactionHTML() {
 }
 
 /* ══════════════════════════════════════
+   LIQUID USAGE SUMMARY
+══════════════════════════════════════ */
+function liquidUsageHTML() {
+  const localDateKey = (ts) => {
+    const date = new Date(ts);
+    if (Number.isNaN(date.getTime())) return '';
+    return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
+  };
+  const dailyUsage = {};
+  const itemUsage = {};
+  const monthlyUsage = {};
+  let invoiceCount = 0;
+
+  for (const invoice of S.invoices) {
+    if (invoice.status === 'cancelled') continue;
+    const dateKey = localDateKey(invoice.ts);
+    if (!dateKey) continue;
+    const monthKey = dateKey.slice(0, 7);
+
+    let hasLiquid = false;
+    let invoiceLitres = 0;
+    for (const item of (invoice.items || [])) {
+      if (!isLiquidStockItem(item)) continue;
+      const litres = Math.max(0, Number(item.qty) || 0);
+      if (litres <= 0) continue;
+
+      hasLiquid = true;
+      invoiceLitres += litres;
+      if (monthKey !== reportMonth) continue;
+      dailyUsage[dateKey] = fmt((dailyUsage[dateKey] || 0) + litres);
+      const stockItem = S.stockItems.find(stock => stock.id === item.sid);
+      const itemName = item.name || stockItem?.name || 'ไม่ระบุชื่อ';
+      itemUsage[itemName] = fmt((itemUsage[itemName] || 0) + litres);
+    }
+    if (hasLiquid) {
+      if (!monthlyUsage[monthKey]) monthlyUsage[monthKey] = { litres: 0, invoices: 0 };
+      monthlyUsage[monthKey].litres = fmt(monthlyUsage[monthKey].litres + invoiceLitres);
+      monthlyUsage[monthKey].invoices += 1;
+      if (monthKey === reportMonth) invoiceCount += 1;
+    }
+  }
+
+  const totalLitres = fmt(Object.values(dailyUsage).reduce((sum, litres) => sum + litres, 0));
+  const usageDays = Object.keys(dailyUsage).length;
+  const averageLitres = usageDays ? fmt(totalLitres / usageDays) : 0;
+  const peakEntry = Object.entries(dailyUsage).sort((a, b) => b[1] - a[1])[0];
+
+  const dailyRows = Object.entries(dailyUsage)
+    .sort((a, b) => b[0].localeCompare(a[0]))
+    .map(([dateKey, litres]) => `
+      <tr>
+        <td>${dateStr(new Date(`${dateKey}T12:00:00`).getTime())}</td>
+        <td class="r money fc-gold" style="font-weight:700">${numFmt(litres)} ลิตร</td>
+      </tr>`).join('');
+
+  const itemRows = Object.entries(itemUsage)
+    .sort((a, b) => b[1] - a[1])
+    .map(([name, litres]) => `
+      <tr>
+        <td>${esc(name)}</td>
+        <td class="r money fc-gold" style="font-weight:700">${numFmt(litres)} ลิตร</td>
+        <td class="r" style="color:var(--fg2)">${totalLitres ? numFmt((litres / totalLitres) * 100) : 0}%</td>
+      </tr>`).join('');
+
+  const monthlyRows = Object.entries(monthlyUsage)
+    .sort((a, b) => b[0].localeCompare(a[0]))
+    .map(([monthKey, usage]) => {
+      const [year, month] = monthKey.split('-').map(Number);
+      const monthLabel = new Date(year, month - 1, 1).toLocaleDateString('th-TH', { month: 'long', year: 'numeric' });
+      return `
+        <tr${monthKey === reportMonth ? ' style="background:var(--p3)"' : ''}>
+          <td>
+            <button class="btn btn-ghost btn-sm" data-liquid-month="${monthKey}" style="min-width:145px;justify-content:flex-start">
+              ${esc(monthLabel)}
+            </button>
+          </td>
+          <td class="r">${usage.invoices} ใบ</td>
+          <td class="r money fc-gold" style="font-weight:700">${numFmt(usage.litres)} ลิตร</td>
+        </tr>`;
+    }).join('');
+
+  return `
+    <div class="fjb mb16" style="flex-wrap:wrap;gap:12px">
+      <div>
+        <h1 class="cond" style="font-size:1.4rem;font-weight:800;text-transform:uppercase">สรุปการใช้ของเหลว</h1>
+        <div style="font-size:.8rem;color:var(--fg2);margin-top:2px">นับจากรายการที่ตัดสต๊อกเป็นหน่วยลิตร</div>
+      </div>
+      <div class="fld" style="min-width:170px;margin:0">
+        <label for="liquidMonth" style="font-size:.75rem;color:var(--fg2);display:block;margin-bottom:3px">เลือกเดือน</label>
+        <input type="month" id="liquidMonth" value="${reportMonth}"
+          style="background:var(--ink);border:1px solid var(--ln2);color:var(--fg);border-radius:8px;padding:7px 10px;font-size:.85rem;outline:none;width:100%">
+      </div>
+    </div>
+
+    <div class="g4 mb16">
+      <div class="stat gold" style="min-height:84px">
+        <div class="sk">${svgI('<path d="M12 2.5S6 9.2 6 14a6 6 0 0 0 12 0c0-4.8-6-11.5-6-11.5Z"/>')} ใช้รวมทั้งเดือน</div>
+        <div class="sv" style="font-size:1.35rem">${numFmt(totalLitres)} ลิตร</div>
+      </div>
+      <div class="stat teal" style="min-height:84px">
+        <div class="sk">${svgI('<path d="M8 2v4M16 2v4M3 10h18M5 4h14a2 2 0 0 1 2 2v14H3V6a2 2 0 0 1 2-2Z"/>')} วันที่มีการใช้</div>
+        <div class="sv" style="font-size:1.35rem">${usageDays} วัน</div>
+      </div>
+      <div class="stat grn" style="min-height:84px">
+        <div class="sk">${svgI('<path d="M4 19V9M10 19V5M16 19v-7M22 19V3"/>')} เฉลี่ยต่อวันที่ใช้</div>
+        <div class="sv" style="font-size:1.35rem">${numFmt(averageLitres)} ลิตร</div>
+      </div>
+      <div class="stat red" style="min-height:84px">
+        <div class="sk">${svgI('<path d="M3 3h18v18H3zM8 7h8M8 12h8M8 17h5"/>')} ใบแจ้งหนี้</div>
+        <div class="sv" style="font-size:1.35rem">${invoiceCount} ใบ</div>
+      </div>
+    </div>
+
+    ${peakEntry ? `<div class="card mb16"><div class="card-b" style="padding:11px 14px;font-size:.84rem;color:var(--fg2)">
+      วันที่ใช้สูงสุด <strong style="color:var(--fg)">${dateStr(new Date(`${peakEntry[0]}T12:00:00`).getTime())}</strong>
+      <span style="margin-left:8px;color:var(--gold);font-weight:700">${numFmt(peakEntry[1])} ลิตร</span>
+    </div></div>` : ''}
+
+    <div class="card mb16">
+      <div class="card-h"><h3>สรุปการใช้ทุกเดือน</h3></div>
+      <div class="tbl-wrap">
+        <table class="tbl">
+          <thead><tr><th>เดือน</th><th class="r">ใบแจ้งหนี้</th><th class="r">ปริมาณที่ใช้</th></tr></thead>
+          <tbody>${monthlyRows || '<tr><td colspan="3" class="tbl-empty">ยังไม่มีข้อมูลการใช้ของเหลว</td></tr>'}</tbody>
+        </table>
+      </div>
+    </div>
+
+    <div class="g2" style="align-items:start">
+      <div class="card">
+        <div class="card-h"><h3>ยอดใช้รายวัน</h3></div>
+        <div class="tbl-wrap">
+          <table class="tbl">
+            <thead><tr><th>วันที่</th><th class="r">ปริมาณที่ใช้</th></tr></thead>
+            <tbody>${dailyRows || '<tr><td colspan="2" class="tbl-empty">ไม่มีการใช้ของเหลวในเดือนนี้</td></tr>'}</tbody>
+          </table>
+        </div>
+      </div>
+      <div class="card">
+        <div class="card-h"><h3>ยอดใช้แยกตามชนิด</h3></div>
+        <div class="tbl-wrap">
+          <table class="tbl">
+            <thead><tr><th>ของเหลว</th><th class="r">ปริมาณรวม</th><th class="r">สัดส่วน</th></tr></thead>
+            <tbody>${itemRows || '<tr><td colspan="3" class="tbl-empty">ไม่มีการใช้ของเหลวในเดือนนี้</td></tr>'}</tbody>
+          </table>
+        </div>
+      </div>
+    </div>`;
+}
+
+/* ══════════════════════════════════════
    BIND
 ══════════════════════════════════════ */
 function bindReport() {
@@ -797,6 +958,20 @@ function bindReport() {
       renderPanel();
     })
   );
+
+  if (reportTab === 'liquid') {
+    sel('liquidMonth')?.addEventListener('input', e => {
+      reportMonth = e.target.value;
+      renderPanel();
+    });
+    document.querySelectorAll('[data-liquid-month]').forEach(button =>
+      button.addEventListener('click', () => {
+        reportMonth = button.dataset.liquidMonth;
+        renderPanel();
+      })
+    );
+    return;
+  }
 
   /* ── Daily tab bindings ── */
   if (reportTab === 'daily') {

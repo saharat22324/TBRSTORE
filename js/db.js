@@ -792,10 +792,8 @@ function repairInvoiceCosts() {
   for (const inv of (S.invoices || [])) {
     let changed = false;
     for (const it of (inv.items || [])) {
-      if (!it.price || it.price <= 0) continue;
-
       // Case 1: cost > sell price — impossible, recalculate
-      if (it.cost > it.price) {
+      if (it.price > 0 && it.cost > it.price) {
         const fixed = Math.round(it.price / 1.37);
         console.log(`[DB] 🔧 cost>sell: ${it.name} ${it.cost}→${fixed}`);
         it.cost = fixed;
@@ -803,7 +801,7 @@ function repairInvoiceCosts() {
         repaired++;
       }
       // Case 2: stock item with cost=0 — lookup from stock master
-      else if (it.cost === 0 && it.itemType === 'stock') {
+      else if ((!it.cost || it.cost <= 0) && it.itemType === 'stock') {
         const si = (it.sid && stockById[it.sid])
                  || stockByName[(it.name || '').trim().toLowerCase()];
         if (si && si.cost > 0) {
