@@ -824,32 +824,46 @@ function liquidUsageHTML() {
 
       hasLiquid = true;
       invoiceLitres += litres;
-      if (monthKey !== reportMonth) continue;
-      dailyUsage[dateKey] = fmt((dailyUsage[dateKey] || 0) + litres);
       const stockItem = S.stockItems.find(stock => stock.id === item.sid);
       const itemName = item.name || stockItem?.name || 'ไม่ระบุชื่อ';
+      if (!monthlyUsage[monthKey]) monthlyUsage[monthKey] = { litres: 0, invoices: 0, items: {} };
+      monthlyUsage[monthKey].items[itemName] = fmt((monthlyUsage[monthKey].items[itemName] || 0) + litres);
+      if (monthKey !== reportMonth) continue;
+      if (!dailyUsage[dateKey]) dailyUsage[dateKey] = { litres: 0, items: {} };
+      dailyUsage[dateKey].litres = fmt(dailyUsage[dateKey].litres + litres);
+      dailyUsage[dateKey].items[itemName] = fmt((dailyUsage[dateKey].items[itemName] || 0) + litres);
       itemUsage[itemName] = fmt((itemUsage[itemName] || 0) + litres);
     }
     if (hasLiquid) {
-      if (!monthlyUsage[monthKey]) monthlyUsage[monthKey] = { litres: 0, invoices: 0 };
+      if (!monthlyUsage[monthKey]) monthlyUsage[monthKey] = { litres: 0, invoices: 0, items: {} };
       monthlyUsage[monthKey].litres = fmt(monthlyUsage[monthKey].litres + invoiceLitres);
       monthlyUsage[monthKey].invoices += 1;
       if (monthKey === reportMonth) invoiceCount += 1;
     }
   }
 
-  const totalLitres = fmt(Object.values(dailyUsage).reduce((sum, litres) => sum + litres, 0));
+  const totalLitres = fmt(Object.values(dailyUsage).reduce((sum, usage) => sum + usage.litres, 0));
   const usageDays = Object.keys(dailyUsage).length;
   const averageLitres = usageDays ? fmt(totalLitres / usageDays) : 0;
-  const peakEntry = Object.entries(dailyUsage).sort((a, b) => b[1] - a[1])[0];
+  const peakEntry = Object.entries(dailyUsage).sort((a, b) => b[1].litres - a[1].litres)[0];
 
   const dailyRows = Object.entries(dailyUsage)
     .sort((a, b) => b[0].localeCompare(a[0]))
-    .map(([dateKey, litres]) => `
-      <tr>
-        <td>${dateStr(new Date(`${dateKey}T12:00:00`).getTime())}</td>
-        <td class="r money fc-gold" style="font-weight:700">${numFmt(litres)} ลิตร</td>
-      </tr>`).join('');
+    .map(([dateKey, usage]) => {
+      const detailRows = Object.entries(usage.items)
+        .sort((a, b) => b[1] - a[1])
+        .map(([name, litres]) => `
+          <tr style="background:var(--p1)">
+            <td style="padding-left:28px;color:var(--fg2)">${esc(name)}</td>
+            <td class="r money">${numFmt(litres)} ลิตร</td>
+          </tr>`).join('');
+      return `
+        <tr style="background:var(--p3)">
+          <td style="font-weight:700">${dateStr(new Date(`${dateKey}T12:00:00`).getTime())}</td>
+          <td class="r money fc-gold" style="font-weight:800">รวม ${numFmt(usage.litres)} ลิตร</td>
+        </tr>
+        ${detailRows}`;
+    }).join('');
 
   const itemRows = Object.entries(itemUsage)
     .sort((a, b) => b[1] - a[1])
@@ -865,6 +879,14 @@ function liquidUsageHTML() {
     .map(([monthKey, usage]) => {
       const [year, month] = monthKey.split('-').map(Number);
       const monthLabel = new Date(year, month - 1, 1).toLocaleDateString('th-TH', { month: 'long', year: 'numeric' });
+      const detailRows = Object.entries(usage.items)
+        .sort((a, b) => b[1] - a[1])
+        .map(([name, litres]) => `
+          <tr style="background:var(--p1)">
+            <td style="padding-left:28px;color:var(--fg2)">${esc(name)}</td>
+            <td></td>
+            <td class="r money">${numFmt(litres)} ลิตร</td>
+          </tr>`).join('');
       return `
         <tr${monthKey === reportMonth ? ' style="background:var(--p3)"' : ''}>
           <td>
@@ -874,7 +896,8 @@ function liquidUsageHTML() {
           </td>
           <td class="r">${usage.invoices} ใบ</td>
           <td class="r money fc-gold" style="font-weight:700">${numFmt(usage.litres)} ลิตร</td>
-        </tr>`;
+        </tr>
+        ${detailRows}`;
     }).join('');
 
   return `
@@ -911,7 +934,7 @@ function liquidUsageHTML() {
 
     ${peakEntry ? `<div class="card mb16"><div class="card-b" style="padding:11px 14px;font-size:.84rem;color:var(--fg2)">
       วันที่ใช้สูงสุด <strong style="color:var(--fg)">${dateStr(new Date(`${peakEntry[0]}T12:00:00`).getTime())}</strong>
-      <span style="margin-left:8px;color:var(--gold);font-weight:700">${numFmt(peakEntry[1])} ลิตร</span>
+      <span style="margin-left:8px;color:var(--gold);font-weight:700">${numFmt(peakEntry[1].litres)} ลิตร</span>
     </div></div>` : ''}
 
     <div class="card mb16">
@@ -926,7 +949,7 @@ function liquidUsageHTML() {
 
     <div class="g2" style="align-items:start">
       <div class="card">
-        <div class="card-h"><h3>ยอดใช้รายวัน</h3></div>
+        <div class="card-h"><h3>ยอดใช้รายวัน — แยกทุกรายการ</h3></div>
         <div class="tbl-wrap">
           <table class="tbl">
             <thead><tr><th>วันที่</th><th class="r">ปริมาณที่ใช้</th></tr></thead>
@@ -935,7 +958,7 @@ function liquidUsageHTML() {
         </div>
       </div>
       <div class="card">
-        <div class="card-h"><h3>ยอดใช้แยกตามชนิด</h3></div>
+        <div class="card-h"><h3>รวมทั้งเดือน — แยกตามรายการ</h3></div>
         <div class="tbl-wrap">
           <table class="tbl">
             <thead><tr><th>ของเหลว</th><th class="r">ปริมาณรวม</th><th class="r">สัดส่วน</th></tr></thead>
