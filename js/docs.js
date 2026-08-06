@@ -743,6 +743,13 @@ function bindDocActions(type, data, dc) {
   ov.querySelector('#dDel')?.addEventListener('click', async () => {
     if (type !== 'inv') return;
     if (!hasPermission('canCancelInvoice')) return showToast('ไม่มีสิทธิ์ยกเลิกบิล', 'err');
+    const activePayments = invoicePaymentsFor(data).filter(payment => !payment.reversedAt);
+    if (activePayments.length) {
+      const activeTotal = activePayments.reduce((sum, payment) => sum + Number(payment.amount || 0), 0);
+      showToast(`บิลนี้รับชำระแล้ว ${THB(activeTotal)} · ต้องย้อนรายการรับชำระก่อนยกเลิกบิล`, 'err');
+      openPaymentModal(data);
+      return;
+    }
     const reason = prompt(`ระบุเหตุผลยกเลิกใบเสร็จ ${data.no}\n\nสต๊อกจะถูกคืนและเอกสารจะยังอยู่ในประวัติ`);
     if (reason === null) return;
     if (!reason.trim()) return showToast('กรุณาระบุเหตุผลการยกเลิก', 'err');

@@ -1247,6 +1247,15 @@ function bindReport() {
       e.stopPropagation();
       const inv = S.invoices.find(x => x.no === b.dataset.dinv);
       if (!inv) return;
+      const activePayments = typeof invoicePaymentsFor === 'function'
+        ? invoicePaymentsFor(inv).filter(payment => !payment.reversedAt)
+        : [];
+      if (activePayments.length) {
+        const activeTotal = activePayments.reduce((sum, payment) => sum + Number(payment.amount || 0), 0);
+        showToast(`บิลนี้รับชำระแล้ว ${THB(activeTotal)} · ต้องย้อนรายการรับชำระก่อนยกเลิกบิล`, 'err');
+        openPaymentModal(inv);
+        return;
+      }
 
       const reason = prompt(
         `ระบุเหตุผลยกเลิกใบเสร็จ ${inv.no} (${inv.cust||'ลูกค้า'}) ยอด ${THB(inv.grand)}\n\n` +
