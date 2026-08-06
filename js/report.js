@@ -989,12 +989,6 @@ function bindReport() {
       const today   = new Date();
       const from    = _dailyFrom || `${today.getFullYear()}-${String(today.getMonth()+1).padStart(2,'0')}-01`;
       const to      = _dailyTo   || today.toISOString().slice(0,10);
-      const isOilIt = (item) => {
-        const si = S.stockItems.find(s => s.id === item.sid);
-        const c  = (si?.cat || '').toLowerCase();
-        const n  = (item.name || '').toLowerCase();
-        return c.includes('น้ำมัน')||c.includes('oil')||c.includes('fluid')||n.includes('น้ำมัน')||n.includes('น้ำยา');
-      };
       const rows = [];
       const hdrs = ['วันที่','ประเภท','ชื่อรายการ','ปริมาณ','ทุน','ขาย','กำไร','Job','ลูกค้า','เลขที่บิล'];
       for (const inv of S.invoices) {
@@ -1004,7 +998,7 @@ function bindReport() {
         const custName= inv.cust || job?.custName || '';
         const jobNo   = job?.no || '';
         for (const item of (inv.items || [])) {
-          const isOil = isOilIt(item);
+          const isOil = isLiquidStockItem(item);
           if (_dailyType === 'oil' && !isOil) continue;
           if (_dailyType === 'parts' && isOil) continue;
           const qty   = item.qty || 0;
