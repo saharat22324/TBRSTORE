@@ -258,6 +258,134 @@
   font-size: .9rem;
 }
 
+/* Liquid usage month summary */
+.liquid-month-heading {
+  justify-content: space-between;
+  gap: 16px;
+}
+.liquid-month-heading h3 { margin: 0; }
+.liquid-month-heading > div > span {
+  display: block;
+  margin-top: 3px;
+  color: var(--fg2);
+  font-size: .7rem;
+}
+.liquid-month-legend {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--fg2);
+  font-size: .68rem;
+  white-space: nowrap;
+}
+.liquid-month-legend i {
+  width: 18px;
+  height: 4px;
+  border-radius: 2px;
+  background: var(--gold);
+}
+.liquid-month-list { padding: 8px 14px 14px; }
+.liquid-month-group {
+  padding: 12px 0 14px;
+  border-bottom: 1px solid var(--ln);
+}
+.liquid-month-group:last-child {
+  padding-bottom: 0;
+  border-bottom: none;
+}
+.liquid-month-group.is-current {
+  margin: 6px -6px;
+  padding: 12px 10px 14px;
+  border: 1px solid rgba(238,166,28,.3);
+  border-radius: 8px;
+  background: rgba(238,166,28,.05);
+}
+.liquid-month-summary {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  width: 100%;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--fg);
+  text-align: left;
+  cursor: pointer;
+}
+.liquid-month-title {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  min-width: 0;
+}
+.liquid-month-title strong { font-size: .9rem; }
+.liquid-month-title small {
+  color: var(--fg2);
+  font-size: .7rem;
+}
+.liquid-month-total {
+  color: var(--gold);
+  font-size: 1.05rem;
+  font-weight: 800;
+  white-space: nowrap;
+}
+.liquid-month-total small {
+  color: var(--fg2);
+  font-family: inherit;
+  font-size: .68rem;
+  font-weight: 600;
+}
+.liquid-month-track {
+  height: 4px;
+  margin: 9px 0 11px;
+  overflow: hidden;
+  border-radius: 2px;
+  background: var(--p3);
+}
+.liquid-month-track span {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: var(--gold);
+}
+.liquid-month-items {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 5px 20px;
+}
+.liquid-month-item {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 10px;
+  min-width: 0;
+  padding: 4px 0;
+  color: var(--fg2);
+  font-size: .78rem;
+}
+.liquid-month-item span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.liquid-month-item strong {
+  flex: 0 0 auto;
+  color: var(--fg);
+  font-size: .76rem;
+}
+
+@media (max-width: 680px) {
+  .liquid-month-heading { align-items: flex-start; }
+  .liquid-month-legend { display: none; }
+  .liquid-month-title {
+    align-items: flex-start;
+    flex-direction: column;
+    gap: 2px;
+  }
+  .liquid-month-items { grid-template-columns: 1fr; }
+}
+
 /* ══════════════════════════════════════
    BADGES
 ══════════════════════════════════════ */

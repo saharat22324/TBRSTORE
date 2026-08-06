@@ -874,30 +874,34 @@ function liquidUsageHTML() {
         <td class="r" style="color:var(--fg2)">${totalLitres ? numFmt((litres / totalLitres) * 100) : 0}%</td>
       </tr>`).join('');
 
-  const monthlyRows = Object.entries(monthlyUsage)
+  const maxMonthlyLitres = Math.max(...Object.values(monthlyUsage).map(usage => usage.litres), 1);
+  const monthlyGroups = Object.entries(monthlyUsage)
     .sort((a, b) => b[0].localeCompare(a[0]))
     .map(([monthKey, usage]) => {
       const [year, month] = monthKey.split('-').map(Number);
       const monthLabel = new Date(year, month - 1, 1).toLocaleDateString('th-TH', { month: 'long', year: 'numeric' });
-      const detailRows = Object.entries(usage.items)
+      const usagePercent = Math.max(3, Math.round((usage.litres / maxMonthlyLitres) * 100));
+      const detailItems = Object.entries(usage.items)
         .sort((a, b) => b[1] - a[1])
         .map(([name, litres]) => `
-          <tr style="background:var(--p1)">
-            <td style="padding-left:28px;color:var(--fg2)">${esc(name)}</td>
-            <td></td>
-            <td class="r money">${numFmt(litres)} ลิตร</td>
-          </tr>`).join('');
+          <div class="liquid-month-item">
+            <span>${esc(name)}</span>
+            <strong class="money">${numFmt(litres)} ลิตร</strong>
+          </div>`).join('');
       return `
-        <tr${monthKey === reportMonth ? ' style="background:var(--p3)"' : ''}>
-          <td>
-            <button class="btn btn-ghost btn-sm" data-liquid-month="${monthKey}" style="min-width:145px;justify-content:flex-start">
-              ${esc(monthLabel)}
-            </button>
-          </td>
-          <td class="r">${usage.invoices} ใบ</td>
-          <td class="r money fc-gold" style="font-weight:700">${numFmt(usage.litres)} ลิตร</td>
-        </tr>
-        ${detailRows}`;
+        <section class="liquid-month-group${monthKey === reportMonth ? ' is-current' : ''}">
+          <button class="liquid-month-summary" data-liquid-month="${monthKey}" type="button">
+            <span class="liquid-month-title">
+              <strong>${esc(monthLabel)}</strong>
+              <small>${usage.invoices} ใบแจ้งหนี้</small>
+            </span>
+            <span class="liquid-month-total money">${numFmt(usage.litres)} <small>ลิตร</small></span>
+          </button>
+          <div class="liquid-month-track" aria-hidden="true">
+            <span style="width:${usagePercent}%"></span>
+          </div>
+          <div class="liquid-month-items">${detailItems}</div>
+        </section>`;
     }).join('');
 
   return `
@@ -938,12 +942,15 @@ function liquidUsageHTML() {
     </div></div>` : ''}
 
     <div class="card mb16">
-      <div class="card-h"><h3>สรุปการใช้ทุกเดือน</h3></div>
-      <div class="tbl-wrap">
-        <table class="tbl">
-          <thead><tr><th>เดือน</th><th class="r">ใบแจ้งหนี้</th><th class="r">ปริมาณที่ใช้</th></tr></thead>
-          <tbody>${monthlyRows || '<tr><td colspan="3" class="tbl-empty">ยังไม่มีข้อมูลการใช้ของเหลว</td></tr>'}</tbody>
-        </table>
+      <div class="card-h liquid-month-heading">
+        <div>
+          <h3>สรุปการใช้ทุกเดือน</h3>
+          <span>กดที่เดือนเพื่อดูรายละเอียดของเดือนนั้น</span>
+        </div>
+        <span class="liquid-month-legend"><i></i> ปริมาณเทียบเดือนที่ใช้สูงสุด</span>
+      </div>
+      <div class="liquid-month-list">
+        ${monthlyGroups || '<div class="tbl-empty">ยังไม่มีข้อมูลการใช้ของเหลว</div>'}
       </div>
     </div>
 
