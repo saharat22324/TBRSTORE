@@ -847,32 +847,47 @@ function liquidUsageHTML() {
   const averageLitres = usageDays ? fmt(totalLitres / usageDays) : 0;
   const peakEntry = Object.entries(dailyUsage).sort((a, b) => b[1].litres - a[1].litres)[0];
 
-  const dailyRows = Object.entries(dailyUsage)
+  const dailyGroups = Object.entries(dailyUsage)
     .sort((a, b) => b[0].localeCompare(a[0]))
-    .map(([dateKey, usage]) => {
-      const detailRows = Object.entries(usage.items)
+    .map(([dateKey, usage], index) => {
+      const detailItems = Object.entries(usage.items)
         .sort((a, b) => b[1] - a[1])
         .map(([name, litres]) => `
-          <tr style="background:var(--p1)">
-            <td style="padding-left:28px;color:var(--fg2)">${esc(name)}</td>
-            <td class="r money">${numFmt(litres)} ลิตร</td>
-          </tr>`).join('');
+          <div class="liquid-day-item">
+            <span>${esc(name)}</span>
+            <strong class="money">${numFmt(litres)} ลิตร</strong>
+          </div>`).join('');
       return `
-        <tr style="background:var(--p3)">
-          <td style="font-weight:700">${dateStr(new Date(`${dateKey}T12:00:00`).getTime())}</td>
-          <td class="r money fc-gold" style="font-weight:800">รวม ${numFmt(usage.litres)} ลิตร</td>
-        </tr>
-        ${detailRows}`;
+        <details class="liquid-day-group"${index === 0 ? ' open' : ''}>
+          <summary>
+            <span class="liquid-day-date">
+              <i>${dateKey.slice(8, 10)}</i>
+              <span>${dateStr(new Date(`${dateKey}T12:00:00`).getTime())}</span>
+            </span>
+            <span class="liquid-day-total money">${numFmt(usage.litres)} <small>ลิตร</small></span>
+          </summary>
+          <div class="liquid-day-items">${detailItems}</div>
+        </details>`;
     }).join('');
 
-  const itemRows = Object.entries(itemUsage)
+  const maxItemLitres = Math.max(...Object.values(itemUsage), 1);
+  const itemGroups = Object.entries(itemUsage)
     .sort((a, b) => b[1] - a[1])
-    .map(([name, litres]) => `
-      <tr>
-        <td>${esc(name)}</td>
-        <td class="r money fc-gold" style="font-weight:700">${numFmt(litres)} ลิตร</td>
-        <td class="r" style="color:var(--fg2)">${totalLitres ? numFmt((litres / totalLitres) * 100) : 0}%</td>
-      </tr>`).join('');
+    .map(([name, litres]) => {
+      const percentage = totalLitres ? (litres / totalLitres) * 100 : 0;
+      const barWidth = Math.max(3, Math.round((litres / maxItemLitres) * 100));
+      return `
+        <div class="liquid-item-summary">
+          <div class="liquid-item-head">
+            <span>${esc(name)}</span>
+            <strong class="money">${numFmt(litres)} <small>ลิตร</small></strong>
+          </div>
+          <div class="liquid-item-foot">
+            <span><i style="width:${barWidth}%"></i></span>
+            <small>${numFmt(percentage)}%</small>
+          </div>
+        </div>`;
+    }).join('');
 
   const maxMonthlyLitres = Math.max(...Object.values(monthlyUsage).map(usage => usage.litres), 1);
   const monthlyGroups = Object.entries(monthlyUsage)
@@ -956,21 +971,21 @@ function liquidUsageHTML() {
 
     <div class="g2" style="align-items:start">
       <div class="card">
-        <div class="card-h"><h3>ยอดใช้รายวัน — แยกทุกรายการ</h3></div>
-        <div class="tbl-wrap">
-          <table class="tbl">
-            <thead><tr><th>วันที่</th><th class="r">ปริมาณที่ใช้</th></tr></thead>
-            <tbody>${dailyRows || '<tr><td colspan="2" class="tbl-empty">ไม่มีการใช้ของเหลวในเดือนนี้</td></tr>'}</tbody>
-          </table>
+        <div class="card-h liquid-detail-heading">
+          <div><h3>ยอดใช้รายวัน</h3><span>กดวันที่เพื่อดูรายการ</span></div>
+          <span>${usageDays} วันที่มีการใช้</span>
+        </div>
+        <div class="liquid-day-list">
+          ${dailyGroups || '<div class="tbl-empty">ไม่มีการใช้ของเหลวในเดือนนี้</div>'}
         </div>
       </div>
       <div class="card">
-        <div class="card-h"><h3>รวมทั้งเดือน — แยกตามรายการ</h3></div>
-        <div class="tbl-wrap">
-          <table class="tbl">
-            <thead><tr><th>ของเหลว</th><th class="r">ปริมาณรวม</th><th class="r">สัดส่วน</th></tr></thead>
-            <tbody>${itemRows || '<tr><td colspan="3" class="tbl-empty">ไม่มีการใช้ของเหลวในเดือนนี้</td></tr>'}</tbody>
-          </table>
+        <div class="card-h liquid-detail-heading">
+          <div><h3>รวมทั้งเดือน</h3><span>เรียงจากปริมาณที่ใช้มากที่สุด</span></div>
+          <strong class="money">${numFmt(totalLitres)} ลิตร</strong>
+        </div>
+        <div class="liquid-item-list">
+          ${itemGroups || '<div class="tbl-empty">ไม่มีการใช้ของเหลวในเดือนนี้</div>'}
         </div>
       </div>
     </div>`;
