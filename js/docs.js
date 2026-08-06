@@ -215,7 +215,7 @@ function buildInvoiceActions(d) {
         style="background:#fde8e8;color:var(--bad)">
         ${svgI('<path d="M18 6 6 18M6 6l12 12"/>')} ยกเลิกบิล
       </button>` : ''}
-      ${!isCancelled && !isAdjustment && !(d.paidAmount > 0) && hasPermission('canEditIssuedInvoice') ? `<button class="btn-cdoc" id="dEditBill"
+      ${!isCancelled && !isAdjustment && hasPermission('canEditIssuedInvoice') ? `<button class="btn-cdoc" id="dEditBill"
         style="background:#fff8e1;color:#f57f17;border-color:#ffe082">
         ${svgI('<path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 1 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/>')} แก้ไขบิล
       </button>` : ''}
@@ -697,6 +697,13 @@ function bindDocActions(type, data, dc) {
     if (!hasPermission('canEditIssuedInvoice')) return showToast('ไม่มีสิทธิ์แก้ไขบิลที่ออกแล้ว', 'err');
     const inv = S.invoices.find(x => x.no === data.no);
     if (!inv) return;
+    const activePayments = invoicePaymentsFor(inv).filter(payment => !payment.reversedAt);
+    if (activePayments.length) {
+      const activeTotal = activePayments.reduce((sum, payment) => sum + Number(payment.amount || 0), 0);
+      showToast(`บิลนี้รับชำระแล้ว ${THB(activeTotal)} · ต้องย้อนรายการรับชำระก่อนแก้ไขบิล`, 'err');
+      openPaymentModal(inv);
+      return;
+    }
 
     // โหลด items กลับเข้าฟอร์ม billing
     bItems = (inv.items || []).map(it => ({
