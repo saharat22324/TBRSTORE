@@ -709,6 +709,8 @@ function convertSupabaseToState(dbData) {
         type: e.type === 'adjust' ? 'count' : (e.type || 'in'),
         qty: Number(e.qty),
         unit: si.unit || '',
+        refType: e.ref_type || '',
+        refId: e.ref_id || null,
         note: e.note || '',
         user: ''
       };

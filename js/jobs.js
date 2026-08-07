@@ -357,6 +357,11 @@ function openJobDetail(jid) {
 
   const reqs      = S.requisitions.filter(r => r.jobId === jid);
   const inv       = S.invoices.find(i => i.jobId === jid || (j.no && i.ref === j.no));
+  const requisitionsLocked = S.invoices.some(i =>
+    (i.jobId === jid || (j.no && i.ref === j.no))
+    && !['cancelled', 'credited', 'refunded'].includes(i.status)
+    && !['credit_note', 'debit_note'].includes(i.documentType)
+  );
   // คำนวณต้นทุนจาก items โดยตรง (ไม่ใช้ inv.totalCost ที่อาจเก่า)
   const calcInvCostJ = i => (i.items || []).reduce((s, it) => s + ((it.qty || 0) * (it.cost || 0)), 0);
   const reqCost   = reqs.reduce((s, r) => s + r.items.reduce((ss, it) => ss + it.qty * (it.cost || 0), 0), 0);
@@ -379,12 +384,12 @@ function openJobDetail(jid) {
             </span>` : ''}
           </div>
           <div style="display:flex;gap:4px;margin-left:12px">
-            <button class="btn-icon btn-edit-req" data-req-id="${r.id}" title="แก้ไขใบเบิก">
+            ${requisitionsLocked ? '<span class="badge b-warn">ล็อกหลังออกบิล</span>' : `<button class="btn-icon btn-edit-req" data-req-id="${r.id}" title="แก้ไขใบเบิก">
               ${svgI('<path d="M3 17.25V21h3.75L17.81 9.94m-6.75-6.75L21 7.75M11 5L9 3l-5.25 5.25"/>',14)}
             </button>
             <button class="btn-icon btn-del-req" data-req-id="${r.id}" title="ลบใบเบิก">
               ${svgI('<path d="M19 6.4L17.6 5 12 10.6 6.4 5 5 6.4l5.6 5.6L5 17.6l1.4 1.4L12 13.4l5.6 5.6 1.4-1.4-5.6-5.6L19 6.4z"/>',14)}
-            </button>
+            </button>`}
           </div>
         </div>
         <div style="padding:0 14px 10px">
@@ -472,9 +477,11 @@ function openJobDetail(jid) {
           <h3 class="cond" style="font-weight:800;text-transform:uppercase;font-size:1rem">
             ใบเบิกสต๊อก
           </h3>
-          <button class="btn btn-teal btn-sm" id="addReqBtn">
-            ${svgI('<path d="M12 5v14M5 12h14"/>')} สร้างใบเบิก
-          </button>
+          ${requisitionsLocked
+            ? '<span class="badge b-warn">ออกบิลแล้ว · ไม่สามารถเพิ่มใบเบิก</span>'
+            : `<button class="btn btn-teal btn-sm" id="addReqBtn">
+                ${svgI('<path d="M12 5v14M5 12h14"/>')} สร้างใบเบิก
+              </button>`}
         </div>
         ${reqCards}
 

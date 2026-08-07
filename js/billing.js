@@ -561,7 +561,42 @@ function openOrderItemModal() {
 /* ══════════════════════════════════════
    SAVE INVOICE
 ══════════════════════════════════════ */
+let invoiceSaveInFlight = false;
+
+function invoiceWriteErrorMessage(error) {
+  const message = String(error?.message || error || '');
+  if (/reverse payments|active payment/i.test(message)) return 'ต้องย้อนรายการรับชำระก่อนแก้ไขบิล';
+  if (/insufficient stock/i.test(message)) return 'สต๊อกสินค้าไม่เพียงพอ กรุณาโหลดข้อมูลใหม่แล้วตรวจจำนวน';
+  if (/not permitted|only admin|permission|unauthorized/i.test(message)) return 'บัญชีนี้ไม่มีสิทธิ์แก้ไขบิล';
+  if (/stock changed/i.test(message)) return 'ยอดสต๊อกมีการเปลี่ยนแปลง กรุณาโหลดข้อมูลใหม่แล้วลองอีกครั้ง';
+  return message.replace(/^.*?:\s*/, '').slice(0, 140) || 'ไม่สามารถบันทึกบิลได้';
+}
+
 async function saveInvoice() {
+  if (invoiceSaveInFlight) return;
+  const saveButton = sel('bSaveInv');
+  const originalLabel = saveButton?.innerHTML || '';
+  invoiceSaveInFlight = true;
+  if (saveButton) {
+    saveButton.disabled = true;
+    saveButton.textContent = 'กำลังบันทึก…';
+  }
+  try {
+    await saveInvoiceOnce();
+  } catch (error) {
+    console.error('[Billing] invoice save failed:', error);
+    showToast(`บันทึกบิลไม่สำเร็จ · ${invoiceWriteErrorMessage(error)}`, 'err');
+  } finally {
+    invoiceSaveInFlight = false;
+    const currentButton = sel('bSaveInv');
+    if (currentButton && currentButton === saveButton) {
+      currentButton.innerHTML = originalLabel;
+      currentButton.disabled = !bItems.length || bCalc().grand <= 0;
+    }
+  }
+}
+
+async function saveInvoiceOnce() {
   const { sub, base, vat, grand } = bCalc();
   if (!bItems.length || grand <= 0) return;
 
@@ -592,12 +627,13 @@ async function saveInvoice() {
 
     // Supabase must commit header, items, stock and ledger together before the
     // local cache is changed. This prevents partial invoice edits.
+    let updatedInvoice = null;
     if (useSupabase) {
       if (!existing.id || typeof updateInvoiceFull !== 'function') {
         showToast('ไม่สามารถแก้ไขแบบ atomic บน Supabase ได้', 'err');
         return;
       }
-      const updated = await updateInvoiceFull(
+      updatedInvoice = await updateInvoiceFull(
         existing.id,
         { sub, disc: bDisc, vat, grand, cust, plate, phone, model, note },
         bItems.map(it => ({
@@ -610,10 +646,6 @@ async function saveInvoice() {
           costPrice: it.cost || 0, total: fmt(it.qty * it.price), note: '',
         }))
       );
-      if (!updated) {
-        showToast('แก้ไขบิลไม่สำเร็จ ข้อมูลและสต๊อกเดิมไม่เปลี่ยน', 'err');
-        return;
-      }
     }
 
     // 1. คืนสต๊อก items เดิมใน local cache
@@ -644,9 +676,10 @@ async function saveInvoice() {
     Object.assign(existing, {
       cust, phone, plate, model, mileage: mile, ref, note,
       items: newItems, sub, disc: bDisc, vat, grand, totalCost,
-      _editedAt: Date.now(),   // ใช้ตรวจสอบว่าเวอร์ชัน local ใหม่กว่า Supabase
+      version: Number(updatedInvoice?.version || existing.version || 1),
     });
 
+    if (useSupabase) await syncRemoteData({ force: true });
     await saveData();
     showToast(`แก้ไขบิล ${existing.no} สำเร็จ ✓`, 'ok');
     if (typeof addAuditLog === 'function')

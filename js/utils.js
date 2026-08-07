@@ -91,6 +91,8 @@ function showToast(msg, type = 'ok') {
   };
 
   el.className = `toast ${type}`;
+  el.setAttribute('role', type === 'err' ? 'alert' : 'status');
+  el.setAttribute('aria-live', type === 'err' ? 'assertive' : 'polite');
   el.querySelector('svg path')?.setAttribute('d', paths[type] || paths.ok);
   document.getElementById('tm').textContent = msg;
   el.classList.add('show');
@@ -100,15 +102,31 @@ function showToast(msg, type = 'ok') {
 }
 
 /* ── Modal / overlay helpers ── */
+const _modalReturnFocus = new Map();
+
 function openOv(id) {
-  document.getElementById(id).classList.add('open');
+  const overlay = document.getElementById(id);
+  if (!overlay) return;
+  _modalReturnFocus.set(id, document.activeElement);
+  overlay.classList.add('open');
+  overlay.setAttribute('aria-hidden', 'false');
   document.body.classList.add('lock');
+  requestAnimationFrame(() => {
+    const focusTarget = overlay.querySelector('[autofocus], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), button:not([disabled]), [tabindex]:not([tabindex="-1"])');
+    focusTarget?.focus();
+  });
 }
 
 function closeOv(id) {
-  document.getElementById(id).classList.remove('open');
-  document.body.classList.remove('lock');
+  const overlay = document.getElementById(id);
+  if (!overlay) return;
+  overlay.classList.remove('open');
+  overlay.setAttribute('aria-hidden', 'true');
+  if (!document.querySelector('.ov.open')) document.body.classList.remove('lock');
   if (id === 'mOv') document.getElementById('mOv').innerHTML = '';
+  const returnFocus = _modalReturnFocus.get(id);
+  if (returnFocus?.isConnected) returnFocus.focus();
+  _modalReturnFocus.delete(id);
 }
 
 function closeMod() { closeOv('mOv'); }
@@ -132,9 +150,9 @@ function showConfirm(title, msg, btnLabel = 'ยืนยัน') {
           <button class="btn btn-red"   id="cfYes">${btnLabel}</button>
         </div>
       </div>`;
-    ov.classList.add('open');
+    openOv('cfOv');
     const done = (v) => {
-      ov.classList.remove('open');
+      closeOv('cfOv');
       ov.innerHTML = '';
       resolve(v);
     };
@@ -146,8 +164,22 @@ function showConfirm(title, msg, btnLabel = 'ยืนยัน') {
 /* Close on Escape key */
 document.addEventListener('keydown', (e) => {
   if (e.key === 'Escape') {
-    closeMod();
-    closeDoc();
+    const confirmOverlay = document.getElementById('cfOv');
+    if (confirmOverlay?.classList.contains('open')) confirmOverlay.querySelector('#cfNo')?.click();
+    else if (document.getElementById('mOv')?.classList.contains('open')) closeMod();
+    else if (document.getElementById('dOv')?.classList.contains('open')) closeDoc();
+    return;
+  }
+  if (e.key === 'Tab') {
+    const overlay = [...document.querySelectorAll('.ov.open')].pop();
+    if (!overlay) return;
+    const focusable = [...overlay.querySelectorAll('button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [href], [tabindex]:not([tabindex="-1"])')]
+      .filter(element => element.offsetParent !== null);
+    if (!focusable.length) return;
+    const first = focusable[0];
+    const last = focusable[focusable.length - 1];
+    if (e.shiftKey && document.activeElement === first) { e.preventDefault(); last.focus(); }
+    else if (!e.shiftKey && document.activeElement === last) { e.preventDefault(); first.focus(); }
   }
 });
 

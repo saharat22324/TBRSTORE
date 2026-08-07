@@ -14,8 +14,9 @@ let currentUserRole = null;
  *  คนอื่นในทีมเลยไม่เห็น) — ฟังก์ชันนี้จะเด้ง toast + เปิด banner เตือน
  * @param {Error} err  error object จาก Supabase
  * @param {string} op  ชื่อ operation เช่น 'addJob' (ใช้ใน log)
+ * @param {{toast?: boolean}} options ตัวเลือกการแสดง toast เมื่อ caller มีข้อความเฉพาะ
  */
-function reportSupabaseWriteError(err, op) {
+function reportSupabaseWriteError(err, op, options = {}) {
   const msg  = (err && (err.message || err.error_description || '')) + '';
   const code = (err && err.code) || '';
   const isRls =
@@ -32,7 +33,7 @@ function reportSupabaseWriteError(err, op) {
 
   // เด้ง toast ให้ผู้ใช้ทุก role รู้ว่าข้อมูลยังไม่ขึ้นระบบกลาง (debounce กันเด้งรัว)
   // ข้าม toast ถ้ากำลัง auto-push เบื้องหลัง (silent) — กันเด้งซ้ำทุก 12 วิจาก record ที่ค้าง
-  if (typeof showToast === 'function' && !(typeof window !== 'undefined' && window._suppressWriteErrorToast)) {
+  if (options.toast !== false && typeof showToast === 'function' && !(typeof window !== 'undefined' && window._suppressWriteErrorToast)) {
     const now = Date.now();
     if (now - (window._lastWriteErrorToast || 0) > 8000) {
       window._lastWriteErrorToast = now;
@@ -778,8 +779,8 @@ async function updateInvoiceFull(invId, invoiceData, items) {
     if (error) throw error;
     return Array.isArray(data) ? data[0] : data;
   } catch (err) {
-    reportSupabaseWriteError(err, 'updateInvoiceFull');
-    return null;
+    reportSupabaseWriteError(err, 'updateInvoiceFull', { toast: false });
+    throw err;
   }
 }
 
@@ -794,17 +795,19 @@ async function getInvoicePayments() {
   }
 }
 
-async function recordInvoicePayment(invId, amount, method, reference, note) {
+async function recordInvoicePayment(invId, amount, method, reference, note, requestId) {
   try {
+    if (!requestId) throw new Error('Payment request id is required');
     const { data, error } = await getSupabase().rpc('record_invoice_payment', {
       p_invoice_id: invId, p_amount: amount, p_method: method,
       p_reference: reference || null, p_note: note || null,
+      p_request_id: requestId,
     });
     if (error) throw error;
     return Array.isArray(data) ? data[0] : data;
   } catch (err) {
-    reportSupabaseWriteError(err, 'recordInvoicePayment');
-    return null;
+    reportSupabaseWriteError(err, 'recordInvoicePayment', { toast: false });
+    throw err;
   }
 }
 
@@ -816,8 +819,8 @@ async function reverseInvoicePayment(paymentId, reason) {
     if (error) throw error;
     return Array.isArray(data) ? data[0] : data;
   } catch (err) {
-    reportSupabaseWriteError(err, 'reverseInvoicePayment');
-    return null;
+    reportSupabaseWriteError(err, 'reverseInvoicePayment', { toast: false });
+    throw err;
   }
 }
 

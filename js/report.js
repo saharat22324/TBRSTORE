@@ -808,12 +808,16 @@ function liquidUsageHTML() {
   const itemUsage = {};
   const monthlyUsage = {};
   let invoiceCount = 0;
+  const [selectedYear, selectedMonth] = reportMonth.split('-').map(Number);
+  const historyStartDate = new Date(selectedYear, selectedMonth - 12, 1);
+  const historyStartKey = `${historyStartDate.getFullYear()}-${String(historyStartDate.getMonth() + 1).padStart(2, '0')}`;
 
   for (const invoice of S.invoices) {
     if (invoice.status === 'cancelled') continue;
     const dateKey = localDateKey(invoice.ts);
     if (!dateKey) continue;
     const monthKey = dateKey.slice(0, 7);
+    if (monthKey < historyStartKey || monthKey > reportMonth) continue;
 
     let hasLiquid = false;
     let invoiceLitres = 0;
@@ -960,7 +964,7 @@ function liquidUsageHTML() {
       <div class="card-h liquid-month-heading">
         <div>
           <h3>สรุปการใช้ทุกเดือน</h3>
-          <span>กดที่เดือนเพื่อดูรายละเอียดของเดือนนั้น</span>
+          <span>12 เดือนล่าสุดถึงเดือนที่เลือก · กดเดือนเพื่อดูรายละเอียด</span>
         </div>
         <span class="liquid-month-legend"><i></i> ปริมาณเทียบเดือนที่ใช้สูงสุด</span>
       </div>

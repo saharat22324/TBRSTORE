@@ -28,10 +28,10 @@
     </div>
   </main>
   <div id="pz"></div>
-  <div class="ov" id="dOv"></div>
-  <div class="ov" id="mOv"></div>
-  <div class="ov" id="cfOv" style="z-index:120"></div>
-  <div class="toast" id="tst">
+  <div class="ov" id="dOv" role="dialog" aria-modal="true" aria-hidden="true"></div>
+  <div class="ov" id="mOv" role="dialog" aria-modal="true" aria-hidden="true"></div>
+  <div class="ov" id="cfOv" role="alertdialog" aria-modal="true" aria-hidden="true" style="z-index:120"></div>
+  <div class="toast" id="tst" role="status" aria-live="polite" aria-atomic="true">
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
       <path d="M20 6 9 17l-5-5"/>
     </svg>
@@ -225,13 +225,13 @@
 
   <!-- Other modules -->
   <script src="js/mobile.js?v=30"></script>
-  <script src="js/supabaseService.js?v=47"></script>
+  <script src="js/supabaseService.js?v=49"></script>
   <script src="js/auth.js?v=30"></script>
   
   <!-- Then Firebase (fallback) -->
   <script src="js/firebaseService.js?v=31"></script>
-  <script src="js/db.js?v=38"></script>
-  <script src="js/utils.js?v=30"></script>
+  <script src="js/db.js?v=39"></script>
+  <script src="js/utils.js?v=31"></script>
   
   <!-- STATE.JS - INLINED TO TEST -->
   <script>
@@ -434,13 +434,13 @@ console.log('[nav.js] ✅ Loaded');
   </script>
   <script src="js/dashboard.js?v=30"></script>
   <script src="js/customers.js?v=31"></script>
-  <script src="js/jobs.js?v=33"></script>
-  <script src="js/stock.js?v=34"></script>
-  <script src="js/billing.js?v=33"></script>
+  <script src="js/jobs.js?v=34"></script>
+  <script src="js/stock.js?v=35"></script>
+  <script src="js/billing.js?v=34"></script>
   <script src="js/purchasing.js?v=32"></script>
-  <script src="js/report.js?v=40"></script>
+  <script src="js/report.js?v=41"></script>
   <script src="js/settings.js?v=32"></script>
-  <script src="js/docs.js?v=37"></script>
+  <script src="js/docs.js?v=39"></script>
   <script>
     (async () => {
       try {

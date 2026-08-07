@@ -241,8 +241,29 @@ function invoicePaymentsFor(inv) {
     .sort((a, b) => (b.paidAt || 0) - (a.paidAt || 0));
 }
 
+function paymentWriteErrorMessage(error) {
+  const message = String(error?.message || error || '');
+  if (/exceeds outstanding balance/i.test(message)) return 'ยอดรับชำระเกินยอดคงเหลือ กรุณาโหลดข้อมูลใหม่';
+  if (/cannot receive payment/i.test(message)) return 'บิลนี้ไม่สามารถรับชำระได้';
+  if (/only admin|not permitted|permission|unauthorized/i.test(message)) return 'บัญชีนี้ไม่มีสิทธิ์ทำรายการ';
+  if (/already.*revers|reversed/i.test(message)) return 'รายการรับชำระนี้ถูกย้อนแล้ว';
+  if (/request id.*reused|request id is required/i.test(message)) return 'ข้อมูลคำขอรับชำระไม่ตรงกัน กรุณาปิดหน้าต่างแล้วเปิดใหม่';
+  return message.replace(/^.*?:\s*/, '').slice(0, 140) || 'ระบบไม่สามารถทำรายการได้';
+}
+
+function recalculateInvoicePaymentState(inv) {
+  const active = invoicePaymentsFor(inv)
+    .filter(payment => !payment.reversedAt)
+    .reduce((sum, payment) => sum + Number(payment.amount || 0), 0);
+  inv.paidAmount = fmt(active);
+  inv.balance = fmt(Math.max(0, Number(inv.grand || 0) - active));
+  inv.paid = Number(inv.grand || 0) > 0 && inv.balance <= .01;
+  inv.status = inv.paid ? 'paid' : 'issued';
+}
+
 function openPaymentModal(inv) {
   const ov = sel('mOv');
+  const paymentRequestId = crypto.randomUUID();
   const canRecord = hasPermission('canRecordPayment');
   const payments = invoicePaymentsFor(inv);
   const paid = payments.filter(p => !p.reversedAt).reduce((sum, p) => sum + Number(p.amount || 0), 0);
@@ -260,25 +281,51 @@ function openPaymentModal(inv) {
   openOv('mOv');
   bindModalClose(ov, '#mCl', '#mCl2');
   ov.querySelector('#payOk')?.addEventListener('click', async () => {
+    const button = ov.querySelector('#payOk');
+    if (!button || button.disabled) return;
     const amount = Number(sv('payAmt'));
     if (!useSupabase || !inv.id) return showToast('ต้องเชื่อมต่อ Supabase เพื่อบันทึกรับชำระ', 'err');
     if (!(amount > 0) || amount > balance + .01) return showToast('จำนวนเงินไม่ถูกต้อง', 'err');
-    const payment = await recordInvoicePayment(inv.id, amount, sv('payMethod'), sv('payRef'), sv('payNote'));
-    if (!payment) return showToast('บันทึกรับชำระไม่สำเร็จ', 'err');
-    S.invoicePayments.push({ id: payment.id, invoiceId: payment.invoice_id, amount:Number(payment.amount), method:payment.method, reference:payment.reference||'', note:payment.note||'', paidAt:new Date(payment.paid_at).getTime(), reversedAt:null, reversalReason:'' });
-    inv.paidAmount = fmt(paid + amount); inv.balance = fmt(Math.max(0, inv.grand - inv.paidAmount)); inv.paid = inv.balance <= .01; inv.status = inv.paid ? 'paid' : 'issued';
-    await saveData(); closeMod(); closeDoc(); renderPanel(); showToast('บันทึกรับชำระแล้ว', 'ok');
+    button.disabled = true;
+    button.textContent = 'กำลังบันทึก…';
+    try {
+      const payment = await recordInvoicePayment(inv.id, amount, sv('payMethod'), sv('payRef'), sv('payNote'), paymentRequestId);
+      await syncRemoteData({ force: true });
+      if (!(S.invoicePayments || []).some(item => item.id === payment.id)) {
+        S.invoicePayments.push({ id: payment.id, invoiceId: payment.invoice_id, amount:Number(payment.amount), method:payment.method, reference:payment.reference||'', note:payment.note||'', paidAt:new Date(payment.paid_at).getTime(), reversedAt:null, reversalReason:'' });
+      }
+      recalculateInvoicePaymentState(inv);
+      await saveData(); closeMod(); closeDoc(); renderPanel(); showToast('บันทึกรับชำระแล้ว', 'ok');
+    } catch (error) {
+      console.error('[Docs] payment recording failed:', error);
+      showToast(`บันทึกรับชำระไม่สำเร็จ · ${paymentWriteErrorMessage(error)}`, 'err');
+      button.disabled = false;
+      button.textContent = 'บันทึกรับชำระ';
+    }
   });
   ov.querySelectorAll('[data-reverse-payment]').forEach(btn => btn.addEventListener('click', async () => {
+    if (btn.disabled) return;
     const reason = prompt('ระบุเหตุผลย้อนรายการรับชำระ');
     if (!reason?.trim()) return;
-    const reversed = await reverseInvoicePayment(btn.dataset.reversePayment, reason.trim());
-    if (!reversed) return showToast('ย้อนรายการไม่สำเร็จ', 'err');
-    const payment = (S.invoicePayments || []).find(p => p.id === btn.dataset.reversePayment);
-    if (payment) { payment.reversedAt = Date.now(); payment.reversalReason = reason.trim(); }
-    const active = invoicePaymentsFor(inv).filter(p => !p.reversedAt).reduce((s,p)=>s+Number(p.amount||0),0);
-    inv.paidAmount=fmt(active); inv.balance=fmt(Math.max(0,inv.grand-active)); inv.paid=inv.balance<=.01; inv.status=inv.paid?'paid':'issued';
-    await saveData(); closeMod(); closeDoc(); renderPanel(); showToast('ย้อนรายการรับชำระแล้ว', 'ok');
+    const originalLabel = btn.textContent;
+    btn.disabled = true;
+    btn.textContent = 'กำลังย้อนรายการ…';
+    try {
+      const reversed = await reverseInvoicePayment(btn.dataset.reversePayment, reason.trim());
+      await syncRemoteData({ force: true });
+      const payment = (S.invoicePayments || []).find(p => p.id === reversed.id);
+      if (payment && !payment.reversedAt) {
+        payment.reversedAt = new Date(reversed.reversed_at).getTime();
+        payment.reversalReason = reversed.reversal_reason || reason.trim();
+      }
+      recalculateInvoicePaymentState(inv);
+      await saveData(); closeMod(); closeDoc(); renderPanel(); showToast('ย้อนรายการรับชำระแล้ว', 'ok');
+    } catch (error) {
+      console.error('[Docs] payment reversal failed:', error);
+      showToast(`ย้อนรายการไม่สำเร็จ · ${paymentWriteErrorMessage(error)}`, 'err');
+      btn.disabled = false;
+      btn.textContent = originalLabel;
+    }
   }));
 }
 
