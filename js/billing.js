@@ -10,8 +10,21 @@
 /* ══════════════════════════════════════
    HTML
 ══════════════════════════════════════ */
+function billingBangkokDateKey(date = new Date()) {
+  const parts = new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'Asia/Bangkok', year: 'numeric', month: '2-digit', day: '2-digit'
+  }).formatToParts(date).reduce((result, part) => {
+    result[part.type] = part.value;
+    return result;
+  }, {});
+  return `${parts.year}-${parts.month}-${parts.day}`;
+}
+
 function billingHTML() {
   const { sub, vat, grand } = bCalc();
+  const todayKey = billingBangkokDateKey();
+  const canBackdate = typeof getCurrentUserRole === 'function' && getCurrentUserRole() === 1;
+  const invoiceDate = bEditData?.invoiceDate || todayKey;
   
   /* ── Stats ── */
   const activeInv = S.invoices.filter(i => i.status !== 'cancelled');
@@ -126,6 +139,20 @@ function billingHTML() {
                        placeholder="JOB-…">
               </div>
             </div>
+            ${canBackdate ? `
+            <div class="fgrid c2 mt12">
+              <div class="fld">
+                <label>วันที่เอกสาร</label>
+                <input id="bInvoiceDate" type="date" value="${esc(invoiceDate)}" max="${todayKey}" ${bEditInvNo ? 'disabled' : ''}>
+              </div>
+              <div class="fld" id="bBackdateReasonWrap" style="${invoiceDate < todayKey && !bEditInvNo ? '' : 'display:none'}">
+                <label>เหตุผลที่ลงย้อนหลัง *</label>
+                <input id="bBackdateReason" maxlength="240" placeholder="เช่น บิลตกหล่นประจำเดือนมิถุนายน">
+                <div style="margin-top:6px;font-size:.72rem;color:var(--warn)">
+                  รายการสต๊อกจะหักจากยอดปัจจุบัน หากอ้างอิง Job ที่มีใบเบิก ระบบจะหักเฉพาะส่วนเกิน
+                </div>
+              </div>
+            </div>` : ''}
           </div>
         </div>
 
@@ -229,6 +256,13 @@ function billingHTML() {
    BIND
 ══════════════════════════════════════ */
 function bindBilling() {
+
+  const invoiceDateInput = sel('bInvoiceDate');
+  const backdateReasonWrap = sel('bBackdateReasonWrap');
+  invoiceDateInput?.addEventListener('change', () => {
+    const todayKey = billingBangkokDateKey();
+    if (backdateReasonWrap) backdateReasonWrap.style.display = invoiceDateInput.value < todayKey ? '' : 'none';
+  });
 
   /* ── Customer auto-fill: เมื่อเลือกชื่อลูกค้าจาก datalist ── */
   sel('bCust')?.addEventListener('change', () => {
@@ -607,6 +641,16 @@ async function saveInvoiceOnce() {
   const ref   = sv('bRef');
   const note  = sv('bNote');
   const phone = sv('bPhone');
+  const todayKey = billingBangkokDateKey();
+  const invoiceDate = sv('bInvoiceDate') || todayKey;
+  const backdateReason = sv('bBackdateReason').trim();
+  const isBackdated = invoiceDate < todayKey;
+  if (invoiceDate > todayKey) throw new Error('วันที่เอกสารต้องไม่เป็นวันในอนาคต');
+  if (isBackdated && !useSupabase) throw new Error('บิลย้อนหลังต้องบันทึกผ่านระบบส่วนกลางเท่านั้น');
+  if (isBackdated && (typeof getCurrentUserRole !== 'function' || getCurrentUserRole() !== 1)) {
+    throw new Error('เฉพาะ Admin เท่านั้นที่เพิ่มบิลย้อนหลังได้');
+  }
+  if (isBackdated && !backdateReason) throw new Error('กรุณาระบุเหตุผลที่ลงบิลย้อนหลัง');
   const selectedCustomer = S.customers.find(c => (c.name || '').trim() === cust.trim());
   const totalCost = bItems.reduce((s, it) => s + fmt(it.qty * (it.cost || 0)), 0);
 
@@ -695,13 +739,13 @@ async function saveInvoiceOnce() {
   }
 
   /* ── NEW INVOICE — ออกบิลใหม่ ── */
-  const no = nextSeqNo('inv').replace('inv-','INV-');
+  const no = isBackdated ? null : nextSeqNo('inv').replace('inv-','INV-');
 
   const billedJob = bJobId ? S.jobs.find(x => x.id === bJobId) : null;
   const billedVehicle = billedJob ? S.vehicles.find(x => x.id === billedJob.vehicleId) : null;
 
   const inv = {
-    no, ts: Date.now(), jobId: bJobId,
+    no, ts: new Date(`${invoiceDate}T12:00:00`).getTime(), createdAt: Date.now(), invoiceDate, backdateReason, jobId: bJobId,
     custId: selectedCustomer?.id || null,
     cust, phone, plate, model, mileage: mile, ref,
     items: newItems,
@@ -734,9 +778,15 @@ async function saveInvoiceOnce() {
           note: ''
         })),
         sub, bDisc, vat ? 0.07 : 0, grand, note, no,
-        { cust, phone, plate, model: sv('bModel') }  // meta: snapshot customer/vehicle info
+        { cust, phone, plate, model: sv('bModel'), invoiceDate, backdateReason, autoInvoiceNumber: isBackdated }
       );
-      if (supaResult) { inv.id = supaResult.id; _invCloudOk = true; }
+      if (supaResult) {
+        inv.id = supaResult.id;
+        inv.no = supaResult.invoice_number;
+        inv.invoiceDate = supaResult.invoice_date || invoiceDate;
+        inv.createdAt = supaResult.created_at ? new Date(supaResult.created_at).getTime() : Date.now();
+        _invCloudOk = true;
+      }
     }
   } catch (err) {
     invoiceError = err;
@@ -745,7 +795,7 @@ async function saveInvoiceOnce() {
 
   if (useSupabase && !_invCloudOk) {
     const reason = String(invoiceError?.message || '').replace(/^.*?:\s*/, '').slice(0,120);
-    showToast(`ออกใบเสร็จ ${no} ไม่สำเร็จ${reason ? ` · ${reason}` : ''}`, 'err');
+    showToast(`ออกใบเสร็จ${no ? ` ${no}` : 'ย้อนหลัง'} ไม่สำเร็จ${reason ? ` · ${reason}` : ''}`, 'err');
     return;
   }
 
@@ -759,7 +809,7 @@ async function saveInvoiceOnce() {
         m.qty = fmt(m.qty - it.qty);
         m.used = fmt((m.used || 0) + it.qty);
         if (!useSupabase && typeof addToLedger === 'function')
-          addToLedger(m.id, 'out', it.qty, 'บิล ' + no);
+          addToLedger(m.id, 'out', it.qty, 'บิล ' + inv.no);
       }
     }
   });
@@ -767,10 +817,10 @@ async function saveInvoiceOnce() {
   S.invoices.push(inv);
   await saveData();
   if (typeof addAuditLog === 'function')
-    addAuditLog('INVOICE_CREATE', 'invoice', inv.id || null, no, { grand });
-  if (!useSupabase)     showToast(`ออกใบเสร็จ ${no} แล้ว`);
-  else if (_invCloudOk) showToast(`ออกใบเสร็จ ${no} แล้ว · ขึ้นคลาวด์ ☁️`);
-  else                  showToast(`ออกใบเสร็จ ${no} ไม่สำเร็จ`, 'err');
+    addAuditLog(isBackdated ? 'INVOICE_CREATE_BACKDATED' : 'INVOICE_CREATE', 'invoice', inv.id || null, inv.no, { grand, invoiceDate });
+  if (!useSupabase)     showToast(`ออกใบเสร็จ ${inv.no} แล้ว`);
+  else if (_invCloudOk) showToast(`ออกใบเสร็จ ${inv.no} แล้ว · ขึ้นคลาวด์ ☁️`);
+  else                  showToast(`ออกใบเสร็จ ${inv.no} ไม่สำเร็จ`, 'err');
 
   /* Reset billing state */
   bItems = []; bKey = 0; bDisc = 0; bVat = false; bJobId = null;

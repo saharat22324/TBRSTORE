@@ -122,7 +122,7 @@ function buildInvoiceHTML(d) {
           <span>เลขที่: <b>${d.no}</b></span>
           ${d.ref ? `<span>อ้างอิง: <b>${esc(d.ref)}</b></span>` : ''}
           ${original ? `<span>อ้างอิงเอกสารเดิม: <b>${esc(original.no)}</b></span>` : ''}
-          <span>วันที่: <b>${dateStr(d.ts)} ${timeStr(d.ts)}</b></span>
+          <span>วันที่เอกสาร: <b>${dateStr(d.ts)}</b></span>
           <span style="background:${d.paid ? '#d4edda' : '#f8d7da'};color:${d.paid ? '#155724' : '#721c24'};
                       padding:2px 8px;border-radius:99px;font-size:.7rem;font-weight:700">
             ${isCancelled ? '✕ ยกเลิกแล้ว' : (documentType === 'credit_note' ? 'เอกสารลดหนี้' : (d.paid ? '✓ ชำระแล้ว' : '● ค้างชำระ'))}
@@ -775,6 +775,7 @@ function bindDocActions(type, data, dc) {
       mileage: inv.mileage || '',
       ref:     inv.ref     || '',
       note:    inv.note    || '',
+      invoiceDate: inv.invoiceDate || new Date(inv.ts).toISOString().slice(0, 10),
     };
 
     closeDoc();

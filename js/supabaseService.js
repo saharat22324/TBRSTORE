@@ -655,7 +655,7 @@ async function addInvoice(jobId, customerId, vehicleId, items, subtotal, discoun
   try {
     // Use provided invoice number or generate locally
     let invNo = invoiceNo;
-    if (!invNo) {
+    if (!invNo && !meta.autoInvoiceNumber) {
       const today = new Date();
       const dateStr = String(today.getFullYear()) + 
                       String(today.getMonth() + 1).padStart(2, '0') + 
@@ -691,6 +691,7 @@ async function addInvoice(jobId, customerId, vehicleId, items, subtotal, discoun
         invoice_number: invNo || '', job_id: safeJobId, customer_id: safeCustomerId,
         vehicle_id: safeVehicleId, customer_name: meta.cust || null,
         plate: meta.plate || null, phone: meta.phone || null, car_model: meta.model || null,
+        invoice_date: meta.invoiceDate || null, backdate_reason: meta.backdateReason || null,
         subtotal, discount, vat, grand_total: grandTotal, note,
         status: 'issued', document_type: 'invoice', invoice_type: 'receipt'
       },

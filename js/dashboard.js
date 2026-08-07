@@ -307,7 +307,10 @@ function bindDashboard() {
               return {
                 id: i.id,
                 no: i.invoice_number,
-                ts: new Date(i.created_at).getTime(),
+                ts: i.invoice_date ? new Date(`${i.invoice_date}T12:00:00`).getTime() : new Date(i.created_at).getTime(),
+                invoiceDate: i.invoice_date || null,
+                createdAt: new Date(i.created_at).getTime(),
+                backdateReason: i.backdate_reason || '',
                 jobId: i.job_id,
                 cust: i.customer_name || i.customers?.name || '',
                 phone: i.phone || '',
