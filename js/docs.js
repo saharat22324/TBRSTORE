@@ -752,6 +752,14 @@ function bindDocActions(type, data, dc) {
       return;
     }
 
+    const requisitionStockIds = new Set(
+      S.requisitions
+        .filter(requisition => requisition.jobId === inv.jobId)
+        .flatMap(requisition => requisition.items || [])
+        .map(item => item.sid)
+        .filter(Boolean)
+    );
+
     // โหลด items กลับเข้าฟอร์ม billing
     bItems = (inv.items || []).map(it => ({
       k: ++bKey,
@@ -762,6 +770,8 @@ function bindDocActions(type, data, dc) {
       price:    it.price || 0,
       itemType: it.itemType || 'other',
       cost:     it.cost || 0,
+      requisitionLinked: it.itemType === 'stock' && requisitionStockIds.has(it.sid),
+      originalQty: Number(it.qty || 0),
     }));
     bDisc      = inv.disc || 0;
     bVat       = (inv.vat || 0) > 0;
@@ -782,7 +792,9 @@ function bindDocActions(type, data, dc) {
     currentTab = 'billing';
     renderNav();
     renderPanel();
-    showToast(`แก้ไขบิล ${inv.no} — แก้รายการแล้วกด บันทึกการแก้ไข`, 'inf');
+    showToast(requisitionStockIds.size
+      ? `แก้ไขบิล ${inv.no} — จำนวนอะไหล่จากใบเบิกต้องแก้ที่ Job Card`
+      : `แก้ไขบิล ${inv.no} — แก้รายการแล้วกด บันทึกการแก้ไข`, 'inf');
   });
 
   /* Payment ledger */

@@ -164,6 +164,11 @@ function billingHTML() {
           </div>
           <div class="card-b">
 
+            ${bEditInvNo && bItems.some(item => item.requisitionLinked) ? `
+            <div class="badge b-warn mb12" style="display:block;padding:9px 12px;white-space:normal">
+              จำนวนอะไหล่ที่มาจากใบเบิกถูกล็อก หากจำนวนของที่ใช้จริงเปลี่ยน ให้แก้ใบเบิกใน Job Card ระบบจะปรับบิลและสต๊อกพร้อมกัน
+            </div>` : ''}
+
             <!-- Add buttons row -->
             <div class="flex gap8 mb12" style="flex-wrap:wrap">
               <select id="bSel"
@@ -293,7 +298,8 @@ function bindBilling() {
     si('sGrand',  THB(grand));
 
     const short = bItems.some(it =>
-      it.sid && it.qty > (S.stockItems.find(x => x.id === it.sid)?.qty || 0)
+      it.sid && !(bEditInvNo && it.requisitionLinked)
+      && it.qty > (S.stockItems.find(x => x.id === it.sid)?.qty || 0)
     );
 
     ['bSaveInv', 'bSaveQt'].forEach(id => {
@@ -315,7 +321,8 @@ function bindBilling() {
 
     box.innerHTML = bItems.map(it => {
       const m     = it.sid ? S.stockItems.find(x => x.id === it.sid) : null;
-      const short = m && it.qty > m.qty;
+      const requisitionLocked = bEditInvNo && it.requisitionLinked;
+      const short = !requisitionLocked && m && it.qty > m.qty;
 
       /* Type badge */
       const badge =
@@ -332,7 +339,7 @@ function bindBilling() {
                        font-family:'JetBrains Mono',monospace">
              ${esc(it.sid)}${short
                ? ` · ⚠ ไม่พอ (เหลือ ${numFmt(m.qty)})`
-               : ' · Stock Item'}
+               : requisitionLocked ? ' · จากใบเบิก · แก้จำนวนที่ Job Card' : ' · Stock Item'}
            </div>`
         : `<div style="display:flex;align-items:center;gap:6px;margin-bottom:3px">${badge}</div>
            <input data-f="nm" value="${esc(it.nm)}" placeholder="ชื่อรายการ" style="width:100%">`;
@@ -343,14 +350,14 @@ function bindBilling() {
           <div>
             <input data-f="qty" type="number" min="0"
                    step="${it.unit === 'ลิตร' ? '0.5' : '1'}"
-                   value="${it.qty}" style="width:100%">
+                   value="${it.qty}" style="width:100%" ${requisitionLocked ? 'disabled' : ''}>
           </div>
           <div>
             <input data-f="price" type="number" min="0"
                    value="${it.price}" style="width:100%">
           </div>
           <div class="tot">${THB(it.qty * it.price)}</div>
-          <button class="btn-icon" data-del="${it.k}">
+          <button class="btn-icon" data-del="${it.k}" ${requisitionLocked ? 'disabled title="รายการนี้มาจากใบเบิก"' : ''}>
             ${svgI('<path d="M18 6 6 18M6 6l12 12"/>',13)}
           </button>
         </div>`;
@@ -394,6 +401,9 @@ function bindBilling() {
     const [type, id] = val.split(':');
 
     if (type === 'stock') {
+      if (bEditInvNo && bItems.some(item => item.requisitionLinked && item.sid === id)) {
+        return showToast('รายการนี้มาจากใบเบิก หากต้องการเปลี่ยนจำนวนให้แก้ที่ Job Card', 'err');
+      }
       const m = S.stockItems.find(x => x.id === id);
       bItems.push({
         k: ++bKey, sid: id, nm: m.name, unit: m.unit,
@@ -667,6 +677,25 @@ async function saveInvoiceOnce() {
     if (existing.status === 'cancelled') {
       showToast('บิลนี้ถูกยกเลิกแล้ว ไม่สามารถแก้ไขได้', 'err');
       return;
+    }
+    const requisitionStockIds = new Set(
+      S.requisitions
+        .filter(requisition => requisition.jobId === existing.jobId)
+        .flatMap(requisition => requisition.items || [])
+        .map(item => item.sid)
+        .filter(Boolean)
+    );
+    for (const stockId of requisitionStockIds) {
+      const originalQty = (existing.items || [])
+        .filter(item => item.itemType === 'stock' && item.sid === stockId)
+        .reduce((sum, item) => sum + Number(item.qty || 0), 0);
+      const editedQty = bItems
+        .filter(item => item.itemType === 'stock' && item.sid === stockId)
+        .reduce((sum, item) => sum + Number(item.qty || 0), 0);
+      if (editedQty !== originalQty) {
+        showToast('จำนวนอะไหล่จากใบเบิกต้องแก้ที่ Job Card เพื่อให้บิลและสต๊อกตรงกัน', 'err');
+        return;
+      }
     }
 
     // Supabase must commit header, items, stock and ledger together before the
