@@ -441,7 +441,10 @@ function openJobDetail(jid) {
         </span>` : ''}
       </div>
       ${billItemsList}
-      <button class="btn btn-ghost btn-sm mt8" id="viewInvBtn">ดูใบเสร็จ</button>`
+      <div class="flex gap8 mt8" style="flex-wrap:wrap">
+        <button class="btn btn-ghost btn-sm" id="viewInvBtn">${activeInvoice ? 'ดูใบเสร็จ' : 'ดูใบเสร็จเดิม'}</button>
+        ${!activeInvoice ? '<button class="btn btn-gold btn-sm" id="billJobBtn">ออกบิลใหม่จากงานนี้</button>' : ''}
+      </div>`
     : `${hasPermission('canViewCost') ? `<div style="font-size:.86rem;color:var(--fg2);margin-bottom:10px">
         ต้นทุนใบเบิก ${THB(totalCost)}
       </div>` : ''}
