@@ -362,6 +362,8 @@ function openJobDetail(jid) {
     && !['cancelled', 'credited', 'refunded'].includes(i.status)
     && !['credit_note', 'debit_note'].includes(i.documentType)
   );
+  const canEditReq = !requisitionsLocked
+    || (typeof getCurrentUserRole === 'function' && getCurrentUserRole() === 1);
   // คำนวณต้นทุนจาก items โดยตรง (ไม่ใช้ inv.totalCost ที่อาจเก่า)
   const calcInvCostJ = i => (i.items || []).reduce((s, it) => s + ((it.qty || 0) * (it.cost || 0)), 0);
   const reqCost   = reqs.reduce((s, r) => s + r.items.reduce((ss, it) => ss + it.qty * (it.cost || 0), 0), 0);
@@ -384,10 +386,10 @@ function openJobDetail(jid) {
             </span>` : ''}
           </div>
           <div style="display:flex;gap:4px;margin-left:12px">
-            ${requisitionsLocked ? '<span class="badge b-warn">ล็อกหลังออกบิล</span>' : `<button class="btn-icon btn-edit-req" data-req-id="${r.id}" title="แก้ไขใบเบิก">
+            ${canEditReq ? `<button class="btn-icon btn-edit-req" data-req-id="${r.id}" title="แก้ไขใบเบิก">
               ${svgI('<path d="M3 17.25V21h3.75L17.81 9.94m-6.75-6.75L21 7.75M11 5L9 3l-5.25 5.25"/>',14)}
-            </button>
-            <button class="btn-icon btn-del-req" data-req-id="${r.id}" title="ลบใบเบิก">
+            </button>` : '<span class="badge b-warn">ล็อกหลังออกบิล</span>'}
+            ${requisitionsLocked ? '<span class="badge b-warn">ล็อกการลบหลังออกบิล</span>' : `<button class="btn-icon btn-del-req" data-req-id="${r.id}" title="ลบใบเบิก">
               ${svgI('<path d="M19 6.4L17.6 5 12 10.6 6.4 5 5 6.4l5.6 5.6L5 17.6l1.4 1.4L12 13.4l5.6 5.6 1.4-1.4-5.6-5.6L19 6.4z"/>',14)}
             </button>`}
           </div>
@@ -1050,6 +1052,14 @@ function openEditReqModal(jid, reqId) {
   const req = S.requisitions.find(r => r.id === reqId);
   if (!j || !req) return;
 
+  const hasIssuedInvoice = S.invoices.some(i =>
+    (i.jobId === jid || (j.no && i.ref === j.no))
+    && !['cancelled', 'credited', 'refunded'].includes(i.status)
+    && !['credit_note', 'debit_note'].includes(i.documentType)
+  );
+  if (hasIssuedInvoice && (typeof getCurrentUserRole !== 'function' || getCurrentUserRole() !== 1)) {
+    return showToast('เฉพาะ Admin เท่านั้นที่แก้ใบเบิกซึ่งออกบิลแล้วได้', 'err');
+  }
   const ov = sel('mOv');
   let editItems = JSON.parse(JSON.stringify(req.items)); /* clone items */
 
@@ -1109,6 +1119,9 @@ function openEditReqModal(jid, reqId) {
         <button class="closex" id="mCl">${svgI('<path d="M18 6 6 18M6 6l12 12"/>')}</button>
       </div>
       <div class="modal-b">
+        ${hasIssuedInvoice ? `<div class="badge b-warn mb12" style="display:block;padding:9px 12px;white-space:normal">
+          งานนี้ออกบิลแล้ว การแก้ไขจะปรับใบเบิก สต๊อก รายการและยอดในใบเสร็จตามราคาที่บันทึกไว้พร้อมกัน
+        </div>` : ''}
         <div id="editReqBox"></div>
       </div>
       <div class="modal-f">
@@ -1124,10 +1137,50 @@ function openEditReqModal(jid, reqId) {
   sel('editReqSave').addEventListener('click', async () => {
     if (!editItems.length) return showToast('ต้องมีรายการอย่างน้อย 1 รายการ', 'err');
 
+    if (editItems.some(it => !Number.isFinite(Number(it.qty)) || Number(it.qty) <= 0)) {
+      return showToast('จำนวนเบิกต้องมากกว่า 0 ทุกรายการ', 'err');
+    }
+
+    const oldQtyByStock = new Map();
+    const newQtyByStock = new Map();
+    (req.items || []).forEach(it => {
+      if (it.sid) oldQtyByStock.set(it.sid, (oldQtyByStock.get(it.sid) || 0) + Number(it.qty || 0));
+    });
+    editItems.forEach(it => {
+      if (it.sid) newQtyByStock.set(it.sid, (newQtyByStock.get(it.sid) || 0) + Number(it.qty || 0));
+    });
+    for (const [stockId, newQty] of newQtyByStock) {
+      const stockItem = S.stockItems.find(item => item.id === stockId);
+      const availableAfterRestore = Number(stockItem?.qty || 0) + (oldQtyByStock.get(stockId) || 0);
+      if (!stockItem || newQty > availableAfterRestore) {
+        return showToast(`สต๊อกไม่พอ: ${stockItem?.name || stockId} (ใช้ได้ ${numFmt(availableAfterRestore)})`, 'err');
+      }
+    }
+
+    const localInvoice = hasIssuedInvoice
+      ? S.invoices.find(i => i.jobId === jid || (j.no && i.ref === j.no))
+      : null;
+    if (hasIssuedInvoice) {
+      if (!localInvoice) return showToast('ไม่พบใบเสร็จของงานนี้', 'err');
+      for (const stockId of new Set([...oldQtyByStock.keys(), ...newQtyByStock.keys()])) {
+        if (!localInvoice.items?.some(it => it.sid === stockId && it.itemType === 'stock')) {
+          return showToast(`ไม่พบรายการ ${stockId} ในใบเสร็จ`, 'err');
+        }
+      }
+    }
+
     if (useSupabase && typeof updateRequisition === 'function') {
       const result = await updateRequisition(req.id, { items: editItems, note: req.note || null });
       if (!result?.id) return showToast(`อัปเดตใบเบิก ${req.no} ไม่สำเร็จ · สต๊อกเดิมไม่เปลี่ยน`, 'err');
-      editItems = Array.isArray(result.items) ? result.items : editItems;
+      if (typeof syncRemoteData === 'function') await syncRemoteData({ force: true });
+      closeMod();
+      renderNav();
+      renderPanel();
+      openJobDetail(jid);
+      showToast(hasIssuedInvoice
+        ? `อัปเดตใบเบิก ${req.no} พร้อมใบเสร็จและสต๊อกแล้ว`
+        : `อัปเดตใบเบิก ${req.no} แล้ว`);
+      return;
     }
 
     // 1. Restore all OLD stock
@@ -1149,6 +1202,21 @@ function openEditReqModal(jid, reqId) {
       }
     });
 
+    if (hasIssuedInvoice) {
+      for (const stockId of new Set([...oldQtyByStock.keys(), ...newQtyByStock.keys()])) {
+        const invoiceItem = localInvoice.items.find(it => it.sid === stockId && it.itemType === 'stock');
+        invoiceItem.qty = fmt(Number(invoiceItem.qty || 0)
+          + (newQtyByStock.get(stockId) || 0) - (oldQtyByStock.get(stockId) || 0));
+      }
+      localInvoice.items = localInvoice.items.filter(it => Number(it.qty || 0) > 0);
+      localInvoice.sub = localInvoice.items.reduce((sum, it) => sum + fmt(Number(it.qty || 0) * Number(it.price || 0)), 0);
+      const invoiceBase = Math.max(0, localInvoice.sub - Number(localInvoice.disc || 0));
+      localInvoice.vat = localInvoice.vat > 0 ? fmt(invoiceBase * 0.07) : 0;
+      localInvoice.grand = Math.round(invoiceBase + localInvoice.vat);
+      localInvoice.totalCost = localInvoice.items.reduce((sum, it) => sum + Number(it.qty || 0) * Number(it.cost || 0), 0);
+      localInvoice.version = Number(localInvoice.version || 1) + 1;
+    }
+
     /* Update requisition */
     req.items = editItems;
 
@@ -1156,7 +1224,9 @@ function openEditReqModal(jid, reqId) {
     closeMod();
     renderNav();
     openJobDetail(jid);
-    showToast(`อัปเดตใบเบิก ${req.no} แล้ว`);
+    showToast(hasIssuedInvoice
+      ? `อัปเดตใบเบิก ${req.no} พร้อมใบเสร็จและสต๊อกแล้ว`
+      : `อัปเดตใบเบิก ${req.no} แล้ว`);
   });
 
   sel('editReqCancel').addEventListener('click', () => {
