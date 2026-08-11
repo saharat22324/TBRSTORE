@@ -355,13 +355,14 @@ function openJobDetail(jid) {
   const j   = S.jobs.find(x => x.id === jid);
   if (!j) return;
 
-  const reqs      = S.requisitions.filter(r => r.jobId === jid);
-  const inv       = S.invoices.find(i => i.jobId === jid || (j.no && i.ref === j.no));
-  const requisitionsLocked = S.invoices.some(i =>
-    (i.jobId === jid || (j.no && i.ref === j.no))
-    && !['cancelled', 'credited', 'refunded'].includes(i.status)
+  const reqs = S.requisitions.filter(r => r.jobId === jid);
+  const linkedInvoices = S.invoices.filter(i => i.jobId === jid || (j.no && i.ref === j.no));
+  const activeInvoice = linkedInvoices.find(i =>
+    !['cancelled', 'credited', 'refunded'].includes(i.status)
     && !['credit_note', 'debit_note'].includes(i.documentType)
   );
+  const inv = activeInvoice || linkedInvoices[0];
+  const requisitionsLocked = Boolean(activeInvoice);
   const canEditReq = !requisitionsLocked
     || (typeof getCurrentUserRole === 'function' && getCurrentUserRole() === 1);
   // คำนวณต้นทุนจาก items โดยตรง (ไม่ใช้ inv.totalCost ที่อาจเก่า)
@@ -432,6 +433,7 @@ function openJobDetail(jid) {
   const billSection = inv
     ? `<div style="font-size:.86rem">
         ออกใบเสร็จ <b style="color:var(--teal)">${inv.no}</b><br>
+        ${!activeInvoice ? '<span class="badge b-bad" style="margin:4px 0">ยกเลิกแล้ว</span><br>' : ''}
         ยอดรวม <b class="fc-gold">${THB(inv.grand)}</b><br>
         ${hasPermission('canViewCost') ? `ต้นทุน ${THB(totalCost)} ·` : ''}
         ${hasPermission('canViewProfit') ? `กำไร <span style="color:${inv.grand-totalCost>=0?'var(--grn)':'var(--bad)'}">
@@ -714,8 +716,8 @@ function openJobDetail(jid) {
 
   /* Delete job (admin + supervisor/หัวหน้าช่าง) */
   ov.querySelector('#delJobBtn')?.addEventListener('click', async () => {
-    if (inv) {
-      showToast('งานนี้ออกบิลแล้ว — กรุณาลบใบเสร็จก่อนจึงจะลบงานได้', 'err');
+    if (activeInvoice) {
+      showToast('งานนี้มีใบเสร็จที่ยังใช้งานอยู่ — กรุณายกเลิกใบเสร็จก่อนจึงจะลบงานได้', 'err');
       return;
     }
     const ok = await showConfirm(
@@ -744,6 +746,9 @@ function openJobDetail(jid) {
       });
     }
     S.requisitions = S.requisitions.filter(r => r.jobId !== jid);
+    linkedInvoices.forEach(invoice => {
+      if (invoice.jobId === jid) invoice.jobId = null;
+    });
 
     /* ลบงานออกจาก state */
     S.jobs = S.jobs.filter(x => x.id !== jid);
