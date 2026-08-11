@@ -10,6 +10,8 @@
 /* ══════════════════════════════════════
    HTML
 ══════════════════════════════════════ */
+let _billingInvoiceView = 'active';
+
 function billingBangkokDateKey(date = new Date()) {
   const parts = new Intl.DateTimeFormat('en-CA', {
     timeZone: 'Asia/Bangkok', year: 'numeric', month: '2-digit', day: '2-digit'
@@ -43,11 +45,14 @@ function billingHTML() {
     `<option value="svc:${s.id}">[บริการ] ${esc(s.name)} — ${THB(s.price)}</option>`
   ).join('');
 
-  const recentInv = [...S.invoices]
+  const recentInv = [...activeInv]
+    .sort((a, b) => (b.ts || b.createdAt || 0) - (a.ts || a.createdAt || 0));
+  const cancelledInv = S.invoices
+    .filter(i => i.status === 'cancelled')
     .sort((a, b) => (b.ts || b.createdAt || 0) - (a.ts || a.createdAt || 0));
 
-  const recentList = recentInv.length
-    ? recentInv.map(i => `
+  const invoiceList = (invoices, cancelled = false) => invoices.length
+    ? invoices.map(i => `
         <div class="fjb" style="padding:8px 14px;border-bottom:1px solid var(--ln);cursor:pointer"
              data-viewinv="${i.no}">
           <div>
@@ -57,14 +62,17 @@ function billingHTML() {
             </div>
           </div>
           <div class="flex gap6" style="align-items:center">
-            <span class="badge ${i.paid ? 'b-grn' : 'b-bad'}" style="font-size:.6rem">
-              ${i.paid ? 'ชำระแล้ว' : 'ค้างชำระ'}
+            <span class="badge ${cancelled ? 'b-bad' : i.paid ? 'b-grn' : 'b-warn'}" style="font-size:.6rem">
+              ${cancelled ? 'ยกเลิกแล้ว' : i.paid ? 'ชำระแล้ว' : 'ค้างชำระ'}
             </span>
-            <span class="money fc-gold">${THB(i.grand)}</span>
+            <span class="money ${cancelled ? '' : 'fc-gold'}" style="${cancelled ? 'color:var(--fg2)' : ''}">${THB(i.grand)}</span>
           </div>
         </div>`)
       .join('')
-    : `<div style="padding:14px;font-size:.82rem;color:var(--fg3)">ยังไม่มีบิล</div>`;
+    : `<div style="padding:14px;font-size:.82rem;color:var(--fg3)">${cancelled ? 'ไม่มีใบที่ยกเลิก' : 'ยังไม่มีบิลใช้งาน'}</div>`;
+
+  const recentList = invoiceList(recentInv);
+  const cancelledList = invoiceList(cancelledInv, true);
 
   return `
     <!-- ── Stats cards ── -->
@@ -245,13 +253,26 @@ function billingHTML() {
           </button>
         </div>
 
-        <!-- Recent invoices -->
+        <!-- Active and cancelled invoices -->
         <div class="card">
-          <div class="card-h" style="padding:10px 14px">
-            ${svgI('<path d="M12 8v4l3 2"/><circle cx="12" cy="12" r="9"/>',14)}
-            <h2 style="font-size:.92rem">บิลล่าสุด (${totalInv})</h2>
+          <div class="card-h" style="padding:10px 14px;display:block">
+            <div class="flex gap8" style="align-items:center;margin-bottom:8px">
+              ${svgI('<path d="M12 8v4l3 2"/><circle cx="12" cy="12" r="9"/>',14)}
+              <h2 id="billingInvoiceListTitle" style="font-size:.92rem">
+                ${_billingInvoiceView === 'cancelled' ? 'ใบที่ยกเลิก' : 'บิลใช้งาน'}
+              </h2>
+            </div>
+            <div class="flex gap6">
+              <button class="btn btn-sm ${_billingInvoiceView === 'active' ? 'btn-red' : 'btn-ghost'}" data-billing-invoice-view="active">
+                บิลใช้งาน (${totalInv})
+              </button>
+              <button class="btn btn-sm ${_billingInvoiceView === 'cancelled' ? 'btn-red' : 'btn-ghost'}" data-billing-invoice-view="cancelled">
+                ใบที่ยกเลิก (${cancelledInv.length})
+              </button>
+            </div>
           </div>
-          <div style="padding:4px 0;max-height:420px;overflow-y:auto">${recentList}</div>
+          <div id="billingActiveInvoices" style="padding:4px 0;max-height:420px;overflow-y:auto;${_billingInvoiceView === 'active' ? '' : 'display:none'}">${recentList}</div>
+          <div id="billingCancelledInvoices" style="padding:4px 0;max-height:420px;overflow-y:auto;${_billingInvoiceView === 'cancelled' ? '' : 'display:none'}">${cancelledList}</div>
         </div>
       </div>
     </div>`;
@@ -261,6 +282,24 @@ function billingHTML() {
    BIND
 ══════════════════════════════════════ */
 function bindBilling() {
+
+  document.querySelectorAll('[data-billing-invoice-view]').forEach(button => {
+    button.addEventListener('click', () => {
+      _billingInvoiceView = button.dataset.billingInvoiceView;
+      const showCancelled = _billingInvoiceView === 'cancelled';
+      const activeList = sel('billingActiveInvoices');
+      const cancelledList = sel('billingCancelledInvoices');
+      const title = sel('billingInvoiceListTitle');
+      if (activeList) activeList.style.display = showCancelled ? 'none' : '';
+      if (cancelledList) cancelledList.style.display = showCancelled ? '' : 'none';
+      if (title) title.textContent = showCancelled ? 'ใบที่ยกเลิก' : 'บิลใช้งาน';
+      document.querySelectorAll('[data-billing-invoice-view]').forEach(viewButton => {
+        const selected = viewButton.dataset.billingInvoiceView === _billingInvoiceView;
+        viewButton.classList.toggle('btn-red', selected);
+        viewButton.classList.toggle('btn-ghost', !selected);
+      });
+    });
+  });
 
   const invoiceDateInput = sel('bInvoiceDate');
   const backdateReasonWrap = sel('bBackdateReasonWrap');
