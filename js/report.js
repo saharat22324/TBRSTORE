@@ -68,11 +68,40 @@ function reportHTML() {
   const mCost   = mInvs.reduce((s, i) => s + calcInvCost(i), 0);
   const mGross  = fmt(mRev - mCost);
 
+  const invoiceRecognition = invoice => {
+    const grand = Number(invoice.grand || 0);
+    const paidAmount = Math.max(0, Number(invoice.paidAmount || 0));
+    const paidRatio = grand > 0 ? Math.min(1, paidAmount / grand) : 0;
+    const revenue = invoiceRevenueBeforeVat(invoice);
+    const cost = calcInvCost(invoice);
+    const gross = revenue - cost;
+    return {
+      paidRatio,
+      recognizedRevenue: fmt(revenue * paidRatio),
+      recognizedCost: fmt(cost * paidRatio),
+      recognizedGross: fmt(gross * paidRatio),
+      pendingGross: fmt(gross * (1 - paidRatio)),
+    };
+  };
+  const recognizedTotals = mInvs.reduce((totals, invoice) => {
+    const recognized = invoiceRecognition(invoice);
+    totals.revenue += recognized.recognizedRevenue;
+    totals.cost += recognized.recognizedCost;
+    totals.gross += recognized.recognizedGross;
+    totals.pendingGross += recognized.pendingGross;
+    return totals;
+  }, { revenue: 0, cost: 0, gross: 0, pendingGross: 0 });
+  const mRecognizedRevenue = fmt(recognizedTotals.revenue);
+  const mRecognizedCost = fmt(recognizedTotals.cost);
+  const mRecognizedGross = fmt(recognizedTotals.gross);
+  const mPendingGross = fmt(recognizedTotals.pendingGross);
+
   const mExp    = S.expenses
     .filter(e => (e.date || '').startsWith(reportMonth))
     .reduce((s, e) => s + (+e.amount || 0), 0);
 
   const mNet    = fmt(mGross - mExp);
+  const mRecognizedNet = fmt(mRecognizedGross - mExp);
 
   const timestampMonth = timestamp => {
     const date = new Date(timestamp);
@@ -154,6 +183,7 @@ function reportHTML() {
         const gp        = fmt(invExVat - invCost);     // กำไร = ก่อน VAT - ต้นทุน
         const invPaid   = fmt(Number(i.paidAmount || 0));
         const invBalance= fmt(Math.max(0, Number(i.grand || 0) - invPaid));
+        const recognized= invoiceRecognition(i);
         return `
           <tr>
             <td class="mono" style="font-size:.75rem;color:var(--teal);cursor:pointer"
@@ -165,6 +195,8 @@ function reportHTML() {
             <td class="r" style="font-size:.82rem;color:var(--fg2)">${THB(invExVat)}${(i.vat||0)>0 ? `<br><span style="font-size:.65rem;color:var(--warn)">VAT ${THB(i.vat)}</span>` : ''}</td>
             ${hasPermission('canViewCost') ? `<td class="r" style="font-size:.82rem;color:var(--bad)">${THB(invCost)}</td>` : ''}
             <td class="r" style="font-weight:700;color:${gp>=0?'var(--grn)':'var(--bad)'}">${THB(gp)}</td>
+            <td class="r" style="font-weight:700;color:var(--grn)">${THB(recognized.recognizedGross)}</td>
+            <td class="r" style="font-weight:700;color:var(--warn)">${THB(recognized.pendingGross)}</td>
             <td class="r money fc-grn">${THB(invPaid)}</td>
             <td class="r money ${invBalance > 0 ? 'fc-bad' : ''}">${THB(invBalance)}</td>
             <td class="c">
@@ -186,7 +218,45 @@ function reportHTML() {
             </td>
           </tr>`;
       }).join('')
-    : `<tr><td colspan="${hasPermission('canViewCost') ? 12 : 11}" class="tbl-empty">ยังไม่มีบิลในเดือนนี้</td></tr>`;
+    : `<tr><td colspan="${hasPermission('canViewCost') ? 14 : 13}" class="tbl-empty">ยังไม่มีบิลในเดือนนี้</td></tr>`;
+
+  const todayStart = new Date();
+  todayStart.setHours(0, 0, 0, 0);
+  const outstandingInvoices = mInvs
+    .map(invoice => {
+      const paidAmount = fmt(Number(invoice.paidAmount || 0));
+      const balance = fmt(Math.max(0, Number(invoice.grand || 0) - paidAmount));
+      const invoiceDate = new Date(invoice.ts || Date.now());
+      invoiceDate.setHours(0, 0, 0, 0);
+      const ageDays = Math.max(0, Math.floor((todayStart - invoiceDate) / 86400000));
+      return { invoice, balance, ageDays, recognized: invoiceRecognition(invoice) };
+    })
+    .filter(item => item.balance > 0.01)
+    .sort((a, b) => (a.invoice.ts || 0) - (b.invoice.ts || 0));
+  const receivableRows = outstandingInvoices.map(({ invoice, balance, ageDays, recognized }) => `
+    <tr>
+      <td class="mono" style="font-size:.76rem;color:var(--teal);cursor:pointer" data-vi="${invoice.no}">${invoice.no}</td>
+      <td>${dateStr(invoice.ts)}</td>
+      <td style="font-weight:600">${esc(invoice.cust || '—')}</td>
+      <td class="r"><span class="badge ${ageDays >= 30 ? 'b-bad' : ageDays >= 14 ? 'b-warn' : 'b-gray'}">${ageDays} วัน</span></td>
+      <td class="r money fc-bad">${THB(balance)}</td>
+      <td class="r money" style="color:var(--warn)">${THB(recognized.pendingGross)}</td>
+      <td class="c"><button class="btn-icon" data-vi="${invoice.no}" title="ดูใบเสร็จ">${svgI('<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>',13)}</button></td>
+    </tr>`).join('');
+  const receivablesHTML = `
+    <div class="card mb16">
+      <div class="card-h">
+        ${svgI('<path d="M3 6h18M5 6v14h14V6M8 10h8"/>')}
+        <h2>ติดตามลูกหนี้ — เก่าสุดก่อน (${outstandingInvoices.length} บิล)</h2>
+        <span class="money fc-bad" style="margin-left:auto;font-weight:800">${THB(mOutstanding)}</span>
+      </div>
+      <div class="tbl-wrap">
+        <table class="tbl">
+          <thead><tr><th>เลขที่</th><th>วันที่</th><th>ลูกค้า</th><th class="r">ค้างมา</th><th class="r">ยอดค้าง</th><th class="r">กำไรรอรับ</th><th></th></tr></thead>
+          <tbody>${receivableRows || '<tr><td colspan="7" class="tbl-empty">ไม่มีลูกหนี้ค้างชำระในเดือนนี้</td></tr>'}</tbody>
+        </table>
+      </div>
+    </div>`;
 
   /* ── โบนัสช่าง ── */
   const [ym_y, ym_m] = reportMonth.split('-').map(Number);
@@ -446,12 +516,12 @@ function reportHTML() {
         </div>
       </div>
       <div class="stat gold">
-        <div class="sk">${svgI('<path d="M18 20V10M12 20V4M6 20v-6"/>')} กำไรขั้นต้น</div>
+        <div class="sk">${svgI('<path d="M18 20V10M12 20V4M6 20v-6"/>')} กำไรขั้นต้นตามบิล</div>
         <div class="sv" style="font-size:1.4rem;color:${mGross>=0?'var(--grn)':'var(--bad)'}">${THB(mGross)}</div>
         <div class="sd">${hasPermission('canViewCost') ? `COGS ${THB(mCost)}` : '••••••'}</div>
       </div>
       <div class="stat ${mNet>=0?'grn':'bad'}">
-        <div class="sk">${svgI('<circle cx="12" cy="12" r="9"/><path d="M12 8v4l3 2"/>')} กำไรสุทธิ</div>
+        <div class="sk">${svgI('<circle cx="12" cy="12" r="9"/><path d="M12 8v4l3 2"/>')} กำไรสุทธิตามบิล</div>
         <div class="sv" style="font-size:1.4rem">${THB(mNet)}</div>
         <div class="sd">${hasPermission('canViewCost') ? `หัก ค่าใช้จ่าย ${THB(mExp)}` : '••••••'}</div>
       </div>
@@ -476,6 +546,24 @@ function reportHTML() {
         <div class="sk">${svgI('<path d="M4 17l5-5 4 4 7-9"/>')} รับจริงหักค่าใช้จ่ายร้าน</div>
         <div class="sv" style="font-size:1.35rem">${THB(mCashAfterExpenses)}</div>
         <div class="sd">ไม่ใช่กำไรสุทธิ และยังไม่รวมเงินจ่ายที่ไม่ได้ลงเป็นค่าใช้จ่าย</div>
+      </div>
+    </div>
+
+    <div class="g3 mb16">
+      <div class="stat grn">
+        <div class="sk">${svgI('<path d="M20 6 9 17l-5-5"/>')} กำไรขั้นต้นรับรู้แล้ว</div>
+        <div class="sv" style="font-size:1.35rem">${THB(mRecognizedGross)}</div>
+        <div class="sd">${hasPermission('canViewCost') ? `รายได้ ${THB(mRecognizedRevenue)} · COGS ${THB(mRecognizedCost)}` : 'รับรู้ตามยอดชำระแล้ว'}</div>
+      </div>
+      <div class="stat warn">
+        <div class="sk">${svgI('<path d="M12 2v20M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/>')} กำไรรอรับชำระ</div>
+        <div class="sv" style="font-size:1.35rem">${THB(mPendingGross)}</div>
+        <div class="sd">รับรู้เพิ่มตามสัดส่วนที่ลูกค้าชำระ</div>
+      </div>
+      <div class="stat ${mRecognizedNet>=0?'teal':'bad'}">
+        <div class="sk">${svgI('<path d="M4 17l5-5 4 4 7-9"/>')} กำไรรับรู้หลังค่าใช้จ่าย</div>
+        <div class="sv" style="font-size:1.35rem">${THB(mRecognizedNet)}</div>
+        <div class="sd">${hasPermission('canViewCost') ? `กำไรรับรู้แล้ว หักค่าใช้จ่ายร้าน ${THB(mExp)}` : '••••••'}</div>
       </div>
     </div>
 
@@ -509,6 +597,8 @@ function reportHTML() {
       </div>` : ''}
     </div>
 
+    ${receivablesHTML}
+
     <!-- ── Invoice table ── -->
     <div class="card">
       <div class="card-h">
@@ -533,7 +623,9 @@ function reportHTML() {
               <th class="r">ยอดรวม (VAT)</th>
               <th class="r">ก่อน VAT</th>
               ${hasPermission('canViewCost') ? '<th class="r">COGS</th>' : ''}
-              <th class="r">กำไร</th>
+              <th class="r">กำไรตามบิล</th>
+              <th class="r">กำไรรับรู้</th>
+              <th class="r">กำไรรอรับ</th>
               <th class="r">รับแล้ว</th>
               <th class="r">คงเหลือ</th>
               <th class="c">ชำระ</th>
