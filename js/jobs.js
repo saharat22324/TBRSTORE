@@ -47,7 +47,7 @@ function jobsHTML() {
   const closeJobs = S.jobs.filter(j => j.status === 5).length;
   const totalRev = S.jobs.reduce((s, j) => {
     const inv = S.invoices.find(i => i.jobId === j.id || (j.no && i.ref === j.no));
-    return s + (inv ? inv.grand - (inv.vat || 0) : 0); // ex-VAT
+    return s + (inv ? invoiceRevenueBeforeVat(inv) : 0);
   }, 0);
   const avgRev = totalJobs > 0 ? totalRev / totalJobs : 0;
 

@@ -17,7 +17,7 @@ function dashboardHTML() {
   });
   const mGrand   = fmt(mInv.reduce((s, i) => s + i.grand, 0));                // รวม VAT (ยอดบนบิล)
   const mVat     = fmt(mInv.reduce((s, i) => s + (i.vat || 0), 0));           // VAT นำส่ง
-  const mRev     = fmt(mInv.reduce((s, i) => s + i.grand - (i.vat || 0), 0)); // ก่อน VAT (ใช้คำนวณกำไร)
+  const mRev     = fmt(mInv.reduce((s, i) => s + invoiceRevenueBeforeVat(i), 0));
   const mCost    = mInv.reduce((s, i) => s + calcInvCost(i), 0);
   const mProfit  = fmt(mRev - mCost);
   const mAvgBill = mInv.length > 0 ? fmt(mRev / mInv.length) : 0;
@@ -25,7 +25,7 @@ function dashboardHTML() {
   /* ── Today ── */
   const todayJobs = S.jobs.filter(j => new Date(j.createdAt).toDateString() === today);
   const todayInv  = S.invoices.filter(i => i.status !== 'cancelled' && new Date(i.ts).toDateString() === today);
-  const todayRev  = todayInv.reduce((s, i) => s + i.grand - (i.vat || 0), 0);
+  const todayRev  = todayInv.reduce((s, i) => s + invoiceRevenueBeforeVat(i), 0);
 
   /* ── Stock alerts ── */
   const lowStock  = S.stockItems.filter(i => i.qty <= i.reorder);
@@ -62,7 +62,7 @@ function dashboardHTML() {
     S.invoices.filter(i => {
       const d = new Date(i.ts);
       return i.status !== 'cancelled' && `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}` === m;
-    }).reduce((s, i) => s + i.grand - (i.vat || 0), 0) // ex-VAT
+    }).reduce((s, i) => s + invoiceRevenueBeforeVat(i), 0)
   );
   const maxS = Math.max(...mSales, 1);
 

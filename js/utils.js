@@ -11,25 +11,49 @@ const JOB_DOT    = ['#28C2C9','#EEA61C','#9b59b6','#F39C12','#2ecc71','#95a5a6']
 
 /* ── Number formatting ── */
 const fmt   = (n) => parseFloat((Math.round(n * 100) / 100).toFixed(2));
-const THB   = (n) => '฿' + (fmt(n) || 0).toLocaleString('th-TH', { maximumFractionDigits: 2 });
+const THB   = (n) => {
+  const amount = fmt(n) || 0;
+  return `${amount < 0 ? '-' : ''}฿${Math.abs(amount).toLocaleString('th-TH', { maximumFractionDigits: 2 })}`;
+};
 const numFmt= (n) => fmt(n).toLocaleString('th-TH', { maximumFractionDigits: 2 });
+
+const invoiceRevenueBeforeVat = (invoice) => {
+  const subtotal = Number(invoice?.sub);
+  if (Number.isFinite(subtotal)) return fmt(subtotal - Number(invoice?.disc || 0));
+  return fmt(Number(invoice?.grand || 0) - Number(invoice?.vat || 0));
+};
 
 /* ── Thai number to words ── */
 function bahtWords(n) {
-  const m = Math.round(n);
-  const u = ['','หนึ่ง','สอง','สาม','สี่','ห้า','หก','เจ็ด','แปด','เก้า'];
-  const p = ['','สิบ','ร้อย','พัน','หมื่น','แสน','ล้าน'];
-  if (m === 0) return 'ศูนย์บาทถ้วน';
-  const digits = m.toString().split('').reverse();
-  let w = '';
-  digits.forEach((d, i) => {
-    if (d === '0') return;
-    const pos = i % 6;
-    if (pos === 1 && d === '2')      w = `${p[pos]}สอง${w}`;
-    else if (pos === 1 && d === '1') w = `${p[pos]}${w}`;
-    else                             w = `${u[+d]}${p[pos]}${w}`;
-  });
-  return w + 'บาทถ้วน';
+  const units = ['ศูนย์','หนึ่ง','สอง','สาม','สี่','ห้า','หก','เจ็ด','แปด','เก้า'];
+  const places = ['','สิบ','ร้อย','พัน','หมื่น','แสน'];
+  const integerWords = (value, useEtForOne = false) => {
+    const number = Math.floor(value);
+    if (number === 0) return units[0];
+    if (number >= 1000000) {
+      const millions = Math.floor(number / 1000000);
+      const remainder = number % 1000000;
+      return integerWords(millions) + 'ล้าน' + (remainder ? integerWords(remainder, true) : '');
+    }
+    const digits = String(number);
+    let words = '';
+    for (let index = 0; index < digits.length; index++) {
+      const digit = Number(digits[index]);
+      if (!digit) continue;
+      const place = digits.length - index - 1;
+      if (place === 1 && digit === 1) words += 'สิบ';
+      else if (place === 1 && digit === 2) words += 'ยี่สิบ';
+      else if (place === 0 && digit === 1 && (number > 10 || useEtForOne)) words += 'เอ็ด';
+      else words += units[digit] + places[place];
+    }
+    return words;
+  };
+
+  const totalSatang = Math.round(Math.abs(Number(n) || 0) * 100);
+  const baht = Math.floor(totalSatang / 100);
+  const satang = totalSatang % 100;
+  const prefix = Number(n) < 0 ? 'ลบ' : '';
+  return prefix + integerWords(baht) + 'บาท' + (satang ? integerWords(satang) + 'สตางค์' : 'ถ้วน');
 }
 
 /* ── Date / time formatting ── */

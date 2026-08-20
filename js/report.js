@@ -64,7 +64,7 @@ function reportHTML() {
   /* Revenue calculations */
   const mGrand  = fmt(mInvs.reduce((s, i) => s + i.grand, 0));               // รวม VAT (ยอดบนบิล)
   const mVat    = fmt(mInvs.reduce((s, i) => s + (i.vat || 0), 0));          // VAT นำส่ง
-  const mRev    = fmt(mInvs.reduce((s, i) => s + i.grand - (i.vat || 0), 0));// ก่อน VAT (ใช้คำนวณกำไร)
+  const mRev    = fmt(mInvs.reduce((s, i) => s + invoiceRevenueBeforeVat(i), 0));
   const mCost   = mInvs.reduce((s, i) => s + calcInvCost(i), 0);
   const mGross  = fmt(mRev - mCost);
 
@@ -74,11 +74,27 @@ function reportHTML() {
 
   const mNet    = fmt(mGross - mExp);
 
+  const timestampMonth = timestamp => {
+    const date = new Date(timestamp);
+    return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
+  };
+  const mCashReceived = fmt((S.invoicePayments || []).reduce((sum, payment) => {
+    const amount = Number(payment.amount || 0);
+    if (payment.paidAt && timestampMonth(payment.paidAt) === reportMonth) sum += amount;
+    if (payment.reversedAt && timestampMonth(payment.reversedAt) === reportMonth) sum -= amount;
+    return sum;
+  }, 0));
+  const mOutstanding = fmt(mInvs.reduce((sum, invoice) => {
+    const paidAmount = Number(invoice.paidAmount || 0);
+    return sum + Math.max(0, Number(invoice.grand || 0) - paidAmount);
+  }, 0));
+  const mCashAfterExpenses = fmt(mCashReceived - mExp);
+
   /* ── Today revenue (ex-VAT) ── */
   const today   = new Date().toDateString();
   const todayRev= S.invoices
     .filter(i => i.status !== 'cancelled' && new Date(i.ts).toDateString() === today)
-    .reduce((s, i) => s + i.grand - (i.vat || 0), 0);
+    .reduce((s, i) => s + invoiceRevenueBeforeVat(i), 0);
 
   const stockVal= S.stockItems.reduce((s, i) => s + i.qty * i.cost, 0);
 
@@ -95,7 +111,7 @@ function reportHTML() {
         const d = new Date(i.ts);
         return i.status !== 'cancelled' && `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}` === m;
       })
-      .reduce((s, i) => s + i.grand - (i.vat || 0), 0) // ex-VAT
+      .reduce((s, i) => s + invoiceRevenueBeforeVat(i), 0)
   );
   const maxS    = Math.max(...mSales, 1);
 
@@ -134,8 +150,10 @@ function reportHTML() {
   const invRows = mInvs.length
     ? [...mInvs].sort((a, b) => (b.ts || 0) - (a.ts || 0)).map(i => {
         const invCost   = (i.items || []).reduce((s, it) => s + ((it.qty || 0) * (it.cost || 0)), 0);
-        const invExVat  = fmt(i.grand - (i.vat || 0)); // ก่อน VAT
+        const invExVat  = invoiceRevenueBeforeVat(i);
         const gp        = fmt(invExVat - invCost);     // กำไร = ก่อน VAT - ต้นทุน
+        const invPaid   = fmt(Number(i.paidAmount || 0));
+        const invBalance= fmt(Math.max(0, Number(i.grand || 0) - invPaid));
         return `
           <tr>
             <td class="mono" style="font-size:.75rem;color:var(--teal);cursor:pointer"
@@ -147,6 +165,8 @@ function reportHTML() {
             <td class="r" style="font-size:.82rem;color:var(--fg2)">${THB(invExVat)}${(i.vat||0)>0 ? `<br><span style="font-size:.65rem;color:var(--warn)">VAT ${THB(i.vat)}</span>` : ''}</td>
             ${hasPermission('canViewCost') ? `<td class="r" style="font-size:.82rem;color:var(--bad)">${THB(invCost)}</td>` : ''}
             <td class="r" style="font-weight:700;color:${gp>=0?'var(--grn)':'var(--bad)'}">${THB(gp)}</td>
+            <td class="r money fc-grn">${THB(invPaid)}</td>
+            <td class="r money ${invBalance > 0 ? 'fc-bad' : ''}">${THB(invBalance)}</td>
             <td class="c">
               <span class="badge ${i.status === 'cancelled' ? 'b-warn' : (i.paid ? 'b-grn' : 'b-bad')}" style="cursor:pointer;font-size:.65rem"
                     ${i.status === 'cancelled' ? '' : `data-togglepaid="${i.no}"`}>
@@ -166,7 +186,7 @@ function reportHTML() {
             </td>
           </tr>`;
       }).join('')
-    : `<tr><td colspan="${hasPermission('canViewCost') ? 10 : 9}" class="tbl-empty">ยังไม่มีบิลในเดือนนี้</td></tr>`;
+    : `<tr><td colspan="${hasPermission('canViewCost') ? 12 : 11}" class="tbl-empty">ยังไม่มีบิลในเดือนนี้</td></tr>`;
 
   /* ── โบนัสช่าง ── */
   const [ym_y, ym_m] = reportMonth.split('-').map(Number);
@@ -182,7 +202,7 @@ function reportHTML() {
   };
   const periodProfit = (from, to) => {
     const invs = mInvs.filter(i => invInRange(i, from, to));
-    const sell = invs.reduce((s, i) => s + i.grand - (i.vat || 0), 0); // ex-VAT
+    const sell = invs.reduce((s, i) => s + invoiceRevenueBeforeVat(i), 0);
     const cost = invs.reduce((s, i) => s + calcInvCost(i), 0);
     return { sell: fmt(sell), cost: fmt(cost), profit: fmt(sell - cost), count: invs.length };
   };
@@ -284,7 +304,7 @@ function reportHTML() {
   for (const inv of mInvs) {
     const invItems = inv.items || [];
     const itemSubtotal = invItems.reduce((sum, it) => sum + (it.qty || 0) * (it.price || 0), 0);
-    const invoiceRevenue = Math.max(0, (inv.grand || 0) - (inv.vat || 0));
+    const invoiceRevenue = Math.max(0, invoiceRevenueBeforeVat(inv));
     const revenueFactor = itemSubtotal > 0 ? invoiceRevenue / itemSubtotal : 0;
     for (const it of invItems) {
       const t = it.itemType || 'other';
@@ -373,7 +393,7 @@ function reportHTML() {
   const custSpend = {};
   for (const inv of S.invoices) {
     const key = (inv.cust || '').trim();
-    if (key) custSpend[key] = (custSpend[key] || 0) + inv.grand - (inv.vat || 0); // ex-VAT
+    if (key) custSpend[key] = (custSpend[key] || 0) + invoiceRevenueBeforeVat(inv);
   }
   const topCusts = Object.entries(custSpend).sort((a,b)=>b[1]-a[1]).slice(0, 10);
   const topMax   = topCusts[0]?.[1] || 1;
@@ -441,6 +461,24 @@ function reportHTML() {
       </div>
     </div>
 
+    <div class="g3 mb16">
+      <div class="stat grn">
+        <div class="sk">${svgI('<path d="M12 2v20M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/>')} เงินรับจริงเดือนนี้</div>
+        <div class="sv" style="font-size:1.35rem">${THB(mCashReceived)}</div>
+        <div class="sd">อิงวันที่รับชำระ และหักรายการย้อนในวันที่ย้อนจริง</div>
+      </div>
+      <div class="stat bad">
+        <div class="sk">${svgI('<path d="M3 6h18M5 6v14h14V6M8 10h8"/>')} ลูกหนี้จากบิลเดือนนี้</div>
+        <div class="sv" style="font-size:1.35rem">${THB(mOutstanding)}</div>
+        <div class="sd">ยอดรวม VAT ที่ยังรับชำระไม่ครบ</div>
+      </div>
+      <div class="stat ${mCashAfterExpenses>=0?'teal':'bad'}">
+        <div class="sk">${svgI('<path d="M4 17l5-5 4 4 7-9"/>')} รับจริงหักค่าใช้จ่ายร้าน</div>
+        <div class="sv" style="font-size:1.35rem">${THB(mCashAfterExpenses)}</div>
+        <div class="sd">ไม่ใช่กำไรสุทธิ และยังไม่รวมเงินจ่ายที่ไม่ได้ลงเป็นค่าใช้จ่าย</div>
+      </div>
+    </div>
+
     <!-- ── Charts + Expenses ── -->
     <div class="g2 mb16">
       <!-- 6-month sales chart -->
@@ -496,6 +534,8 @@ function reportHTML() {
               <th class="r">ก่อน VAT</th>
               ${hasPermission('canViewCost') ? '<th class="r">COGS</th>' : ''}
               <th class="r">กำไร</th>
+              <th class="r">รับแล้ว</th>
+              <th class="r">คงเหลือ</th>
               <th class="c">ชำระ</th>
               <th class="c"></th>
             </tr>
@@ -1107,7 +1147,7 @@ function bindReport() {
     if (!mInvs2.length) return showToast('ไม่มีบิลในเดือนนี้', 'err');
 
     const s      = S.shop;
-    const totalEx  = mInvs2.reduce((a, i) => a + i.grand - (i.vat || 0), 0);
+    const totalEx  = mInvs2.reduce((a, i) => a + invoiceRevenueBeforeVat(i), 0);
     const totalVat = mInvs2.reduce((a, i) => a + (i.vat || 0), 0);
     const totalAll = mInvs2.reduce((a, i) => a + i.grand, 0);
 
@@ -1117,7 +1157,7 @@ function bindReport() {
     const periodLabel = `${thMonth} ${+ymY + 543}`;
 
     const invRowsHTML = [...mInvs2].sort((a, b) => (b.ts || 0) - (a.ts || 0)).map((i, idx) => {
-      const exVat = i.grand - (i.vat || 0);
+      const exVat = invoiceRevenueBeforeVat(i);
       const vat   = i.vat || 0;
       return `<tr style="border-bottom:1px solid #e5e5e5">
         <td style="padding:5px 8px;text-align:center;font-size:.82rem;color:#888">${idx+1}</td>
@@ -1215,7 +1255,7 @@ function bindReport() {
     if (!mInvs2.length) return showToast('ไม่มีบิลในเดือนนี้', 'err');
     const header = 'เลขที่,วันที่,ลูกค้า,ทะเบียน,ยอดรวม (รวม VAT),ก่อน VAT,VAT 7%,ชำระ';
     const rows = mInvs2.map(i => {
-      const exVat = fmt(i.grand - (i.vat || 0));
+      const exVat = invoiceRevenueBeforeVat(i);
       const vat   = i.vat || 0;
       return `"${i.no}","${dateStr(i.ts)}","${(i.cust||'').replace(/"/g,'""')}","${(i.plate||'').replace(/"/g,'""')}",${i.grand},${exVat},${vat},${i.paid ? 'ชำระแล้ว' : 'ค้างชำระ'}`;
     });

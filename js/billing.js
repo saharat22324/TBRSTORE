@@ -33,6 +33,7 @@ function billingHTML() {
   const totalInv = activeInv.length;
   const totalGrand = activeInv.reduce((s, i) => s + i.grand, 0);
   const totalVat   = activeInv.reduce((s, i) => s + (i.vat || 0), 0);
+  const totalBeforeVat = activeInv.reduce((s, i) => s + invoiceRevenueBeforeVat(i), 0);
   const avgBill    = totalInv > 0 ? totalGrand / totalInv : 0;
   const todayInv   = activeInv.filter(i => new Date(i.ts).toDateString() === new Date().toDateString());
   const todayGrand = todayInv.reduce((s, i) => s + i.grand, 0);
@@ -85,7 +86,7 @@ function billingHTML() {
       <div class="stat gold" style="min-height:92px">
         <div class="sk">${svgI('<path d="M12 1v22M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/>')} ยอดขายรวม</div>
         <div class="sv" style="font-size:1.3rem">${THB(totalGrand)}<span style="font-size:.65rem;font-weight:400;color:var(--fg2);margin-left:4px">รวม VAT</span></div>
-        <div class="sd">${THB(totalGrand - totalVat)} ไม่รวม VAT · VAT ${THB(totalVat)}</div>
+        <div class="sd">${THB(totalBeforeVat)} ไม่รวม VAT · VAT ${THB(totalVat)}</div>
       </div>
       <div class="stat teal" style="min-height:92px">
         <div class="sk">${svgI('<path d="M18 20V10M12 20V4M6 20v-6"/>')} ค่าเฉลี่ยต่อบิล</div>
@@ -516,7 +517,6 @@ function bCalc() {
   const sub  = bItems.reduce((s, i) => s + fmt(i.qty * i.price), 0);
   const base = Math.max(0, sub - bDisc);
   const vat  = bVat ? fmt(base * 0.07) : 0;
-  // ปัดยอดรวมสุทธิเป็นจำนวนเต็มบาท (ใกล้สุด) — มีผลเฉพาะบิลใหม่
   return { sub, base, vat, grand: Math.round(base + vat) };
 }
 

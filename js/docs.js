@@ -31,6 +31,102 @@ function docLogoHTML() {
     </div>`;
 }
 
+function documentMoney(value, whole = false) {
+  const amount = whole ? Math.round(Number(value) || 0) : fmt(Number(value) || 0);
+  const formatted = Math.abs(amount).toLocaleString('th-TH', whole
+    ? { maximumFractionDigits: 0 }
+    : { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  return `${amount < 0 ? '-' : ''}฿${formatted}`;
+}
+
+function documentPrintMetaHTML(title, reference) {
+  return `<div class="doc-print-meta">
+    <span>${esc(title)} · ${esc(reference || '—')}</span>
+    <span class="doc-print-page"></span>
+  </div>`;
+}
+
+function addPdfPageFooters(pdf, documentElement) {
+  const totalPages = pdf.internal.getNumberOfPages();
+  const rawReference = documentElement.querySelector('.doc-ref b')?.textContent?.trim() || 'Document';
+  const reference = rawReference.replace(/[^\x20-\x7E]/g, '') || 'Document';
+  const pageWidth = pdf.internal.pageSize.getWidth();
+  const pageHeight = pdf.internal.pageSize.getHeight();
+
+  for (let pageNumber = 1; pageNumber <= totalPages; pageNumber++) {
+    pdf.setPage(pageNumber);
+    pdf.setDrawColor(210, 210, 210);
+    pdf.setLineWidth(0.2);
+    pdf.line(12, pageHeight - 7, pageWidth - 12, pageHeight - 7);
+    pdf.setFont('helvetica', 'normal');
+    pdf.setFontSize(7);
+    pdf.setTextColor(100, 100, 100);
+    pdf.text(reference, 12, pageHeight - 4);
+    pdf.text(`Page ${pageNumber} / ${totalPages}`, pageWidth - 12, pageHeight - 4, { align: 'right' });
+  }
+}
+
+function printDocumentHTML(html) {
+  const printZone = document.getElementById('pz');
+  printZone.innerHTML = html;
+  window.print();
+  setTimeout(() => { printZone.innerHTML = ''; }, 600);
+}
+
+function documentPdfFilename(type, data) {
+  const prefix = type === 'tax' ? 'tax-invoice'
+    : type === 'qt' ? 'quotation'
+      : data.documentType === 'credit_note' ? 'credit-note'
+        : data.documentType === 'debit_note' ? 'debit-note' : 'receipt';
+  const reference = String(data.no || dateFmt()).replace(/[<>:"/\\|?*\x00-\x1F]/g, '-');
+  return `${prefix}-${reference}.pdf`;
+}
+
+async function downloadDocumentPdf(html, filename, button) {
+  const originalButtonHTML = button?.innerHTML;
+  if (button) {
+    button.disabled = true;
+    button.textContent = 'กำลังสร้าง PDF...';
+  }
+
+  const stage = document.createElement('div');
+  stage.className = 'pdf-stage';
+  stage.innerHTML = html;
+  document.body.appendChild(stage);
+
+  try {
+    if (typeof window.html2pdf !== 'function') throw new Error('PDF library is unavailable');
+    if (document.fonts?.ready) await document.fonts.ready;
+    await new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+    const documentElement = stage.querySelector('.doc');
+    const worker = window.html2pdf().set({
+      margin: [10, 12, 10, 12],
+      filename,
+      image: { type: 'jpeg', quality: 0.98 },
+      html2canvas: { scale: 2, useCORS: true, logging: false, backgroundColor: '#ffffff' },
+      jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait', compress: true },
+      pagebreak: {
+        mode: ['css', 'legacy'],
+        avoid: ['tr', '.doc-summary', '.doc-sigs', '.doc-foot'],
+      },
+    }).from(documentElement).toPdf();
+    const pdf = await worker.get('pdf');
+    addPdfPageFooters(pdf, documentElement);
+    pdf.save(filename);
+    showToast('ดาวน์โหลด PDF แล้ว', 'ok');
+  } catch (error) {
+    console.error('[PDF] Generate failed:', error);
+    showToast('สร้าง PDF อัตโนมัติไม่สำเร็จ · เปิดหน้าพิมพ์เพื่อบันทึกเป็น PDF แทน', 'err');
+    printDocumentHTML(html);
+  } finally {
+    stage.remove();
+    if (button) {
+      button.disabled = false;
+      button.innerHTML = originalButtonHTML;
+    }
+  }
+}
+
 /* ══════════════════════════════════════
    MAIN: showDoc
    type: 'inv' | 'qt'
@@ -70,14 +166,15 @@ function buildInvoiceHTML(d) {
   const documentTitleEn = documentType === 'credit_note' ? 'CREDIT NOTE'
     : documentType === 'debit_note' ? 'DEBIT NOTE' : 'RECEIPT';
   const original = d.originalInvoiceId ? S.invoices.find(i => i.id === d.originalInvoiceId) : null;
-  const paidAmount = Number(d.paidAmount || 0);
-  const balance = Math.max(0, Number(d.grand || 0) - paidAmount);
   const nextMile = d.mileage
     ? (parseInt(String(d.mileage).replace(/\D/g,'')) + 10000).toLocaleString('th-TH')
     : null;
 
-  /* ราคาในใบเสร็จ — ปัดเป็นจำนวนเต็ม */
-  const R = n => '฿' + Math.round(n).toLocaleString('th-TH');
+  const R = n => documentMoney(n);
+  const RWhole = n => documentMoney(n, true);
+  const taxableBase = fmt(Math.max(0, Number(d.sub || 0) - Number(d.disc || 0)));
+  const vatAmount = fmt(Number(d.vat || 0));
+  const afterVatAmount = fmt(taxableBase + vatAmount);
 
   /* Item rows — fill to min 8 rows */
   const itemRows = (d.items || []).map((it, i) => `
@@ -103,6 +200,7 @@ function buildInvoiceHTML(d) {
 
   return `
     <div class="doc" style="position:relative">
+      ${documentPrintMetaHTML(documentTitle, d.no)}
       ${isCancelled ? `<div style="position:absolute;z-index:5;inset:42% 0 auto;text-align:center;
         transform:rotate(-18deg);font-size:4rem;font-weight:900;color:rgba(190,30,45,.18);pointer-events:none">ยกเลิก</div>` : ''}
       <!-- Header -->
@@ -167,20 +265,19 @@ function buildInvoiceHTML(d) {
         ${noteBox}
 
         <!-- Totals -->
-        <div style="display:flex;justify-content:space-between;align-items:flex-end">
+        <div class="doc-summary" style="display:flex;justify-content:space-between;align-items:flex-end">
           <div class="doc-words">(${d.grand < 0 ? 'ลบ' : ''}${bahtWords(Math.abs(d.grand))})</div>
           <div style="display:flex;justify-content:flex-end">
             <div class="doc-sum-box">
               <div class="dsr"><span>จำนวนเงิน</span><span>${R(d.sub)}</span></div>
               <div class="dsr"><span>ส่วนลด</span><span>${d.disc > 0 ? R(d.disc) : '—'}</span></div>
-              <div class="dsr"><span>หลังหักส่วนลด</span><span>${R(Math.max(0, d.sub - d.disc))}</span></div>
-              <div class="dsr"><span>Vat 7%</span><span>${d.vat > 0 ? R(d.vat) : '—'}</span></div>
+              <div class="dsr"><span>หลังหักส่วนลด</span><span>${R(taxableBase)}</span></div>
+              <div class="dsr"><span>Vat 7%</span><span>${vatAmount > 0 ? R(vatAmount) : '—'}</span></div>
+              <div class="dsr"><span>ยอดหลังรวม VAT</span><span>${R(afterVatAmount)}</span></div>
               <div class="dsr tot">
                 <span class="lbl">จำนวนเงินทั้งสิ้น</span>
-                <span class="lv">${R(d.grand)}</span>
+                <span class="lv">${RWhole(d.grand)}</span>
               </div>
-              ${documentType !== 'credit_note' ? `<div class="dsr"><span>รับชำระแล้ว</span><span>${R(paidAmount)}</span></div>
-              <div class="dsr"><span>ยอดคงเหลือ</span><span>${R(balance)}</span></div>` : ''}
             </div>
           </div>
         </div>
@@ -229,6 +326,10 @@ function buildInvoiceActions(d) {
         ${svgI('<path d="M9 12h6M9 16h6M9 8h2M14 2v6h6"/><path d="M4 2h10l6 6v12a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2z"/>')}
         ใบกำกับภาษี
       </button>` : ''}
+      <button class="btn-pdf" id="dPdf">
+        ${svgI('<path d="M12 3v12M7 10l5 5 5-5M5 21h14"/>')}
+        ดาวน์โหลด PDF
+      </button>
       <button class="btn-prt" id="dPr">
         ${svgI('<path d="M6 9V2h12v7M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><rect x="6" y="14" width="12" height="8"/>')}
         พิมพ์ใบเสร็จ
@@ -505,32 +606,38 @@ function showTaxDoc(d, buyer) {
           ${svgI('<path d="M6 9V2h12v7M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><rect x="6" y="14" width="12" height="8"/>')}
           พิมพ์ใบกำกับภาษี
         </button>
+        <button class="btn-pdf" id="dPdfTax">
+          ${svgI('<path d="M12 3v12M7 10l5 5 5-5M5 21h14"/>')}
+          ดาวน์โหลด PDF
+        </button>
       </div>
     </div>`;
   openOv('dOv');
   ov.querySelector('#dCl2').addEventListener('click', closeDoc);
   ov.querySelector('#dTaxBack').addEventListener('click', () => openTaxInvoiceModal(d));
+  ov.querySelector('#dPdfTax').addEventListener('click', event => {
+    downloadDocumentPdf(dc, documentPdfFilename('tax', d), event.currentTarget);
+  });
   ov.querySelector('#dPrTax').addEventListener('click', () => {
-    document.getElementById('pz').innerHTML = dc;
-    window.print();
-    setTimeout(() => { document.getElementById('pz').innerHTML = ''; }, 600);
+    printDocumentHTML(dc);
   });
 }
 
 function buildTaxInvoiceHTML(d, buyer) {
   const s = S.shop;
-  const R = n => '฿' + Math.round(n).toLocaleString('th-TH');
-  const Rd = n => '฿' + (Math.round(n * 100) / 100).toLocaleString('th-TH', { minimumFractionDigits: 2 });
+  const R = n => documentMoney(n);
+  const RWhole = n => documentMoney(n, true);
+  const Rd = R;
 
-  /* แยกฐานภาษีและ VAT ให้ยอดลงตัวเสมอ (ผลรวมแยก VAT = ยอดสุทธิจริง)
-     - บิลคิด VAT: ฐาน = ยอดสินค้า − ส่วนลด, VAT = ยอดสุทธิ − ฐาน
-     - บิลไม่คิด VAT: ถือว่าราคารวม VAT แล้ว (VAT-inclusive) ถอด 7% ออกจากยอดสุทธิ */
+  /* Preserve issued tax values. Whole-baht invoices expose their rounding
+      difference separately instead of changing the 7% VAT amount. */
   const hasVat   = (d.vat || 0) > 0;
-  const total    = d.grand;
-  const subTotal = (d.sub || 0);
-  const discAmt  = (d.disc || 0);
-  const preVat   = hasVat ? Math.max(0, subTotal - discAmt) : (total / 1.07);
-  const vatAmt   = Math.max(0, total - preVat);
+    const total    = fmt(Number(d.grand || 0));
+    const subTotal = fmt(Number(d.sub || 0));
+    const discAmt  = fmt(Number(d.disc || 0));
+    const preVat   = hasVat ? fmt(Math.max(0, subTotal - discAmt)) : fmt(total / 1.07);
+    const vatAmt   = hasVat ? fmt(Number(d.vat || 0)) : fmt(Math.max(0, total - preVat));
+    const afterVatAmount = fmt(preVat + vatAmt);
   const showDisc = hasVat && discAmt > 0;
 
   const itemRows = (d.items || []).map((it, i) => `
@@ -548,6 +655,7 @@ function buildTaxInvoiceHTML(d, buyer) {
 
   return `
     <div class="doc">
+      ${documentPrintMetaHTML('ใบกำกับภาษี', d.no)}
       <div class="doc-hd">
         ${docLogoHTML()}
         <div class="doc-ta">
@@ -589,7 +697,7 @@ function buildTaxInvoiceHTML(d, buyer) {
           <tbody>${itemRows}${blankRows}</tbody>
         </table>
 
-        <div style="display:flex;justify-content:space-between;align-items:flex-end;margin-top:8px">
+        <div class="doc-summary" style="display:flex;justify-content:space-between;align-items:flex-end;margin-top:8px">
           <div class="doc-words">(${bahtWords(total)})</div>
           <div style="display:flex;justify-content:flex-end">
             <div class="doc-sum-box">
@@ -599,9 +707,10 @@ function buildTaxInvoiceHTML(d, buyer) {
               <div class="dsr"><span>มูลค่าหลังหักส่วนลด</span><span>${Rd(preVat)}</span></div>` : `
               <div class="dsr"><span>มูลค่าสินค้า/บริการ</span><span>${Rd(preVat)}</span></div>`}
               <div class="dsr"><span>ภาษีมูลค่าเพิ่ม 7%</span><span>${Rd(vatAmt)}</span></div>
+              <div class="dsr"><span>ยอดหลังรวม VAT</span><span>${Rd(afterVatAmount)}</span></div>
               <div class="dsr tot">
                 <span class="lbl">จำนวนเงินรวมทั้งสิ้น</span>
-                <span class="lv">${R(total)}</span>
+                <span class="lv">${RWhole(total)}</span>
               </div>
             </div>
           </div>
@@ -623,7 +732,8 @@ function buildTaxInvoiceHTML(d, buyer) {
 ══════════════════════════════════════ */
 function buildQuoteHTML(d) {
   const expD = new Date((d.ts || Date.now()) + 7 * 86400000);
-  const R = n => '฿' + Math.round(n).toLocaleString('th-TH');
+  const R = n => documentMoney(n);
+  const RWhole = n => documentMoney(n, true);
 
   const itemRows = (d.items || []).map((it, i) => `
     <tr>
@@ -641,6 +751,7 @@ function buildQuoteHTML(d) {
 
   return `
     <div class="doc">
+      ${documentPrintMetaHTML('ใบเสนอราคา', d.no)}
       <div class="doc-hd">
         ${docLogoHTML()}
         <div class="doc-ta">
@@ -681,7 +792,7 @@ function buildQuoteHTML(d) {
           <tbody>${itemRows}${blankRows}</tbody>
         </table>
 
-        <div style="display:flex;justify-content:space-between;align-items:flex-end">
+        <div class="doc-summary" style="display:flex;justify-content:space-between;align-items:flex-end">
           <div>
             <div class="doc-words">(${bahtWords(d.grand)})</div>
             ${d.note ? `<div style="font-size:.76rem;color:#7a5500;margin-top:6px">เงื่อนไข: ${esc(d.note)}</div>` : ''}
@@ -691,7 +802,7 @@ function buildQuoteHTML(d) {
               <div class="dsr"><span>ยอดรวม</span><span>${R(d.sub)}</span></div>
               <div class="dsr"><span>ส่วนลด</span><span>${d.disc > 0 ? R(d.disc) : '—'}</span></div>
               <div class="dsr"><span>VAT 7%</span><span>${d.vat > 0 ? R(d.vat) : '—'}</span></div>
-              <div class="dsr tot"><span class="lbl">รวมสุทธิ</span><span class="lv">${R(d.grand)}</span></div>
+              <div class="dsr tot"><span class="lbl">รวมสุทธิ</span><span class="lv">${RWhole(d.grand)}</span></div>
             </div>
           </div>
         </div>
@@ -716,6 +827,7 @@ function buildQuoteActions(d) {
     <div class="doc-acts">
       <button class="btn-cdoc" id="dCl">ปิด</button>
       ${convertBtn}
+      <button class="btn-pdf" id="dPdf">${svgI('<path d="M12 3v12M7 10l5 5 5-5M5 21h14"/>')} ดาวน์โหลด PDF</button>
       <button class="btn-prt" id="dPr">พิมพ์ใบเสนอราคา</button>
     </div>`;
 }
@@ -731,9 +843,11 @@ function bindDocActions(type, data, dc) {
 
   /* Print */
   ov.querySelector('#dPr')?.addEventListener('click', () => {
-    document.getElementById('pz').innerHTML = dc;
-    window.print();
-    setTimeout(() => { document.getElementById('pz').innerHTML = ''; }, 600);
+    printDocumentHTML(dc);
+  });
+
+  ov.querySelector('#dPdf')?.addEventListener('click', event => {
+    downloadDocumentPdf(dc, documentPdfFilename(type, data), event.currentTarget);
   });
 
   /* Tax invoice (ใบกำกับภาษีเต็มรูป) */

@@ -294,13 +294,55 @@
 .doc-acts svg { width: 14px; height: 14px; }
 
 .btn-prt  { background: #15171b; color: #fff;  } .btn-prt:hover  { background: #000;     }
+.btn-pdf  { background: #b91c1c; color: #fff;  } .btn-pdf:hover  { background: #991b1b; }
 .btn-cdoc { background: #e5e5e5; color: #333;  } .btn-cdoc:hover { background: #ccc;     }
 .btn-cvt  { background: #C9850D; color: #fff;  } .btn-cvt:hover  { background: #a86a0a;  }
+
+.pdf-stage {
+  position: fixed;
+  left: -100000px;
+  top: 0;
+  width: 186mm;
+  background: #fff;
+  z-index: -1;
+}
+
+.pdf-stage .doc {
+  width: 100%;
+  print-color-adjust: exact;
+  -webkit-print-color-adjust: exact;
+}
+
+.doc-print-meta {
+  display: none;
+}
+
+.pdf-stage .dt tr,
+.pdf-stage .doc-summary,
+.pdf-stage .doc-sigs,
+.pdf-stage .doc-foot {
+  break-inside: avoid;
+  page-break-inside: avoid;
+}
 
 /* ══════════════════════════════════════
    @MEDIA PRINT
 ══════════════════════════════════════ */
+@page {
+  size: A4;
+  margin: 10mm 12mm;
+}
+
 @media print {
+  html,
+  body {
+    width: auto !important;
+    height: auto !important;
+    margin: 0 !important;
+    overflow: visible !important;
+    background: #fff !important;
+  }
+
   /* Hide everything except print zone */
   body * { visibility: hidden !important; }
 
@@ -310,12 +352,67 @@
   }
 
   #pz {
-    position: fixed;
-    left: 0;
-    top: 0;
-    width: 100%;
+    position: static !important;
+    width: auto !important;
+    min-height: 0 !important;
     background: #fff;
     display: block !important;
+  }
+
+  .doc {
+    width: 100%;
+    font-size: 11px;
+    print-color-adjust: exact;
+    -webkit-print-color-adjust: exact;
+  }
+
+  .doc-print-meta {
+    position: fixed;
+    left: 0;
+    right: 0;
+    bottom: -7mm;
+    display: flex;
+    justify-content: space-between;
+    padding-top: 1.5mm;
+    border-top: .2mm solid #d2d2d2;
+    color: #666;
+    font: 7pt "JetBrains Mono", monospace;
+  }
+
+  .doc-print-page::after {
+    content: "Page " counter(page) " / " counter(pages);
+  }
+
+  .doc-hd,
+  .doc-ref,
+  .doc-2col,
+  .doc-summary,
+  .doc-sum-box,
+  .doc-sigs,
+  .doc-foot {
+    break-inside: avoid;
+    page-break-inside: avoid;
+  }
+
+  .dt thead {
+    display: table-header-group;
+  }
+
+  .dt tfoot {
+    display: table-footer-group;
+  }
+
+  .dt tr,
+  .dt td,
+  .dt th {
+    break-inside: avoid;
+    page-break-inside: avoid;
+  }
+
+  .dt td,
+  .dt th {
+    padding-top: 5px;
+    padding-bottom: 5px;
   }
 
   /* Never print action buttons */
