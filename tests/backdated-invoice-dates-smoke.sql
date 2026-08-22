@@ -14,8 +14,12 @@ DECLARE
   v_invoice invoices;
   v_today DATE:=(CURRENT_TIMESTAMP AT TIME ZONE 'Asia/Bangkok')::DATE;
   v_entry_date DATE:=CURRENT_DATE;
-  v_backdate DATE:=DATE '2026-06-15';
+  v_backdate DATE:=(v_today-INTERVAL '4 months')::DATE;
 BEGIN
+  IF v_backdate>=v_today-INTERVAL '3 months' THEN
+    RAISE EXCEPTION 'Smoke-test invoice date is not older than three months';
+  END IF;
+
   INSERT INTO customers(name)
   VALUES('Backdated invoice smoke '||txid_current())
   RETURNING id INTO v_customer;
@@ -24,7 +28,7 @@ BEGIN
     jsonb_build_object(
       'invoice_number','',
       'invoice_date',v_backdate,
-      'backdate_reason','June invoice omitted from original entry',
+      'backdate_reason','Historical invoice entered after system adoption',
       'customer_id',v_customer,
       'customer_name','Backdated invoice smoke',
       'subtotal',100,'discount',0,'vat',0,'grand_total',100
@@ -41,17 +45,17 @@ BEGIN
   IF v_invoice.created_at::DATE<>v_entry_date THEN
     RAISE EXCEPTION 'System entry date was backdated: %',v_invoice.created_at;
   END IF;
-  IF v_invoice.invoice_number NOT LIKE 'INV-20260615-%' THEN
+  IF v_invoice.invoice_number NOT LIKE 'INV-'||TO_CHAR(v_backdate,'YYYYMMDD')||'-%' THEN
     RAISE EXCEPTION 'Backdated invoice number has wrong date prefix: %',v_invoice.invoice_number;
   END IF;
-  IF v_invoice.backdate_reason<>'June invoice omitted from original entry' THEN
+  IF v_invoice.backdate_reason<>'Historical invoice entered after system adoption' THEN
     RAISE EXCEPTION 'Backdate reason was not stored';
   END IF;
   IF NOT EXISTS (
     SELECT 1 FROM audit_logs
     WHERE entity_id=v_invoice.id::TEXT
       AND action='INVOICE_CREATE_BACKDATED'
-      AND details->>'invoice_date'='2026-06-15'
+      AND details->>'invoice_date'=v_backdate::TEXT
       AND NULLIF(details->>'created_at','') IS NOT NULL
   ) THEN RAISE EXCEPTION 'Backdated invoice audit event is missing'; END IF;
 

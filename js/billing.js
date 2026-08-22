@@ -151,7 +151,7 @@ function billingHTML() {
             ${canBackdate ? `
             <div class="fgrid c2 mt12">
               <div class="fld">
-                <label>วันที่เอกสาร</label>
+                <label>วันที่เอกสาร (รองรับบิลเก่า)</label>
                 <input id="bInvoiceDate" type="date" value="${esc(invoiceDate)}" max="${todayKey}" ${bEditInvNo ? 'disabled' : ''}>
               </div>
               <div class="fld" id="bBackdateReasonWrap" style="${invoiceDate < todayKey && !bEditInvNo ? '' : 'display:none'}">
@@ -695,11 +695,11 @@ async function saveInvoiceOnce() {
   const backdateReason = sv('bBackdateReason').trim();
   const isBackdated = invoiceDate < todayKey;
   if (invoiceDate > todayKey) throw new Error('วันที่เอกสารต้องไม่เป็นวันในอนาคต');
-  if (isBackdated && !useSupabase) throw new Error('บิลย้อนหลังต้องบันทึกผ่านระบบส่วนกลางเท่านั้น');
-  if (isBackdated && (typeof getCurrentUserRole !== 'function' || getCurrentUserRole() !== 1)) {
+  if (!bEditInvNo && isBackdated && !useSupabase) throw new Error('บิลย้อนหลังต้องบันทึกผ่านระบบส่วนกลางเท่านั้น');
+  if (!bEditInvNo && isBackdated && (typeof getCurrentUserRole !== 'function' || getCurrentUserRole() !== 1)) {
     throw new Error('เฉพาะ Admin เท่านั้นที่เพิ่มบิลย้อนหลังได้');
   }
-  if (isBackdated && !backdateReason) throw new Error('กรุณาระบุเหตุผลที่ลงบิลย้อนหลัง');
+  if (!bEditInvNo && isBackdated && !backdateReason) throw new Error('กรุณาระบุเหตุผลที่ลงบิลย้อนหลัง');
   const selectedCustomer = S.customers.find(c => (c.name || '').trim() === cust.trim());
   const totalCost = bItems.reduce((s, it) => s + fmt(it.qty * (it.cost || 0)), 0);
 
