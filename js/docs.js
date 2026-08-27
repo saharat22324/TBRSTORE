@@ -66,11 +66,16 @@ function addPdfPageFooters(pdf, documentElement) {
   }
 }
 
-function printDocumentHTML(html) {
+async function printDocumentHTML(html) {
   const printZone = document.getElementById('pz');
   printZone.innerHTML = html;
+
+  const cleanup = () => { printZone.innerHTML = ''; };
+  window.addEventListener('afterprint', cleanup, { once: true });
+
+  if (document.fonts?.ready) await document.fonts.ready;
+  await new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)));
   window.print();
-  setTimeout(() => { printZone.innerHTML = ''; }, 600);
 }
 
 function documentPdfFilename(type, data) {
