@@ -343,13 +343,8 @@
     background: #fff !important;
   }
 
-  /* Hide everything except print zone */
-  body * { visibility: hidden !important; }
-
-  #pz,
-  #pz * {
-    visibility: visible !important;
-  }
+  /* Remove the application UI from print layout entirely. */
+  body > :not(#pz) { display: none !important; }
 
   #pz {
     position: static !important;
@@ -370,7 +365,7 @@
     position: fixed;
     left: 0;
     right: 0;
-    bottom: -7mm;
+    bottom: 0;
     display: flex;
     justify-content: space-between;
     padding-top: 1.5mm;
