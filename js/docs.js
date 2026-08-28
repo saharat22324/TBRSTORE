@@ -183,10 +183,13 @@ function buildInvoiceHTML(d) {
     : null;
 
   const R = n => documentMoney(n);
-  const RWhole = n => documentMoney(n, true);
   const taxableBase = fmt(Math.max(0, Number(d.sub || 0) - Number(d.disc || 0)));
   const vatAmount = fmt(Number(d.vat || 0));
-  const afterVatAmount = fmt(taxableBase + vatAmount);
+  const hasVat = vatAmount > 0;
+  const grandTotal = Number(d.grand || 0);
+  const grandTotalDisplay = !hasVat && Number.isInteger(grandTotal)
+    ? documentMoney(grandTotal, true)
+    : R(grandTotal);
 
   /* Item rows — fill to min 8 rows */
   const itemRows = (d.items || []).map((it, i) => `
@@ -283,12 +286,13 @@ function buildInvoiceHTML(d) {
             <div class="doc-sum-box">
               <div class="dsr"><span>จำนวนเงิน</span><span>${R(d.sub)}</span></div>
               <div class="dsr"><span>ส่วนลด</span><span>${d.disc > 0 ? R(d.disc) : '—'}</span></div>
-              <div class="dsr"><span>หลังหักส่วนลด</span><span>${R(taxableBase)}</span></div>
-              <div class="dsr"><span>Vat 7%</span><span>${vatAmount > 0 ? R(vatAmount) : '—'}</span></div>
-              <div class="dsr"><span>ยอดหลังรวม VAT</span><span>${R(afterVatAmount)}</span></div>
+              ${hasVat ? `
+              <div class="dsr"><span>จำนวนเงินก่อน VAT 7%</span><span>${R(taxableBase)}</span></div>
+              <div class="dsr"><span>VAT 7%</span><span>${R(vatAmount)}</span></div>` : `
+              <div class="dsr"><span>จำนวนเงินหลังหักส่วนลด</span><span>${R(taxableBase)}</span></div>`}
               <div class="dsr tot">
                 <span class="lbl">จำนวนเงินทั้งสิ้น</span>
-                <span class="lv">${RWhole(d.grand)}</span>
+                <span class="lv">${grandTotalDisplay}</span>
               </div>
             </div>
           </div>
@@ -638,19 +642,17 @@ function showTaxDoc(d, buyer) {
 function buildTaxInvoiceHTML(d, buyer) {
   const s = S.shop;
   const R = n => documentMoney(n);
-  const RWhole = n => documentMoney(n, true);
   const Rd = R;
 
-  /* Preserve issued tax values. Whole-baht invoices expose their rounding
-      difference separately instead of changing the 7% VAT amount. */
+  /* Preserve issued VAT values. For legacy non-VAT bills, derive the
+     tax-exclusive amount from the stored total when issuing a tax invoice. */
   const hasVat   = (d.vat || 0) > 0;
     const total    = fmt(Number(d.grand || 0));
     const subTotal = fmt(Number(d.sub || 0));
     const discAmt  = fmt(Number(d.disc || 0));
     const preVat   = hasVat ? fmt(Math.max(0, subTotal - discAmt)) : fmt(total / 1.07);
     const vatAmt   = hasVat ? fmt(Number(d.vat || 0)) : fmt(Math.max(0, total - preVat));
-    const afterVatAmount = fmt(preVat + vatAmt);
-  const showDisc = hasVat && discAmt > 0;
+    const displayedSubTotal = hasVat ? subTotal : preVat;
 
   const itemRows = (d.items || []).map((it, i) => `
       <tr>
@@ -713,16 +715,13 @@ function buildTaxInvoiceHTML(d, buyer) {
           <div class="doc-words">(${bahtWords(total)})</div>
           <div style="display:flex;justify-content:flex-end">
             <div class="doc-sum-box">
-              ${showDisc ? `
-              <div class="dsr"><span>มูลค่าสินค้า/บริการ</span><span>${Rd(subTotal)}</span></div>
-              <div class="dsr"><span>ส่วนลด</span><span>${Rd(discAmt)}</span></div>
-              <div class="dsr"><span>มูลค่าหลังหักส่วนลด</span><span>${Rd(preVat)}</span></div>` : `
-              <div class="dsr"><span>มูลค่าสินค้า/บริการ</span><span>${Rd(preVat)}</span></div>`}
-              <div class="dsr"><span>ภาษีมูลค่าเพิ่ม 7%</span><span>${Rd(vatAmt)}</span></div>
-              <div class="dsr"><span>ยอดหลังรวม VAT</span><span>${Rd(afterVatAmount)}</span></div>
+              <div class="dsr"><span>จำนวนเงิน</span><span>${Rd(displayedSubTotal)}</span></div>
+              <div class="dsr"><span>ส่วนลด</span><span>${discAmt > 0 ? Rd(discAmt) : '—'}</span></div>
+              <div class="dsr"><span>จำนวนเงินก่อน VAT 7%</span><span>${Rd(preVat)}</span></div>
+              <div class="dsr"><span>VAT 7%</span><span>${Rd(vatAmt)}</span></div>
               <div class="dsr tot">
                 <span class="lbl">จำนวนเงินรวมทั้งสิ้น</span>
-                <span class="lv">${RWhole(total)}</span>
+                <span class="lv">${R(total)}</span>
               </div>
             </div>
           </div>
@@ -745,7 +744,13 @@ function buildTaxInvoiceHTML(d, buyer) {
 function buildQuoteHTML(d) {
   const expD = new Date((d.ts || Date.now()) + 7 * 86400000);
   const R = n => documentMoney(n);
-  const RWhole = n => documentMoney(n, true);
+  const taxableBase = fmt(Math.max(0, Number(d.sub || 0) - Number(d.disc || 0)));
+  const vatAmount = fmt(Number(d.vat || 0));
+  const hasVat = vatAmount > 0;
+  const grandTotal = Number(d.grand || 0);
+  const grandTotalDisplay = !hasVat && Number.isInteger(grandTotal)
+    ? documentMoney(grandTotal, true)
+    : R(grandTotal);
 
   const itemRows = (d.items || []).map((it, i) => `
     <tr>
@@ -811,10 +816,13 @@ function buildQuoteHTML(d) {
           </div>
           <div style="display:flex;justify-content:flex-end">
             <div class="doc-sum-box">
-              <div class="dsr"><span>ยอดรวม</span><span>${R(d.sub)}</span></div>
+              <div class="dsr"><span>จำนวนเงิน</span><span>${R(d.sub)}</span></div>
               <div class="dsr"><span>ส่วนลด</span><span>${d.disc > 0 ? R(d.disc) : '—'}</span></div>
-              <div class="dsr"><span>VAT 7%</span><span>${d.vat > 0 ? R(d.vat) : '—'}</span></div>
-              <div class="dsr tot"><span class="lbl">รวมสุทธิ</span><span class="lv">${RWhole(d.grand)}</span></div>
+              ${hasVat ? `
+              <div class="dsr"><span>จำนวนเงินก่อน VAT 7%</span><span>${R(taxableBase)}</span></div>
+              <div class="dsr"><span>VAT 7%</span><span>${R(vatAmount)}</span></div>` : `
+              <div class="dsr"><span>จำนวนเงินหลังหักส่วนลด</span><span>${R(taxableBase)}</span></div>`}
+              <div class="dsr tot"><span class="lbl">รวมสุทธิ</span><span class="lv">${grandTotalDisplay}</span></div>
             </div>
           </div>
         </div>
