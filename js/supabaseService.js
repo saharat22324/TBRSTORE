@@ -1023,6 +1023,33 @@ async function voidExpenseAtomic(expId, reason) {
   }
 }
 
+async function getMonthlyBonusSettings() {
+  try {
+    const { data, error } = await getSupabase()
+      .from('monthly_bonus_settings')
+      .select('month_key,headcount');
+    if (error) throw error;
+    return data || [];
+  } catch (err) {
+    console.error('[Service] getMonthlyBonusSettings error:', err);
+    return [];
+  }
+}
+
+async function saveMonthlyBonusHeadcount(monthKey, headcount) {
+  try {
+    const { data, error } = await getSupabase().rpc('save_monthly_bonus_headcount_atomic', {
+      p_month_key: monthKey,
+      p_headcount: headcount
+    });
+    if (error) throw error;
+    return data;
+  } catch (err) {
+    reportSupabaseWriteError(err, 'saveMonthlyBonusHeadcount');
+    throw err;
+  }
+}
+
 async function getExpenses() {
   try {
     const { data, error } = await getSupabase()
@@ -1232,12 +1259,18 @@ async function loadAllData() {
         const data = await getInvoicePayments();
         console.log('[Service] ✅ Invoice payments loaded:', data?.length || 0);
         return data;
+      })(),
+      (async () => {
+        console.log('[Service] Loading monthly bonus settings...');
+        const data = await getMonthlyBonusSettings();
+        console.log('[Service] ✅ Monthly bonus settings loaded:', data?.length || 0);
+        return data;
       })()
     ]);
 
     // Extract successful results
         const [customers, vehicles, jobs, stockItems, invoices, services, shopConfig, stockLedger,
-          requisitions, expenses, quotes, purchaseOrders, invoicePayments] = results.map((r, i) => {
+          requisitions, expenses, quotes, purchaseOrders, invoicePayments, monthlyBonusSettings] = results.map((r, i) => {
       if (r.status === 'fulfilled') {
         return r.value;
       } else {
@@ -1261,6 +1294,7 @@ async function loadAllData() {
       quotes:         quotes          || [],
       purchaseOrders: purchaseOrders  || [],
       invoicePayments: invoicePayments || [],
+      monthlyBonusSettings: monthlyBonusSettings || [],
     };
   } catch (err) {
     console.error('[Service] loadAllData error:', err);

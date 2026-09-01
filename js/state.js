@@ -36,6 +36,7 @@ function seedData() {
 
     /* ── Running sequences ── */
     seq: { job: 1, inv: 1, qt: 1, po: 1, rq: 1 },
+    bonusHeadcounts: {},
 
     /* ── ลูกค้า & รถ ── */
     customers: [],

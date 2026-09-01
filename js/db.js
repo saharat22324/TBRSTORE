@@ -207,6 +207,12 @@ async function syncRemoteData(opts) {
     S.expenses = S.expenses.filter(e => !e.id || !_delUuidRx.test(e.id) || sbExpIds.has(e.id));
     if (S.expenses.length !== prevExpLen) { changed = true; console.log(`[DB] 🗑 Removed ${prevExpLen - S.expenses.length} deleted expense(s)`); }
 
+    const remoteBonusHeadcounts = newState.bonusHeadcounts || {};
+    if (JSON.stringify(S.bonusHeadcounts || {}) !== JSON.stringify(remoteBonusHeadcounts)) {
+      S.bonusHeadcounts = remoteBonusHeadcounts;
+      changed = true;
+    }
+
     // ── Quotes ──
     const qtById = new Map(S.quotes.map(q => [q.id, q]));
     const qtByNo = new Map(S.quotes.map(q => [q.no, q]));
@@ -740,6 +746,13 @@ function convertSupabaseToState(dbData) {
       date:   e.expense_date || e.date || '',
       note:   e.reference || e.note || '',
     }));
+  }
+
+  if (dbData.monthlyBonusSettings) {
+    state.bonusHeadcounts = Object.fromEntries(dbData.monthlyBonusSettings.map(setting => [
+      setting.month_key,
+      Number(setting.headcount)
+    ]));
   }
 
   if (dbData.quotes && dbData.quotes.length > 0) {

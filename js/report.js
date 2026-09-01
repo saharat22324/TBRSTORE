@@ -18,7 +18,6 @@ let _dailyTo     = '';
 let _dailyType   = 'all'; // 'all' | 'oil' | 'parts'
 let _dailyCust   = '';    // customer name filter
 let _dailyPlate  = '';    // vehicle plate filter
-let _bonusHeads  = 0;     // จำนวนช่างที่หาร (0 = ดึงจาก profiles)
 
 function isLiquidStockItem(item) {
   const itemName = String(item.name || '').trim().toLowerCase();
@@ -261,7 +260,8 @@ function reportHTML() {
   /* ── โบนัสช่าง ── */
   const BONUS_RATE = 0.10;
   const defaultHeads = S.profiles?.filter(p => p.role !== 'admin').length || 3;
-  const heads = _bonusHeads > 0 ? _bonusHeads : defaultHeads;
+  const savedHeads = Number(S.bonusHeadcounts?.[reportMonth] || 0);
+  const heads = savedHeads > 0 ? savedHeads : defaultHeads;
   const monthlyBonusBase = Math.max(0, mNet);
   const monthlyBonusPerPerson = heads > 0 ? fmt(monthlyBonusBase * BONUS_RATE / heads) : 0;
 
@@ -1181,9 +1181,31 @@ function bindReport() {
   });
 
   /* Bonus headcount */
-  sel('bonusHeads')?.addEventListener('input', e => {
-    _bonusHeads = parseInt(e.target.value) || 0;
-    renderPanel();
+  sel('bonusHeads')?.addEventListener('change', async e => {
+    const headcount = parseInt(e.target.value);
+    if (!Number.isInteger(headcount) || headcount < 1 || headcount > 20) {
+      showToast('จำนวนคนต้องอยู่ระหว่าง 1 ถึง 20', 'err');
+      renderPanel();
+      return;
+    }
+    if (!useSupabase || typeof saveMonthlyBonusHeadcount !== 'function') {
+      showToast('ต้องเชื่อมต่อ Supabase เพื่อบันทึกจำนวนคนรายเดือน', 'err');
+      renderPanel();
+      return;
+    }
+    try {
+      e.target.disabled = true;
+      const setting = await saveMonthlyBonusHeadcount(reportMonth, headcount);
+      S.bonusHeadcounts ||= {};
+      S.bonusHeadcounts[setting.month_key] = Number(setting.headcount);
+      await saveData();
+      showToast(`บันทึกจำนวนคนเดือน ${reportMonth} แล้ว`, 'ok');
+      renderPanel();
+    } catch (err) {
+      console.error('[Report] Monthly bonus headcount save failed:', err);
+      showToast(err?.message || 'บันทึกจำนวนคนไม่สำเร็จ', 'err');
+      renderPanel();
+    }
   });
 
   /* Add expense button */
