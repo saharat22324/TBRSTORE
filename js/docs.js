@@ -183,10 +183,12 @@ function buildInvoiceHTML(d) {
     : null;
 
   const R = n => documentMoney(n);
-  const taxableBase = fmt(Math.max(0, Number(d.sub || 0) - Number(d.disc || 0)));
   const vatAmount = fmt(Number(d.vat || 0));
   const hasVat = vatAmount > 0;
   const grandTotal = Number(d.grand || 0);
+  const taxableBase = hasVat
+    ? fmt(Math.max(0, grandTotal - vatAmount))
+    : fmt(Math.max(0, Number(d.sub || 0) - Number(d.disc || 0)));
   const grandTotalDisplay = !hasVat && Number.isInteger(grandTotal)
     ? documentMoney(grandTotal, true)
     : R(grandTotal);
@@ -650,7 +652,7 @@ function buildTaxInvoiceHTML(d, buyer) {
     const total    = fmt(Number(d.grand || 0));
     const subTotal = fmt(Number(d.sub || 0));
     const discAmt  = fmt(Number(d.disc || 0));
-    const preVat   = hasVat ? fmt(Math.max(0, subTotal - discAmt)) : fmt(total / 1.07);
+    const preVat   = hasVat ? fmt(Math.max(0, total - Number(d.vat || 0))) : fmt(total / 1.07);
     const vatAmt   = hasVat ? fmt(Number(d.vat || 0)) : fmt(Math.max(0, total - preVat));
     const displayedSubTotal = hasVat ? subTotal : preVat;
 
@@ -744,10 +746,12 @@ function buildTaxInvoiceHTML(d, buyer) {
 function buildQuoteHTML(d) {
   const expD = new Date((d.ts || Date.now()) + 7 * 86400000);
   const R = n => documentMoney(n);
-  const taxableBase = fmt(Math.max(0, Number(d.sub || 0) - Number(d.disc || 0)));
   const vatAmount = fmt(Number(d.vat || 0));
   const hasVat = vatAmount > 0;
   const grandTotal = Number(d.grand || 0);
+  const taxableBase = hasVat
+    ? fmt(Math.max(0, grandTotal - vatAmount))
+    : fmt(Math.max(0, Number(d.sub || 0) - Number(d.disc || 0)));
   const grandTotalDisplay = !hasVat && Number.isInteger(grandTotal)
     ? documentMoney(grandTotal, true)
     : R(grandTotal);

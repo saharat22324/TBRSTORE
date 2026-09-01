@@ -172,7 +172,11 @@ async function initSupabaseService() {
       } else if (event === 'SIGNED_OUT') {
         currentUser = null;
         currentUserRole = null;
+        localStorage.removeItem('tbr_user_session');
         console.log('[Service] User signed out');
+        if (!window.location.pathname.endsWith('/login.html')) {
+          window.location.replace('login.html');
+        }
       }
     });
 
