@@ -263,41 +263,75 @@ function reportHTML() {
   const defaultHeads = S.profiles?.filter(p => p.role !== 'admin').length || 3;
   const heads = _bonusHeads > 0 ? _bonusHeads : defaultHeads;
   const monthlyBonusBase = Math.max(0, mNet);
-  const monthlyBonusPool = fmt(monthlyBonusBase * BONUS_RATE);
-  const monthlyBonusPerPerson = heads > 0 ? fmt(monthlyBonusPool / heads) : 0;
+  const monthlyBonusPerPerson = heads > 0 ? fmt(monthlyBonusBase * BONUS_RATE / heads) : 0;
 
   const bonusHTML = `
-    <div class="card" style="margin-top:16px">
-      <div class="card-h">
-        ${svgI('<circle cx="12" cy="8" r="4"/><path d="M4 21a8 8 0 0 1 16 0"/><path d="M9 21h6"/>')}
-        <h2>โบนัสช่างรายเดือน — 10% จากกำไรจริง</h2>
-        <div class="flex gap6" style="margin-left:auto;align-items:center">
-          <label style="font-size:.75rem;color:var(--fg2)">หารกี่คน</label>
-          <input type="number" id="bonusHeads" min="1" max="20" value="${heads}"
-            style="width:64px;background:var(--ink);border:1px solid var(--ln2);color:var(--fg);
-                   border-radius:8px;padding:6px 10px;font-size:.9rem;outline:none;text-align:center">
+    <div class="card bonus-card">
+      <div class="card-h bonus-card__header">
+        <div class="bonus-card__avatar">
+          ${svgI('<circle cx="12" cy="8" r="4"/><path d="M4 21a8 8 0 0 1 16 0"/><path d="M9 21h6"/>')}
+        </div>
+        <div class="bonus-card__title">
+          <h2>โบนัสช่างรายเดือน — 10% จากกำไรจริง</h2>
+          <span>คำนวณจากยอดกำไรสุทธิหลังหักค่าใช้จ่ายเรียบร้อยแล้ว</span>
+        </div>
+        <div class="bonus-headcount">
+          ${svgI('<rect x="3" y="5" width="18" height="16" rx="2"/><path d="M16 3v4M8 3v4M3 10h18"/>')}
+          <label for="bonusHeads">หารกัน</label>
+          <input type="number" id="bonusHeads" min="1" max="20" value="${heads}">
+          <span>คน</span>
         </div>
       </div>
-      <div class="card-b" style="padding:12px 14px">
-        <div class="flex gap16" style="flex-wrap:wrap;align-items:center">
-          <div style="background:var(--p3);border-radius:8px;padding:10px 14px;min-width:150px">
-            <div style="font-size:.67rem;color:var(--fg2)">กำไรจริงเดือนนี้</div>
-            <div class="money" style="font-size:1.1rem;font-weight:800;color:${mNet>=0?'var(--grn)':'var(--bad)'}">${THB(mNet)}</div>
-            <div style="font-size:.65rem;color:var(--fg2);margin-top:3px">ยอดขายก่อน VAT หักต้นทุนและค่าใช้จ่ายร้านแล้ว</div>
+      <div class="bonus-flow">
+        <div class="bonus-step">
+          <div class="bonus-step__icon">
+            ${svgI('<path d="M4 20V10h4v10M10 20V4h4v16M16 20v-7h4v7"/>')}
           </div>
-          <div style="font-size:1.1rem;color:var(--fg2)">× 10%</div>
-          <div style="background:var(--p3);border-radius:8px;padding:10px 14px;min-width:130px;text-align:center">
-            <div style="font-size:.67rem;color:var(--fg2)">โบนัสรวมทั้งเดือน</div>
-            <div class="money" style="font-size:1.15rem;font-weight:800;color:var(--teal)">${THB(monthlyBonusPool)}</div>
-          </div>
-          <div style="font-size:1.1rem;color:var(--fg2)">÷ ${heads} คน</div>
-          <div style="background:var(--p3);border-radius:8px;padding:10px 14px;min-width:130px;text-align:center;border:2px solid var(--teal)">
-            <div style="font-size:.67rem;color:var(--fg2)">ต่อคน / เดือน</div>
-            <div class="money" style="font-size:1.2rem;font-weight:800;color:var(--teal)">${THB(monthlyBonusPerPerson)}</div>
+          <div class="bonus-step__content">
+            <div class="bonus-step__label">กำไรสุทธิประจำเดือน</div>
+            <div class="money bonus-step__value" style="color:${mNet>=0?'var(--grn)':'var(--bad)'}">${THB(mNet)}</div>
+            <div class="bonus-step__detail">ยอดรวมก่อน VAT<br>หักต้นทุนและค่าใช้จ่ายแล้ว</div>
           </div>
         </div>
-        ${mNet < 0 ? '<div style="font-size:.7rem;color:var(--bad);margin-top:8px">เดือนที่ขาดทุนจะไม่คำนวณโบนัส</div>' : ''}
+        <div class="bonus-operator" aria-hidden="true">×</div>
+        <div class="bonus-step">
+          <div class="bonus-step__icon">
+            ${svgI('<line x1="19" y1="5" x2="5" y2="19"/><circle cx="6.5" cy="6.5" r="2.5"/><circle cx="17.5" cy="17.5" r="2.5"/>')}
+          </div>
+          <div class="bonus-step__content">
+            <div class="bonus-step__label">อัตราโบนัสช่าง</div>
+            <div class="money bonus-step__value">10%</div>
+            <div class="bonus-step__detail">จากกำไรสุทธิจริง</div>
+          </div>
+        </div>
+        <div class="bonus-operator" aria-hidden="true">÷</div>
+        <div class="bonus-step">
+          <div class="bonus-step__icon">
+            ${svgI('<path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75"/>')}
+          </div>
+          <div class="bonus-step__content">
+            <div class="bonus-step__label">หารกัน</div>
+            <div class="money bonus-step__value">${heads} <small>คน</small></div>
+            <div class="bonus-step__detail">จำนวนช่างที่รับโบนัส</div>
+          </div>
+        </div>
+        <div class="bonus-operator" aria-hidden="true">=</div>
+        <div class="bonus-step bonus-step--result">
+          <div class="bonus-step__icon">
+            ${svgI('<path d="M20 7V5a2 2 0 0 0-2-2H5a3 3 0 0 0 0 6h15v10a2 2 0 0 1-2 2H5a3 3 0 0 1 0-6h15"/><path d="M16 12h.01"/>')}
+          </div>
+          <div class="bonus-step__content">
+            <div class="bonus-step__label">ต่อคน / เดือน</div>
+            <div class="money bonus-step__value">${THB(monthlyBonusPerPerson)}</div>
+            <div class="bonus-step__detail">โบนัสสุทธิของช่างแต่ละคน</div>
+          </div>
+        </div>
       </div>
+      <div class="bonus-card__footnote">
+        ${svgI('<circle cx="12" cy="12" r="9"/><path d="M9.5 9a2.5 2.5 0 1 1 4.5 1.5c-1.2.8-2 1.4-2 3M12 17h.01"/>')}
+        <span>ยอดโบนัสคำนวณจากกำไรก่อน VAT และหักต้นทุนกับค่าใช้จ่ายร้านแล้ว</span>
+      </div>
+      ${mNet < 0 ? '<div class="bonus-card__notice">เดือนนี้ขาดทุน จึงไม่มียอดโบนัสสำหรับนำมาแบ่ง</div>' : ''}
     </div>`;
 
   /* ── กำไรแยกตามประเภทสินค้า (เดือนนี้) ── */
