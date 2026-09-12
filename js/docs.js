@@ -183,9 +183,10 @@ function buildInvoiceHTML(d) {
     : null;
 
   const R = n => documentMoney(n);
-  const vatAmount = fmt(Number(d.vat || 0));
-  const hasVat = vatAmount > 0;
-  const grandTotal = Number(d.grand || 0);
+  const hasVat = Number(d.vat || 0) > 0;
+  const vatTotals = invoiceVatTotals(d);
+  const grandTotal = hasVat ? vatTotals.grand : Number(d.grand || 0);
+  const vatAmount = hasVat ? vatTotals.vat : 0;
   const taxableBase = hasVat
     ? fmt(Math.max(0, grandTotal - vatAmount))
     : fmt(Math.max(0, Number(d.sub || 0) - Number(d.disc || 0)));
@@ -649,12 +650,13 @@ function buildTaxInvoiceHTML(d, buyer) {
   /* Preserve issued VAT values. For legacy non-VAT bills, derive the
      tax-exclusive amount from the stored total when issuing a tax invoice. */
   const hasVat   = (d.vat || 0) > 0;
-    const total    = fmt(Number(d.grand || 0));
-    const subTotal = fmt(Number(d.sub || 0));
-    const discAmt  = fmt(Number(d.disc || 0));
-    const preVat   = hasVat ? fmt(Math.max(0, total - Number(d.vat || 0))) : fmt(total / 1.07);
-    const vatAmt   = hasVat ? fmt(Number(d.vat || 0)) : fmt(Math.max(0, total - preVat));
-    const displayedSubTotal = hasVat ? subTotal : preVat;
+  const vatBreakdown = invoiceVatTotals(d);
+  const total    = hasVat ? vatBreakdown.grand : fmt(Number(d.grand || 0));
+  const subTotal = fmt(Number(d.sub || 0));
+  const discAmt  = fmt(Number(d.disc || 0));
+  const preVat   = hasVat ? vatBreakdown.base : fmt(total / 1.07);
+  const vatAmt   = hasVat ? vatBreakdown.vat : fmt(Math.max(0, total - preVat));
+  const displayedSubTotal = hasVat ? subTotal : preVat;
 
   const itemRows = (d.items || []).map((it, i) => `
       <tr>
@@ -746,9 +748,10 @@ function buildTaxInvoiceHTML(d, buyer) {
 function buildQuoteHTML(d) {
   const expD = new Date((d.ts || Date.now()) + 7 * 86400000);
   const R = n => documentMoney(n);
-  const vatAmount = fmt(Number(d.vat || 0));
-  const hasVat = vatAmount > 0;
-  const grandTotal = Number(d.grand || 0);
+  const hasVat = Number(d.vat || 0) > 0;
+  const vatTotals = invoiceVatTotals(d);
+  const grandTotal = hasVat ? vatTotals.grand : Number(d.grand || 0);
+  const vatAmount = hasVat ? vatTotals.vat : 0;
   const taxableBase = hasVat
     ? fmt(Math.max(0, grandTotal - vatAmount))
     : fmt(Math.max(0, Number(d.sub || 0) - Number(d.disc || 0)));

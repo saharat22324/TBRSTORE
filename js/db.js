@@ -11,6 +11,23 @@ let _liveSync      = null;   // polling interval for remote sync
 let _autoPush      = null;   // interval for auto-pushing local-only records up
 let _lastSyncTs    = 0;      // debounce timestamp
 
+function normalizeLoadedVatTotals(state) {
+  let changed = false;
+  for (const document of [...(state.invoices || []), ...(state.quotes || [])]) {
+    if (Number(document.vat || 0) <= 0) continue;
+    const totals = invoiceVatTotals(document);
+    if (Math.abs(Number(document.vat || 0) - totals.vat) > 0.001) {
+      document.vat = totals.vat;
+      changed = true;
+    }
+    if (Math.abs(Number(document.grand || 0) - totals.grand) > 0.001) {
+      document.grand = totals.grand;
+      changed = true;
+    }
+  }
+  return changed;
+}
+
 /* ══════════════════════════════════════
    LIVE SYNC — ดึงข้อมูลใหม่จาก Supabase
    เรียกจาก Realtime subscription / polling / visibilitychange
@@ -297,6 +314,8 @@ async function syncRemoteData(opts) {
       }
     }
 
+    if (normalizeLoadedVatTotals(S)) changed = true;
+
     if (changed) {
       syncSeqFromState();
       localStorage.setItem(DB_KEY, JSON.stringify(S));
@@ -426,6 +445,7 @@ async function loadData() {
 
           // ALWAYS merge localStorage records not yet in Supabase (safety net)
           await mergeLocalStorageIntoS();
+          normalizeLoadedVatTotals(S);
           // รีเซ็ตตัวนับ retry ทุกครั้งที่โหลดหน้า — กัน record ที่เคย fail ชั่วคราว
           // ค้างไม่ขึ้นคลาวด์ถาวร (auto-push จะลองดันขึ้นใหม่ทุก session)
           [...(S.customers||[]), ...(S.vehicles||[]), ...(S.jobs||[]), ...(S.invoices||[])]
@@ -467,6 +487,7 @@ async function loadData() {
           const cloudData = await loadFromCloud('tbr-data');
           if (cloudData) {
             S = cloudData;
+            normalizeLoadedVatTotals(S);
             useSupabase = false;
             console.log('[DB] ✅ โหลดจาก Firebase Cloud สำเร็จ');
             return;
@@ -482,6 +503,9 @@ async function loadData() {
     if (raw) {
       S = JSON.parse(raw);
       migrateData();
+      if (normalizeLoadedVatTotals(S)) {
+        localStorage.setItem(DB_KEY, JSON.stringify(S));
+      }
       // Keep useSupabase = true if Supabase was accessible (just empty tables)
       // This allows future saves to go to Supabase for multi-device sync
       if (useSupabase) {
@@ -653,8 +677,12 @@ function convertSupabaseToState(dbData) {
       })) || [],
       sub: i.subtotal,
       disc: i.discount || 0,
-      // vat ใน DB เก็บเป็น rate (0.07) → แปลงกลับเป็นตัวเลข amount
-      vat: (i.vat > 0) ? fmt(Math.max(0, (i.subtotal || 0) - (i.discount || 0)) * 0.07) : 0,
+      // vat ใน DB เก็บเป็น rate (0.07) จึงถอดยอดภาษีจากยอดสุทธิที่ปัดแล้ว
+      vat: calculateRoundedVatTotals(
+        Math.max(0, (i.subtotal || 0) - (i.discount || 0)),
+        i.vat > 0,
+        i.grand_total
+      ).vat,
       grand: i.grand_total,
       totalCost: (i.invoice_items || []).reduce((s, it) => s + (it.quantity || 0) * (it.cost_price > 0 ? it.cost_price : (it.stock_item_id ? (costByUuid[it.stock_item_id] || 0) : 0)), 0),
       note: i.note || '',
@@ -769,7 +797,9 @@ function convertSupabaseToState(dbData) {
       items:     Array.isArray(q.items) ? q.items : [],
       sub:       parseFloat(q.sub)   || 0,
       disc:      parseFloat(q.disc)  || 0,
-      vat:       parseFloat(q.vat)   || 0,
+      vat:       Number(q.vat) > 0
+        ? calculateRoundedVatTotals(0, true, q.grand).vat
+        : 0,
       grand:     parseFloat(q.grand) || 0,
       converted: q.converted  || false,
     }));

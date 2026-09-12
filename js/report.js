@@ -62,7 +62,7 @@ function reportHTML() {
   const calcInvCost = inv => (inv.items || []).reduce((s, it) => s + ((it.qty || 0) * (it.cost || 0)), 0);
   /* Revenue calculations */
   const mGrand  = fmt(mInvs.reduce((s, i) => s + i.grand, 0));               // รวม VAT (ยอดบนบิล)
-  const mVat    = fmt(mInvs.reduce((s, i) => s + (i.vat || 0), 0));          // VAT นำส่ง
+  const mVat    = fmt(mInvs.reduce((s, i) => s + invoiceVatAmount(i), 0));    // VAT นำส่ง
   const mRev    = fmt(mInvs.reduce((s, i) => s + invoiceRevenueBeforeVat(i), 0));
   const mCost   = mInvs.reduce((s, i) => s + calcInvCost(i), 0);
   const mGross  = fmt(mRev - mCost);
@@ -191,7 +191,7 @@ function reportHTML() {
             <td style="font-weight:600">${esc(i.cust || '—')}</td>
             <td style="font-size:.8rem;color:var(--fg2)">${esc(i.plate || '—')}</td>
             <td class="r money fc-gold">${THB(i.grand)}</td>
-            <td class="r" style="font-size:.82rem;color:var(--fg2)">${THB(invExVat)}${(i.vat||0)>0 ? `<br><span style="font-size:.65rem;color:var(--warn)">VAT ${THB(i.vat)}</span>` : ''}</td>
+            <td class="r" style="font-size:.82rem;color:var(--fg2)">${THB(invExVat)}${(i.vat||0)>0 ? `<br><span style="font-size:.65rem;color:var(--warn)">VAT ${THB(invoiceVatAmount(i))}</span>` : ''}</td>
             ${hasPermission('canViewCost') ? `<td class="r" style="font-size:.82rem;color:var(--bad)">${THB(invCost)}</td>` : ''}
             <td class="r" style="font-weight:700;color:${gp>=0?'var(--grn)':'var(--bad)'}">${THB(gp)}</td>
             <td class="r" style="font-weight:700;color:var(--grn)">${THB(recognized.recognizedGross)}</td>
@@ -1232,7 +1232,7 @@ function bindReport() {
 
     const s      = S.shop;
     const totalEx  = mInvs2.reduce((a, i) => a + invoiceRevenueBeforeVat(i), 0);
-    const totalVat = mInvs2.reduce((a, i) => a + (i.vat || 0), 0);
+    const totalVat = mInvs2.reduce((a, i) => a + invoiceVatAmount(i), 0);
     const totalAll = mInvs2.reduce((a, i) => a + i.grand, 0);
 
     const [ymY, ymM] = reportMonth.split('-');
@@ -1242,7 +1242,7 @@ function bindReport() {
 
     const invRowsHTML = [...mInvs2].sort((a, b) => (b.ts || 0) - (a.ts || 0)).map((i, idx) => {
       const exVat = invoiceRevenueBeforeVat(i);
-      const vat   = i.vat || 0;
+      const vat   = invoiceVatAmount(i);
       return `<tr style="border-bottom:1px solid #e5e5e5">
         <td style="padding:5px 8px;text-align:center;font-size:.82rem;color:#888">${idx+1}</td>
         <td style="padding:5px 8px;font-family:monospace;font-size:.78rem;color:#0077aa">${esc(i.no)}</td>
@@ -1340,7 +1340,7 @@ function bindReport() {
     const header = 'เลขที่,วันที่,ลูกค้า,ทะเบียน,ยอดรวม (รวม VAT),ก่อน VAT,VAT 7%,ชำระ';
     const rows = mInvs2.map(i => {
       const exVat = invoiceRevenueBeforeVat(i);
-      const vat   = i.vat || 0;
+      const vat   = invoiceVatAmount(i);
       return `"${i.no}","${dateStr(i.ts)}","${(i.cust||'').replace(/"/g,'""')}","${(i.plate||'').replace(/"/g,'""')}",${i.grand},${exVat},${vat},${i.paid ? 'ชำระแล้ว' : 'ค้างชำระ'}`;
     });
     const csv = [header, ...rows].join('\n');

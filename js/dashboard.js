@@ -16,7 +16,7 @@ function dashboardHTML() {
     return i.status !== 'cancelled' && `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}` === ym;
   });
   const mGrand   = fmt(mInv.reduce((s, i) => s + i.grand, 0));                // รวม VAT (ยอดบนบิล)
-  const mVat     = fmt(mInv.reduce((s, i) => s + (i.vat || 0), 0));           // VAT นำส่ง
+  const mVat     = fmt(mInv.reduce((s, i) => s + invoiceVatAmount(i), 0));     // VAT นำส่ง
   const mRev     = fmt(mInv.reduce((s, i) => s + invoiceRevenueBeforeVat(i), 0));
   const mCost    = mInv.reduce((s, i) => s + calcInvCost(i), 0);
   const mProfit  = fmt(mRev - mCost);
@@ -336,12 +336,17 @@ function bindDashboard() {
                 })),
                 sub: i.subtotal,
                 disc: i.discount || 0,
-                vat: (i.vat > 0) ? fmt(Math.max(0, (i.subtotal || 0) - (i.discount || 0)) * 0.07) : 0,
+                vat: calculateRoundedVatTotals(
+                  Math.max(0, (i.subtotal || 0) - (i.discount || 0)),
+                  i.vat > 0,
+                  i.grand_total
+                ).vat,
                 grand: i.grand_total,
                 totalCost: 0,
                 note: i.note || ''
               };
             });
+            normalizeLoadedVatTotals({ invoices: converted, quotes: [] });
             // Preserve invoices that only exist in localStorage (not yet synced to Supabase)
             const supabaseNos = new Set(converted.map(i => i.no).filter(Boolean));
             const localOnly = S.invoices.filter(i => i.no && !supabaseNos.has(i.no));

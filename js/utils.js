@@ -17,7 +17,31 @@ const THB   = (n) => {
 };
 const numFmt= (n) => fmt(n).toLocaleString('th-TH', { maximumFractionDigits: 2 });
 
+const calculateRoundedVatTotals = (amountBeforeVat, vatEnabled, fixedGrandTotal = null) => {
+  const originalBase = fmt(Math.max(0, Number(amountBeforeVat) || 0));
+  const grand = fixedGrandTotal == null
+    ? Math.round(originalBase * (vatEnabled ? 1.07 : 1))
+    : fmt(Number(fixedGrandTotal) || 0);
+  if (!vatEnabled) return { base: originalBase, vat: 0, grand };
+
+  const base = fmt(grand / 1.07);
+  return { base, vat: fmt(grand - base), grand };
+};
+
+const invoiceVatTotals = (invoice) => {
+  const subtotal = Number(invoice?.sub);
+  const amountBeforeVat = Number.isFinite(subtotal)
+    ? subtotal - Number(invoice?.disc || 0)
+    : Number(invoice?.grand || 0) - Number(invoice?.vat || 0);
+  return calculateRoundedVatTotals(amountBeforeVat, Number(invoice?.vat || 0) > 0);
+};
+
+const invoiceVatAmount = (invoice) => invoiceVatTotals(invoice).vat;
+
 const invoiceRevenueBeforeVat = (invoice) => {
+  if (Number(invoice?.vat || 0) > 0) {
+    return invoiceVatTotals(invoice).base;
+  }
   const subtotal = Number(invoice?.sub);
   if (Number.isFinite(subtotal)) return fmt(subtotal - Number(invoice?.disc || 0));
   return fmt(Number(invoice?.grand || 0) - Number(invoice?.vat || 0));

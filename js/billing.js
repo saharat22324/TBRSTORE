@@ -32,7 +32,7 @@ function billingHTML() {
   const activeInv = S.invoices.filter(i => i.status !== 'cancelled');
   const totalInv = activeInv.length;
   const totalGrand = activeInv.reduce((s, i) => s + i.grand, 0);
-  const totalVat   = activeInv.reduce((s, i) => s + (i.vat || 0), 0);
+  const totalVat   = activeInv.reduce((s, i) => s + invoiceVatAmount(i), 0);
   const totalBeforeVat = activeInv.reduce((s, i) => s + invoiceRevenueBeforeVat(i), 0);
   const avgBill    = totalInv > 0 ? totalGrand / totalInv : 0;
   const todayInv   = activeInv.filter(i => new Date(i.ts).toDateString() === new Date().toDateString());
@@ -515,9 +515,7 @@ function bindBilling() {
 /* ── Billing calc ── */
 function bCalc() {
   const sub  = bItems.reduce((s, i) => s + fmt(i.qty * i.price), 0);
-  const base = Math.max(0, sub - bDisc);
-  const vat  = bVat ? fmt(base * 0.07) : 0;
-  return { sub, base, vat, grand: Math.round(base + vat) };
+  return { sub, ...calculateRoundedVatTotals(sub - bDisc, bVat) };
 }
 
 /* ══════════════════════════════════════
