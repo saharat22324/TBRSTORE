@@ -1,4 +1,4 @@
-name: Deploy VAT Decimal Migration
+name: Deploy VAT Migration
 
 on:
   workflow_dispatch:
@@ -45,7 +45,7 @@ jobs:
           sudo apt-get install -y postgresql-client-17
           echo "/usr/lib/postgresql/17/bin" >> "$GITHUB_PATH"
 
-      - name: Apply VAT migration
+      - name: Apply VAT history reconciliation
         shell: bash
         run: |
           psql \
@@ -54,9 +54,9 @@ jobs:
             --username="$SUPABASE_DB_USER" \
             --dbname=postgres \
             --set=ON_ERROR_STOP=1 \
-            --file=20260903_decimal_vat_invoice_totals.sql
+            --file=20260904_reconcile_decimal_vat_totals.sql
 
-      - name: Verify VAT migration
+      - name: Verify VAT history reconciliation
         shell: bash
         run: |
           psql \
@@ -65,4 +65,4 @@ jobs:
             --username="$SUPABASE_DB_USER" \
             --dbname=postgres \
             --set=ON_ERROR_STOP=1 \
-            --file=tests/vat-decimal-readonly.sql
+            --file=tests/vat-decimal-history-readonly.sql
