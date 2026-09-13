@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8">
   <title>VAT calculation regression tests</title>
-  <link rel="stylesheet" href="../css/print.css?v=46">
+  <link rel="stylesheet" href="../css/print.css?v=47">
 </head>
 <body>
   <pre id="result">Running...</pre>
@@ -72,25 +72,6 @@
         throw new Error('VAT receipt does not show the expected breakdown');
       }
 
-      const documentStage = document.createElement('div');
-      documentStage.innerHTML = receiptHtml;
-      document.body.appendChild(documentStage);
-      const shopHeadingStyle = getComputedStyle(documentStage.querySelector('.doc-sn'));
-      const documentHeadingStyle = getComputedStyle(documentStage.querySelector('.doc-tt'));
-      const referenceStyle = getComputedStyle(documentStage.querySelector('.doc-ref'));
-      const infoLabelStyle = getComputedStyle(documentStage.querySelector('.doc-box .lbl'));
-      const tableHeadingStyle = getComputedStyle(documentStage.querySelector('.dt th'));
-      if (!shopHeadingStyle.fontFamily.includes('Noto Sans Thai')
-          || shopHeadingStyle.fontStyle !== 'normal'
-          || shopHeadingStyle.fontWeight !== '700'
-          || !documentHeadingStyle.fontFamily.includes('Noto Sans Thai')
-          || !referenceStyle.fontFamily.includes('Noto Sans Thai')
-          || !infoLabelStyle.fontFamily.includes('Noto Sans Thai')
-          || !tableHeadingStyle.fontFamily.includes('Noto Sans Thai')) {
-        throw new Error('Thai PDF labels are not using the PDF-safe Thai font');
-      }
-      documentStage.remove();
-
       const includedVatInvoice = { ...vatInvoice, no: 'TEST-INCLUDED', vat: 0, grand: 4500 };
       const taxInvoiceHtml = buildTaxInvoiceHTML(includedVatInvoice, {
         name: 'Test Customer', address: 'Test Address', taxId: '0000000000000', branch: 'Head Office',
@@ -102,9 +83,35 @@
         throw new Error('Included-VAT tax invoice does not preserve the amount due');
       }
 
+      const quoteHtml = buildQuoteHTML({ ...vatInvoice, no: 'TEST-QUOTE' });
+      for (const [label, documentHtml] of [
+        ['receipt', receiptHtml],
+        ['tax invoice', taxInvoiceHtml],
+        ['quotation', quoteHtml],
+      ]) {
+        const documentStage = document.createElement('div');
+        documentStage.innerHTML = documentHtml;
+        document.body.appendChild(documentStage);
+        const shopHeadingStyle = getComputedStyle(documentStage.querySelector('.doc-sn'));
+        const documentHeadingStyle = getComputedStyle(documentStage.querySelector('.doc-tt'));
+        const referenceStyle = getComputedStyle(documentStage.querySelector('.doc-ref'));
+        const infoLabelStyle = getComputedStyle(documentStage.querySelector('.doc-box .lbl'));
+        const tableHeadingStyle = getComputedStyle(documentStage.querySelector('.dt th'));
+        if (!shopHeadingStyle.fontFamily.includes('Noto Sans Thai')
+            || shopHeadingStyle.fontStyle !== 'normal'
+            || shopHeadingStyle.fontWeight !== '700'
+            || !documentHeadingStyle.fontFamily.includes('Noto Sans Thai')
+            || !referenceStyle.fontFamily.includes('Noto Sans Thai')
+            || !infoLabelStyle.fontFamily.includes('Noto Sans Thai')
+            || !tableHeadingStyle.fontFamily.includes('Noto Sans Thai')) {
+          throw new Error(`${label} labels are not using the PDF-safe Thai font`);
+        }
+        documentStage.remove();
+      }
+
       const output = document.getElementById('result');
       output.dataset.status = 'passed';
-      output.textContent = `PASS: ${cases.length + 2710} VAT checks`;
+      output.textContent = `PASS: ${cases.length + 2712} VAT checks`;
     } catch (error) {
       const output = document.getElementById('result');
       output.dataset.status = 'failed';

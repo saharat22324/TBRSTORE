@@ -782,7 +782,7 @@ function openJobDetail(jid) {
     if (!reqRows) reqRows = '<tr><td colspan="2" style="color:#888;text-align:center">—</td></tr>';
 
     const dc = `
-      <div class="doc" style="max-width:680px;margin:0 auto;font-family:sans-serif">
+      <div class="doc" style="max-width:680px;margin:0 auto;font-family:'Noto Sans Thai',sans-serif">
         <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:8px">
           <div>
             <div style="font-weight:900;font-size:1.2rem">${esc(s.name||'TBR Performance')}</div>
@@ -831,9 +831,7 @@ function openJobDetail(jid) {
           </div>
         </div>
       </div>`;
-    document.getElementById('pz').innerHTML = dc;
-    window.print();
-    setTimeout(() => { document.getElementById('pz').innerHTML = ''; }, 600);
+    printDocumentHTML(dc);
   });
 }
 function openReqModal(jid) {

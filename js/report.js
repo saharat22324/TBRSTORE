@@ -1325,9 +1325,7 @@ function bindReport() {
         </div>
       </div>`;
 
-    document.getElementById('pz').innerHTML = printHTML;
-    window.print();
-    setTimeout(() => { document.getElementById('pz').innerHTML = ''; }, 800);
+    printDocumentHTML(printHTML);
   });
 
   /* Export CSV */
