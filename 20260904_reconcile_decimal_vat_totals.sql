@@ -71,9 +71,25 @@ WHERE COALESCE(i.document_type, 'invoice') NOT IN ('credit_note', 'debit_note')
 DO $$
 DECLARE
   target_count INTEGER;
+  backup_count INTEGER;
+  migration_applied BOOLEAN;
 BEGIN
   SELECT COUNT(*) INTO target_count FROM decimal_vat_targets;
-  IF target_count <> 9 THEN
+
+  IF target_count = 0 THEN
+    SELECT COUNT(*) INTO backup_count
+    FROM invoice_decimal_vat_backup_20260904;
+
+    SELECT EXISTS (
+      SELECT 1
+      FROM schema_migrations
+      WHERE version = '20260904_reconcile_decimal_vat_totals'
+    ) INTO migration_applied;
+
+    IF backup_count <> 9 OR NOT migration_applied THEN
+      RAISE EXCEPTION 'Historical VAT no-op precondition failed: expected applied migration and 9 backup rows';
+    END IF;
+  ELSIF target_count <> 9 THEN
     RAISE EXCEPTION 'Historical VAT target count changed: expected 9, found %', target_count;
   END IF;
 
