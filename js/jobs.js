@@ -1217,9 +1217,9 @@ function openEditReqModal(jid, reqId) {
           + (newQtyByStock.get(stockId) || 0) - (oldQtyByStock.get(stockId) || 0));
       }
       localInvoice.items = localInvoice.items.filter(it => Number(it.qty || 0) > 0);
-      localInvoice.sub = localInvoice.items.reduce((sum, it) => sum + fmt(Number(it.qty || 0) * Number(it.price || 0)), 0);
+      localInvoice.sub = calculateInvoiceSubtotal(localInvoice.items);
       const invoiceBase = Math.max(0, localInvoice.sub - Number(localInvoice.disc || 0));
-      const totals = calculateRoundedVatTotals(invoiceBase, localInvoice.vat > 0);
+      const totals = calculateRoundedVatTotals(invoiceBase, invoiceHasVat(localInvoice));
       localInvoice.vat = totals.vat;
       localInvoice.grand = totals.grand;
       localInvoice.totalCost = localInvoice.items.reduce((sum, it) => sum + Number(it.qty || 0) * Number(it.cost || 0), 0);

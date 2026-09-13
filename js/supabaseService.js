@@ -768,7 +768,8 @@ async function updateInvoiceFull(invId, invoiceData, items) {
       p_invoice_id: invId,
       p_invoice: {
         subtotal: invoiceData.sub, discount: invoiceData.disc,
-        vat: invoiceData.vat > 0 ? 0.07 : 0, grand_total: invoiceData.grand,
+        vat: (invoiceData.vatEnabled ?? invoiceData.vat > 0) ? 0.07 : 0,
+        grand_total: invoiceData.grand,
         customer_name: invoiceData.cust || null, plate: invoiceData.plate || null,
         phone: invoiceData.phone || null, car_model: invoiceData.model || null,
         note: invoiceData.note || null,
@@ -1079,6 +1080,7 @@ async function createQuoteAtomic(quoteData) {
       sub: parseFloat(quoteData.sub) || 0,
       disc: parseFloat(quoteData.disc) || 0,
       vat: parseFloat(quoteData.vat) || 0,
+      vat_enabled: quoteData.vatEnabled ?? Number(quoteData.vat) > 0,
       grand: parseFloat(quoteData.grand) || 0,
       note: quoteData.note || null,
       ref: quoteData.ref || null,

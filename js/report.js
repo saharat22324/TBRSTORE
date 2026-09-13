@@ -191,7 +191,7 @@ function reportHTML() {
             <td style="font-weight:600">${esc(i.cust || '—')}</td>
             <td style="font-size:.8rem;color:var(--fg2)">${esc(i.plate || '—')}</td>
             <td class="r money fc-gold">${THB(i.grand)}</td>
-            <td class="r" style="font-size:.82rem;color:var(--fg2)">${THB(invExVat)}${(i.vat||0)>0 ? `<br><span style="font-size:.65rem;color:var(--warn)">VAT ${THB(invoiceVatAmount(i))}</span>` : ''}</td>
+            <td class="r" style="font-size:.82rem;color:var(--fg2)">${THB(invExVat)}${invoiceHasVat(i) ? `<br><span style="font-size:.65rem;color:var(--warn)">VAT ${THB(invoiceVatAmount(i))}</span>` : ''}</td>
             ${hasPermission('canViewCost') ? `<td class="r" style="font-size:.82rem;color:var(--bad)">${THB(invCost)}</td>` : ''}
             <td class="r" style="font-weight:700;color:${gp>=0?'var(--grn)':'var(--bad)'}">${THB(gp)}</td>
             <td class="r" style="font-weight:700;color:var(--grn)">${THB(recognized.recognizedGross)}</td>

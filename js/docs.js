@@ -183,16 +183,14 @@ function buildInvoiceHTML(d) {
     : null;
 
   const R = n => documentMoney(n);
-  const hasVat = Number(d.vat || 0) > 0;
+  const hasVat = invoiceHasVat(d);
   const vatTotals = invoiceVatTotals(d);
   const grandTotal = hasVat ? vatTotals.grand : Number(d.grand || 0);
   const vatAmount = hasVat ? vatTotals.vat : 0;
   const taxableBase = hasVat
     ? fmt(Math.max(0, grandTotal - vatAmount))
     : fmt(Math.max(0, Number(d.sub || 0) - Number(d.disc || 0)));
-  const grandTotalDisplay = !hasVat && Number.isInteger(grandTotal)
-    ? documentMoney(grandTotal, true)
-    : R(grandTotal);
+  const grandTotalDisplay = R(grandTotal);
 
   /* Item rows — fill to min 8 rows */
   const itemRows = (d.items || []).map((it, i) => `
@@ -647,16 +645,16 @@ function buildTaxInvoiceHTML(d, buyer) {
   const R = n => documentMoney(n);
   const Rd = R;
 
-  /* Preserve issued VAT values. For legacy non-VAT bills, derive the
-     tax-exclusive amount from the stored total when issuing a tax invoice. */
-  const hasVat   = (d.vat || 0) > 0;
-  const vatBreakdown = invoiceVatTotals(d);
-  const total    = hasVat ? vatBreakdown.grand : fmt(Number(d.grand || 0));
+  /* Preserve the amount due. Tax invoices extract included VAT from that total. */
+  const hasVat = invoiceHasVat(d);
+  const vatBreakdown = hasVat
+    ? invoiceVatTotals(d)
+    : calculateIncludedVatTotals(d.grand);
+  const total    = vatBreakdown.grand;
   const subTotal = fmt(Number(d.sub || 0));
   const discAmt  = fmt(Number(d.disc || 0));
-  const preVat   = hasVat ? vatBreakdown.base : fmt(total / 1.07);
-  const vatAmt   = hasVat ? vatBreakdown.vat : fmt(Math.max(0, total - preVat));
-  const displayedSubTotal = hasVat ? subTotal : preVat;
+  const preVat   = vatBreakdown.base;
+  const vatAmt   = vatBreakdown.vat;
 
   const itemRows = (d.items || []).map((it, i) => `
       <tr>
@@ -719,7 +717,7 @@ function buildTaxInvoiceHTML(d, buyer) {
           <div class="doc-words">(${bahtWords(total)})</div>
           <div style="display:flex;justify-content:flex-end">
             <div class="doc-sum-box">
-              <div class="dsr"><span>จำนวนเงิน</span><span>${Rd(displayedSubTotal)}</span></div>
+              <div class="dsr"><span>จำนวนเงิน</span><span>${Rd(subTotal)}</span></div>
               <div class="dsr"><span>ส่วนลด</span><span>${discAmt > 0 ? Rd(discAmt) : '—'}</span></div>
               <div class="dsr"><span>จำนวนเงินก่อน VAT 7%</span><span>${Rd(preVat)}</span></div>
               <div class="dsr"><span>VAT 7%</span><span>${Rd(vatAmt)}</span></div>
@@ -748,16 +746,14 @@ function buildTaxInvoiceHTML(d, buyer) {
 function buildQuoteHTML(d) {
   const expD = new Date((d.ts || Date.now()) + 7 * 86400000);
   const R = n => documentMoney(n);
-  const hasVat = Number(d.vat || 0) > 0;
+  const hasVat = invoiceHasVat(d);
   const vatTotals = invoiceVatTotals(d);
   const grandTotal = hasVat ? vatTotals.grand : Number(d.grand || 0);
   const vatAmount = hasVat ? vatTotals.vat : 0;
   const taxableBase = hasVat
     ? fmt(Math.max(0, grandTotal - vatAmount))
     : fmt(Math.max(0, Number(d.sub || 0) - Number(d.disc || 0)));
-  const grandTotalDisplay = !hasVat && Number.isInteger(grandTotal)
-    ? documentMoney(grandTotal, true)
-    : R(grandTotal);
+  const grandTotalDisplay = R(grandTotal);
 
   const itemRows = (d.items || []).map((it, i) => `
     <tr>
@@ -915,7 +911,7 @@ function bindDocActions(type, data, dc) {
       originalQty: Number(it.qty || 0),
     }));
     bDisc      = inv.disc || 0;
-    bVat       = (inv.vat || 0) > 0;
+    bVat       = invoiceHasVat(inv);
     bJobId     = inv.jobId || null;
     bEditInvNo = inv.no;
     bEditData  = {
@@ -1023,7 +1019,7 @@ function bindDocActions(type, data, dc) {
       itemType: it.itemType || 'other', cost: it.cost || 0,
     }));
     bDisc  = data.disc  || 0;
-    bVat   = (data.vat  || 0) > 0;
+    bVat   = invoiceHasVat(data);
     bJobId = null;
 
     await saveData();

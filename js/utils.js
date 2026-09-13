@@ -4,42 +4,118 @@
 
 /* ── Business constants ── */
 const MARKUP_RATE = 1.37; // อะไหล่สั่ง: ราคาขาย = ทุน × 1.37
+const VAT_RATE_PERCENT = 7;
+const VAT_GROSS_PERCENT = 100 + VAT_RATE_PERCENT;
 
 const JOB_STATUS = ['เปิดงาน','ตรวจสอบ','รออนุมัติ','กำลังซ่อม','รอส่งมอบ','ปิดงาน'];
 const JOB_COLOR  = ['teal','warn','purple','gold','grn','gray'];
 const JOB_DOT    = ['#28C2C9','#EEA61C','#9b59b6','#F39C12','#2ecc71','#95a5a6'];
 
 /* ── Number formatting ── */
-const fmt   = (n) => parseFloat((Math.round(n * 100) / 100).toFixed(2));
+const decimalParts = (value) => {
+  const match = String(value ?? 0).trim().match(/^([+-]?)(\d*)(?:\.(\d*))?(?:e([+-]?\d+))?$/i);
+  if (!match || (!match[2] && !match[3])) return { coefficient: 0n, scale: 0 };
+
+  const sign = match[1] === '-' ? -1n : 1n;
+  const fraction = match[3] || '';
+  let coefficient = BigInt(`${match[2] || '0'}${fraction}`) * sign;
+  let scale = fraction.length - Number(match[4] || 0);
+  if (scale < 0) {
+    coefficient *= 10n ** BigInt(-scale);
+    scale = 0;
+  }
+  return { coefficient, scale };
+};
+
+const roundRatio = (numerator, denominator) => {
+  if (denominator === 0n) return 0n;
+  const negative = (numerator < 0n) !== (denominator < 0n);
+  const absoluteNumerator = numerator < 0n ? -numerator : numerator;
+  const absoluteDenominator = denominator < 0n ? -denominator : denominator;
+  const quotient = absoluteNumerator / absoluteDenominator;
+  const remainder = absoluteNumerator % absoluteDenominator;
+  const rounded = remainder * 2n >= absoluteDenominator ? quotient + 1n : quotient;
+  return negative ? -rounded : rounded;
+};
+
+const toSatang = (value) => {
+  const { coefficient, scale } = decimalParts(value);
+  return roundRatio(coefficient * 100n, 10n ** BigInt(scale));
+};
+
+const fromSatang = (value) => Number(value) / 100;
+const fmt = (value) => fromSatang(toSatang(value));
+
+const calculateInvoiceSubtotal = (items) => {
+  const products = (items || []).map(item => {
+    const quantity = decimalParts(item.qty ?? item.quantity ?? 0);
+    const price = decimalParts(item.price ?? item.unitPrice ?? item.unit_price ?? 0);
+    return {
+      coefficient: quantity.coefficient * price.coefficient,
+      scale: quantity.scale + price.scale,
+    };
+  });
+  const scale = products.reduce((maximum, product) => Math.max(maximum, product.scale), 0);
+  const coefficient = products.reduce((sum, product) => (
+    sum + product.coefficient * (10n ** BigInt(scale - product.scale))
+  ), 0n);
+  return fromSatang(roundRatio(coefficient * 100n, 10n ** BigInt(scale)));
+};
+
 const THB   = (n) => {
   const amount = fmt(n) || 0;
-  return `${amount < 0 ? '-' : ''}฿${Math.abs(amount).toLocaleString('th-TH', { maximumFractionDigits: 2 })}`;
+  return `${amount < 0 ? '-' : ''}฿${Math.abs(amount).toLocaleString('th-TH', {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  })}`;
 };
 const numFmt= (n) => fmt(n).toLocaleString('th-TH', { maximumFractionDigits: 2 });
 
-const calculateRoundedVatTotals = (amountBeforeVat, vatEnabled, fixedGrandTotal = null) => {
-  const originalBase = fmt(Math.max(0, Number(amountBeforeVat) || 0));
-  const grand = fixedGrandTotal == null
-    ? Math.round(originalBase * (vatEnabled ? 1.07 : 1))
-    : fmt(Number(fixedGrandTotal) || 0);
-  if (!vatEnabled) return { base: originalBase, vat: 0, grand };
-
-  const base = fmt(grand / 1.07);
-  return { base, vat: fmt(grand - base), grand };
+const calculateIncludedVatTotals = (grandTotal) => {
+  const grandSatang = toSatang(Math.max(0, Number(grandTotal) || 0));
+  const vatSatang = roundRatio(grandSatang * BigInt(VAT_RATE_PERCENT), BigInt(VAT_GROSS_PERCENT));
+  return {
+    base: fromSatang(grandSatang - vatSatang),
+    vat: fromSatang(vatSatang),
+    grand: fromSatang(grandSatang),
+  };
 };
+
+const calculateRoundedVatTotals = (amountBeforeVat, vatEnabled, fixedGrandTotal = null) => {
+  const baseSatang = toSatang(Math.max(0, Number(amountBeforeVat) || 0));
+  if (!vatEnabled) {
+    const grandSatang = fixedGrandTotal == null ? baseSatang : toSatang(fixedGrandTotal);
+    return { base: fromSatang(baseSatang), vat: 0, grand: fromSatang(grandSatang) };
+  }
+
+  const grandSatang = fixedGrandTotal == null
+    ? baseSatang + roundRatio(baseSatang * BigInt(VAT_RATE_PERCENT), 100n)
+    : toSatang(fixedGrandTotal);
+  return calculateIncludedVatTotals(fromSatang(grandSatang));
+};
+
+const invoiceHasVat = (invoice) => typeof invoice?.vatEnabled === 'boolean'
+  ? invoice.vatEnabled
+  : Number(invoice?.vat || 0) > 0;
 
 const invoiceVatTotals = (invoice) => {
   const subtotal = Number(invoice?.sub);
   const amountBeforeVat = Number.isFinite(subtotal)
     ? subtotal - Number(invoice?.disc || 0)
     : Number(invoice?.grand || 0) - Number(invoice?.vat || 0);
-  return calculateRoundedVatTotals(amountBeforeVat, Number(invoice?.vat || 0) > 0);
+  const hasVat = invoiceHasVat(invoice);
+  const storedGrandTotal = Number(invoice?.grand);
+  return calculateRoundedVatTotals(
+    amountBeforeVat,
+    hasVat,
+    Number.isFinite(storedGrandTotal) ? storedGrandTotal : null
+  );
 };
 
 const invoiceVatAmount = (invoice) => invoiceVatTotals(invoice).vat;
 
 const invoiceRevenueBeforeVat = (invoice) => {
-  if (Number(invoice?.vat || 0) > 0) {
+  if (invoiceHasVat(invoice)) {
     return invoiceVatTotals(invoice).base;
   }
   const subtotal = Number(invoice?.sub);

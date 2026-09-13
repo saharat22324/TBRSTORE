@@ -336,6 +336,7 @@ function bindDashboard() {
                 })),
                 sub: i.subtotal,
                 disc: i.discount || 0,
+                vatEnabled: i.vat > 0,
                 vat: calculateRoundedVatTotals(
                   Math.max(0, (i.subtotal || 0) - (i.discount || 0)),
                   i.vat > 0,

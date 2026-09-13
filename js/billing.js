@@ -225,7 +225,7 @@ function billingHTML() {
           <div class="sr"><span>ยอดรวม</span><span id="sSub" class="money">${THB(sub)}</span></div>
           <div class="sr">
             <span>ส่วนลด (฿)</span>
-            <input id="sDisc" type="number" min="0" value="${bDisc||''}">
+            <input id="sDisc" type="number" min="0" step="0.01" value="${bDisc||''}">
           </div>
           <div class="sr">
             <label class="vat-sw ${bVat?'on':''}" id="sVat">
@@ -514,8 +514,9 @@ function bindBilling() {
 
 /* ── Billing calc ── */
 function bCalc() {
-  const sub  = bItems.reduce((s, i) => s + fmt(i.qty * i.price), 0);
-  return { sub, ...calculateRoundedVatTotals(sub - bDisc, bVat) };
+  const sub = calculateInvoiceSubtotal(bItems);
+  const disc = fmt(Math.max(0, Number(bDisc) || 0));
+  return { sub, disc, ...calculateRoundedVatTotals(sub - disc, bVat) };
 }
 
 /* ══════════════════════════════════════
@@ -678,7 +679,7 @@ async function saveInvoice() {
 }
 
 async function saveInvoiceOnce() {
-  const { sub, base, vat, grand } = bCalc();
+  const { sub, disc, vat, grand } = bCalc();
   if (!bItems.length || grand <= 0) return;
 
   const cust  = sv('bCust');
@@ -745,7 +746,7 @@ async function saveInvoiceOnce() {
       }
       updatedInvoice = await updateInvoiceFull(
         existing.id,
-        { sub, disc: bDisc, vat, grand, cust, plate, phone, model, note },
+        { sub, disc, vat, vatEnabled: bVat, grand, cust, plate, phone, model, note },
         bItems.map(it => ({
           type: it.itemType || 'service',
           stockItemId: it.itemType === 'stock'
@@ -785,7 +786,7 @@ async function saveInvoiceOnce() {
     // 3. อัปเดต invoice object (เก็บ no, ts, jobId, paid, id เดิม)
     Object.assign(existing, {
       cust, phone, plate, model, mileage: mile, ref, note,
-      items: newItems, sub, disc: bDisc, vat, grand, totalCost,
+      items: newItems, sub, disc, vat, vatEnabled: bVat, grand, totalCost,
       version: Number(updatedInvoice?.version || existing.version || 1),
     });
 
@@ -815,7 +816,7 @@ async function saveInvoiceOnce() {
     custId: selectedCustomer?.id || null,
     cust, phone, plate, model, mileage: mile, ref,
     items: newItems,
-    sub, disc: bDisc, vat, grand, totalCost, note,
+    sub, disc, vat, vatEnabled: bVat, grand, totalCost, note,
     paid: false, paidAmount: 0, balance: grand,
     status: 'issued', documentType: 'invoice',
   };
@@ -843,7 +844,7 @@ async function saveInvoiceOnce() {
           total: fmt(it.qty * it.price),
           note: ''
         })),
-        sub, bDisc, vat ? 0.07 : 0, grand, note, no,
+        sub, disc, bVat ? 0.07 : 0, grand, note, no,
         { cust, phone, plate, model: sv('bModel'), invoiceDate, backdateReason, autoInvoiceNumber: isBackdated }
       );
       if (supaResult) {
@@ -899,7 +900,7 @@ async function saveInvoiceOnce() {
    SAVE QUOTATION
 ══════════════════════════════════════ */
 async function saveQuote() {
-  const { sub, vat, grand } = bCalc();
+  const { sub, disc, vat, grand } = bCalc();
   if (!bItems.length || grand <= 0) return;
 
   const no = nextSeqNo('qt').replace('qt-','QT-');
@@ -913,7 +914,7 @@ async function saveQuote() {
       qty: fmt(it.qty), price: it.price,
       cost: it.cost||0, itemType: it.itemType,
     })),
-    sub, disc: bDisc, vat, grand, converted: false,
+    sub, disc, vat, vatEnabled: bVat, grand, converted: false,
   };
 
   if (useSupabase) {

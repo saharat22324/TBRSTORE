@@ -14,7 +14,7 @@ let _lastSyncTs    = 0;      // debounce timestamp
 function normalizeLoadedVatTotals(state) {
   let changed = false;
   for (const document of [...(state.invoices || []), ...(state.quotes || [])]) {
-    if (Number(document.vat || 0) <= 0) continue;
+    if (!invoiceHasVat(document)) continue;
     const totals = invoiceVatTotals(document);
     if (Math.abs(Number(document.vat || 0) - totals.vat) > 0.001) {
       document.vat = totals.vat;
@@ -677,6 +677,7 @@ function convertSupabaseToState(dbData) {
       })) || [],
       sub: i.subtotal,
       disc: i.discount || 0,
+      vatEnabled: i.vat > 0,
       // vat ใน DB เก็บเป็น rate (0.07) จึงถอดยอดภาษีจากยอดสุทธิที่ปัดแล้ว
       vat: calculateRoundedVatTotals(
         Math.max(0, (i.subtotal || 0) - (i.discount || 0)),
@@ -797,9 +798,10 @@ function convertSupabaseToState(dbData) {
       items:     Array.isArray(q.items) ? q.items : [],
       sub:       parseFloat(q.sub)   || 0,
       disc:      parseFloat(q.disc)  || 0,
-      vat:       Number(q.vat) > 0
+      vat:       (typeof q.vat_enabled === 'boolean' ? q.vat_enabled : Number(q.vat) > 0)
         ? calculateRoundedVatTotals(0, true, q.grand).vat
         : 0,
+      vatEnabled: typeof q.vat_enabled === 'boolean' ? q.vat_enabled : Number(q.vat) > 0,
       grand:     parseFloat(q.grand) || 0,
       converted: q.converted  || false,
     }));
@@ -1332,7 +1334,7 @@ async function syncLocalToSupabase(opts = {}) {
           }));
           const result = await addInvoice(
             inv.jobId || null, inv.custId, inv.vehicleId || null,
-            items, inv.sub || 0, inv.disc || 0, (inv.vat > 0 ? 0.07 : 0), inv.grand || 0,
+            items, inv.sub || 0, inv.disc || 0, (invoiceHasVat(inv) ? 0.07 : 0), inv.grand || 0,
             inv.note || '', inv.no || ''
           );
           if (result?.id) {

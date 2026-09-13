@@ -1,0 +1,96 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>VAT calculation regression tests</title>
+</head>
+<body>
+  <pre id="result">Running...</pre>
+  <script src="../js/utils.js"></script>
+  <script>
+    var S = { shop: { name: 'Test Shop', addr: '', phone: '', tax: '', note: '' }, invoices: [] };
+  </script>
+  <script src="../js/docs.js"></script>
+  <script>
+    const assertMoney = (actual, expected, label) => {
+      if (Math.abs(actual - expected) > 0.001) {
+        throw new Error(`${label}: expected ${expected}, received ${actual}`);
+      }
+    };
+
+    try {
+      const cases = [
+        { subtotal: 10600, discount: 0, vat: true, base: 10600, tax: 742, grand: 11342 },
+        { subtotal: 5000, discount: 500, vat: true, base: 4500, tax: 315, grand: 4815 },
+        { subtotal: 2790, discount: 0, vat: true, base: 2790, tax: 195.30, grand: 2985.30 },
+        { subtotal: 10.01, discount: 0, vat: false, base: 10.01, tax: 0, grand: 10.01 },
+        { subtotal: 12.34, discount: 1.11, vat: true, base: 11.23, tax: 0.79, grand: 12.02 },
+      ];
+
+      for (const testCase of cases) {
+        const result = calculateRoundedVatTotals(
+          testCase.subtotal - testCase.discount,
+          testCase.vat
+        );
+        assertMoney(result.base, testCase.base, 'amount before VAT');
+        assertMoney(result.vat, testCase.tax, 'VAT amount');
+        assertMoney(result.grand, testCase.grand, 'grand total');
+        assertMoney(result.base + result.vat, result.grand, 'breakdown invariant');
+      }
+
+      for (let baseSatang = 0; baseSatang <= 100000; baseSatang += 37) {
+        const result = calculateRoundedVatTotals(baseSatang / 100, true);
+        const expectedGrandSatang = baseSatang + Math.floor((baseSatang * 7 + 50) / 100);
+        assertMoney(result.grand, expectedGrandSatang / 100, 'generic VAT total');
+        assertMoney(result.base + result.vat, result.grand, 'generic breakdown invariant');
+      }
+
+      const included = calculateIncludedVatTotals(107.01);
+      assertMoney(included.vat, 7, 'inclusive VAT extraction');
+      assertMoney(included.base + included.vat, included.grand, 'inclusive VAT invariant');
+
+      const tinyVatInvoice = { sub: 0.01, disc: 0, vat: 0, vatEnabled: true, grand: 0.01 };
+      if (!invoiceHasVat(tinyVatInvoice)) throw new Error('VAT-enabled state was lost at zero satang');
+      assertMoney(invoiceVatTotals(tinyVatInvoice).grand, 0.01, 'tiny VAT total');
+
+      const subtotal = calculateInvoiceSubtotal([
+        { qty: 0.1, price: 0.2 },
+        { qty: 0.2, price: 0.1 },
+        { qty: 1.005, price: 1 },
+      ]);
+      assertMoney(subtotal, 1.05, 'decimal subtotal');
+
+      const vatInvoice = {
+        no: 'TEST-VAT', ts: Date.now(), sub: 5000, disc: 500, vat: 315, grand: 4815,
+        items: [], cust: 'Test Customer', status: 'issued', documentType: 'invoice',
+      };
+      const receiptHtml = buildInvoiceHTML(vatInvoice);
+      if (!receiptHtml.includes(documentMoney(4500))
+          || !receiptHtml.includes(documentMoney(315))
+          || !receiptHtml.includes(documentMoney(4815))) {
+        throw new Error('VAT receipt does not show the expected breakdown');
+      }
+
+      const includedVatInvoice = { ...vatInvoice, no: 'TEST-INCLUDED', vat: 0, grand: 4500 };
+      const taxInvoiceHtml = buildTaxInvoiceHTML(includedVatInvoice, {
+        name: 'Test Customer', address: 'Test Address', taxId: '0000000000000', branch: 'Head Office',
+      });
+      const includedBreakdown = calculateIncludedVatTotals(4500);
+      if (!taxInvoiceHtml.includes(documentMoney(includedBreakdown.base))
+          || !taxInvoiceHtml.includes(documentMoney(includedBreakdown.vat))
+          || !taxInvoiceHtml.includes(documentMoney(4500))) {
+        throw new Error('Included-VAT tax invoice does not preserve the amount due');
+      }
+
+      const output = document.getElementById('result');
+      output.dataset.status = 'passed';
+      output.textContent = `PASS: ${cases.length + 2709} VAT checks`;
+    } catch (error) {
+      const output = document.getElementById('result');
+      output.dataset.status = 'failed';
+      output.textContent = `FAIL: ${error.message}`;
+      throw error;
+    }
+  </script>
+</body>
+</html>
