@@ -1,0 +1,68 @@
+name: Deploy VAT Decimal Migration
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: production-database-migration
+  cancel-in-progress: false
+
+jobs:
+  migrate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      PGPASSWORD: ${{ secrets.SUPABASE_DB_PASSWORD }}
+      PGSSLMODE: require
+      SUPABASE_DB_HOST: ${{ secrets.SUPABASE_DB_HOST }}
+      SUPABASE_DB_PORT: ${{ secrets.SUPABASE_DB_PORT }}
+      SUPABASE_DB_USER: ${{ secrets.SUPABASE_DB_USER }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Verify required secrets
+        shell: bash
+        run: |
+          test -n "$PGPASSWORD" || { echo "SUPABASE_DB_PASSWORD is not configured"; exit 1; }
+          test -n "$SUPABASE_DB_HOST" || { echo "SUPABASE_DB_HOST is not configured"; exit 1; }
+          test -n "$SUPABASE_DB_PORT" || { echo "SUPABASE_DB_PORT is not configured"; exit 1; }
+          test -n "$SUPABASE_DB_USER" || { echo "SUPABASE_DB_USER is not configured"; exit 1; }
+
+      - name: Install PostgreSQL client
+        shell: bash
+        run: |
+          sudo install -d -m 0755 /usr/share/postgresql-common/pgdg
+          sudo curl --fail --silent --show-error \
+            --output /usr/share/postgresql-common/pgdg/apt.postgresql.org.asc \
+            https://www.postgresql.org/media/keys/ACCC4CF8.asc
+          . /etc/os-release
+          echo "deb [signed-by=/usr/share/postgresql-common/pgdg/apt.postgresql.org.asc] https://apt.postgresql.org/pub/repos/apt ${VERSION_CODENAME}-pgdg main" \
+            | sudo tee /etc/apt/sources.list.d/pgdg.list >/dev/null
+          sudo apt-get update
+          sudo apt-get install -y postgresql-client-17
+          echo "/usr/lib/postgresql/17/bin" >> "$GITHUB_PATH"
+
+      - name: Apply VAT migration
+        shell: bash
+        run: |
+          psql \
+            --host="$SUPABASE_DB_HOST" \
+            --port="$SUPABASE_DB_PORT" \
+            --username="$SUPABASE_DB_USER" \
+            --dbname=postgres \
+            --set=ON_ERROR_STOP=1 \
+            --file=20260903_decimal_vat_invoice_totals.sql
+
+      - name: Verify VAT migration
+        shell: bash
+        run: |
+          psql \
+            --host="$SUPABASE_DB_HOST" \
+            --port="$SUPABASE_DB_PORT" \
+            --username="$SUPABASE_DB_USER" \
+            --dbname=postgres \
+            --set=ON_ERROR_STOP=1 \
+            --file=tests/vat-decimal-readonly.sql
