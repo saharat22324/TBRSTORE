@@ -678,6 +678,28 @@ async function saveInvoice() {
   }
 }
 
+function getInvoiceStockDeductions(jobId, items) {
+  const remainingCoverage = new Map();
+  if (jobId) {
+    (S.requisitions || [])
+      .filter(requisition => requisition.jobId === jobId)
+      .flatMap(requisition => requisition.items || [])
+      .forEach(item => {
+        if (item.sid) remainingCoverage.set(item.sid, (remainingCoverage.get(item.sid) || 0) + Number(item.qty || 0));
+      });
+  }
+
+  const deductions = new Map();
+  (items || []).forEach(item => {
+    if (!item.sid || item.itemType !== 'stock') return;
+    const quantity = Math.max(0, Number(item.qty) || 0);
+    const covered = Math.min(quantity, remainingCoverage.get(item.sid) || 0);
+    remainingCoverage.set(item.sid, Math.max(0, (remainingCoverage.get(item.sid) || 0) - covered));
+    deductions.set(item.sid, (deductions.get(item.sid) || 0) + quantity - covered);
+  });
+  return deductions;
+}
+
 async function saveInvoiceOnce() {
   const { sub, disc, vat, grand } = bCalc();
   if (!bItems.length || grand <= 0) return;
@@ -759,29 +781,20 @@ async function saveInvoiceOnce() {
       );
     }
 
-    // 1. คืนสต๊อก items เดิมใน local cache
-    (existing.items || []).forEach(it => {
-      if (it.sid && it.itemType === 'stock') {
-        const m = S.stockItems.find(x => x.id === it.sid);
-        if (m) {
-          m.qty  = fmt(m.qty  + it.qty);
-          m.used = fmt(Math.max(0, (m.used || 0) - it.qty));
-        }
-      }
-    });
-
-    // 2. ตัดสต๊อก items ใหม่
-    bItems.forEach(it => {
-      if (it.sid && it.itemType === 'stock') {
-        const m = S.stockItems.find(x => x.id === it.sid);
-        if (m) {
-          m.qty  = fmt(m.qty  - it.qty);
-          m.used = fmt((m.used || 0) + it.qty);
-          if (!useSupabase && typeof addToLedger === 'function')
-            addToLedger(m.id, 'out', it.qty, 'แก้ไขบิล ' + existing.no);
-        }
-      }
-    });
+    if (!useSupabase) {
+      const oldDeductions = getInvoiceStockDeductions(existing.jobId, existing.items);
+      const newDeductions = getInvoiceStockDeductions(existing.jobId, bItems);
+      const stockIds = new Set([...oldDeductions.keys(), ...newDeductions.keys()]);
+      stockIds.forEach(stockId => {
+        const m = S.stockItems.find(x => x.id === stockId);
+        if (!m) return;
+        const adjustment = (oldDeductions.get(stockId) || 0) - (newDeductions.get(stockId) || 0);
+        m.qty = fmt(m.qty + adjustment);
+        m.used = fmt(Math.max(0, (m.used || 0) - adjustment));
+        if (adjustment && typeof addToLedger === 'function')
+          addToLedger(m.id, adjustment > 0 ? 'in' : 'out', Math.abs(adjustment), 'แก้ไขบิล ' + existing.no);
+      });
+    }
 
     // 3. อัปเดต invoice object (เก็บ no, ts, jobId, paid, id เดิม)
     Object.assign(existing, {
@@ -869,19 +882,18 @@ async function saveInvoiceOnce() {
   /* Update local cache only after the atomic cloud transaction succeeds. */
   if (billedVehicle && mile) billedVehicle.mileage = parseInt(mile) || billedVehicle.mileage;
   if (billedJob) billedJob.status = 5;
-  bItems.forEach(it => {
-    if (it.sid && it.itemType === 'stock') {
-      const m = S.stockItems.find(x => x.id === it.sid);
-      if (m) {
-        m.qty = fmt(m.qty - it.qty);
-        m.used = fmt((m.used || 0) + it.qty);
-        if (!useSupabase && typeof addToLedger === 'function')
-          addToLedger(m.id, 'out', it.qty, 'บิล ' + inv.no);
-      }
-    }
-  });
+  if (!useSupabase) {
+    getInvoiceStockDeductions(bJobId, bItems).forEach((quantity, stockId) => {
+      const m = S.stockItems.find(x => x.id === stockId);
+      if (!m || !quantity) return;
+      m.qty = fmt(m.qty - quantity);
+      m.used = fmt((m.used || 0) + quantity);
+      if (typeof addToLedger === 'function') addToLedger(m.id, 'out', quantity, 'บิล ' + inv.no);
+    });
+  }
 
   S.invoices.push(inv);
+  if (useSupabase) await syncRemoteData({ force: true });
   await saveData();
   if (typeof addAuditLog === 'function')
     addAuditLog(isBackdated ? 'INVOICE_CREATE_BACKDATED' : 'INVOICE_CREATE', 'invoice', inv.id || null, inv.no, { grand, invoiceDate });
