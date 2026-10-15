@@ -655,6 +655,37 @@ async function recordStockTransaction(stockItemId, type, quantity, referenceType
  * === INVOICES ===
  */
 
+function invoiceReferenceId(value, label, required = false) {
+  if (value === null || value === undefined || value === '') {
+    if (required) throw new Error(`${label} is required; reload and select the record again`);
+    return null;
+  }
+  if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(value)) {
+    throw new Error(`${label} is invalid; reload and select the record again`);
+  }
+  return value;
+}
+
+function invoiceAtomicItems(items) {
+  if (!Array.isArray(items) || !items.length) throw new Error('Invoice items are required');
+  return items.map(item => {
+    if (!Number.isFinite(Number(item.quantity)) || Number(item.quantity) <= 0) {
+      throw new Error('Invoice quantity must be greater than zero');
+    }
+    return {
+      item_type: item.type || 'service',
+      stock_item_id: invoiceReferenceId(item.stockItemId, 'Stock item', item.type === 'stock'),
+      service_id: invoiceReferenceId(item.serviceId, 'Service'),
+      description: item.description || '',
+      quantity: item.quantity,
+      unit_price: item.unitPrice,
+      cost_price: item.costPrice || 0,
+      total: item.total,
+      note: item.note || ''
+    };
+  });
+}
+
 async function addInvoice(jobId, customerId, vehicleId, items, subtotal, discount, vat, grandTotal, note, invoiceNo, meta = {}) {
   try {
     // Use provided invoice number or generate locally
@@ -670,32 +701,22 @@ async function addInvoice(jobId, customerId, vehicleId, items, subtotal, discoun
     }
 
     // Validate UUIDs — local IDs (non-UUID) must not be sent as FK references
-    const uuidRe = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-    const safeJobId      = jobId      && uuidRe.test(jobId)      ? jobId      : null;
-    const safeCustomerId = customerId && uuidRe.test(customerId) ? customerId : null;
-    const safeVehicleId  = vehicleId  && uuidRe.test(vehicleId)  ? vehicleId  : null;
+    const safeJobId = invoiceReferenceId(jobId, 'Job');
+    const safeCustomerId = invoiceReferenceId(customerId, 'Customer');
+    const safeVehicleId = invoiceReferenceId(vehicleId, 'Vehicle');
     
     console.log('[Service] Creating invoice:', invNo, '| job:', safeJobId, '| cust:', safeCustomerId);
 
     // Preferred path after production-hardening-phase-1.sql: invoice header and
     // every line item are committed in one PostgreSQL transaction.
-    const atomicItems = items.map(item => ({
-      item_type: item.type || 'service',
-      stock_item_id: item.stockItemId && uuidRe.test(item.stockItemId) ? item.stockItemId : null,
-      service_id: item.serviceId && uuidRe.test(item.serviceId) ? item.serviceId : null,
-      description: item.description || '',
-      quantity: item.quantity,
-      unit_price: item.unitPrice,
-      cost_price: item.costPrice || 0,
-      total: item.total,
-      note: item.note || ''
-    }));
+    const atomicItems = invoiceAtomicItems(items);
     const { data: atomicInvoice, error: atomicErr } = await getSupabase().rpc('create_invoice_atomic', {
       p_invoice: {
         invoice_number: invNo || '', job_id: safeJobId, customer_id: safeCustomerId,
         vehicle_id: safeVehicleId, customer_name: meta.cust || null,
         plate: meta.plate || null, phone: meta.phone || null, car_model: meta.model || null,
         invoice_date: meta.invoiceDate || null, backdate_reason: meta.backdateReason || null,
+        request_id: meta.requestId || null,
         subtotal, discount, vat, grand_total: grandTotal, note,
         status: 'issued', document_type: 'invoice', invoice_type: 'receipt'
       },
@@ -720,9 +741,18 @@ async function cancelInvoiceAtomic(invId, reason) {
     if (error) throw error;
     return Array.isArray(data) ? data[0] : data;
   } catch (err) {
-    reportSupabaseWriteError(err, 'cancelInvoiceAtomic');
+    reportSupabaseWriteError(err, 'cancelInvoiceAtomic', { toast: false });
+    if (typeof showToast === 'function') {
+      showToast(typeof invoiceWriteErrorMessage === 'function' ? invoiceWriteErrorMessage(err) : err.message, 'err');
+    }
     return null;
   }
+}
+
+async function getInvoiceStockSafetyReport() {
+  const { data, error } = await getSupabase().rpc('get_invoice_stock_safety_report');
+  if (error) throw error;
+  return data || [];
 }
 
 async function updateInvoiceTaxDetails(invId, buyer) {
@@ -762,7 +792,6 @@ async function repairInvoiceJobLinkAtomic(invId, jobId) {
  * แก้ไขใบเสร็จ — อัปเดต header + ลบ items เดิม + ใส่ items ใหม่
  */
 async function updateInvoiceFull(invId, invoiceData, items) {
-  const uuidRe = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
   try {
     const { data, error } = await getSupabase().rpc('update_invoice_atomic', {
       p_invoice_id: invId,
@@ -773,14 +802,9 @@ async function updateInvoiceFull(invId, invoiceData, items) {
         customer_name: invoiceData.cust || null, plate: invoiceData.plate || null,
         phone: invoiceData.phone || null, car_model: invoiceData.model || null,
         note: invoiceData.note || null,
+        expected_version: invoiceData.version ?? null,
       },
-      p_items: items.map(item => ({
-        stock_item_id: item.stockItemId && uuidRe.test(item.stockItemId) ? item.stockItemId : null,
-        service_id: item.serviceId && uuidRe.test(item.serviceId) ? item.serviceId : null,
-        item_type: item.type || 'service', description: item.description || '',
-        quantity: item.quantity, unit_price: item.unitPrice,
-        cost_price: item.costPrice || 0, total: item.total, note: item.note || '',
-      })),
+      p_items: invoiceAtomicItems(items),
     });
     if (error) throw error;
     return Array.isArray(data) ? data[0] : data;

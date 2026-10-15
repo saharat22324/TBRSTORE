@@ -11,6 +11,7 @@
    HTML
 ══════════════════════════════════════ */
 let _billingInvoiceView = 'active';
+let invoiceCreateAttempt = null;
 
 function billingBangkokDateKey(date = new Date()) {
   const parts = new Intl.DateTimeFormat('en-CA', {
@@ -76,6 +77,10 @@ function billingHTML() {
   const cancelledList = invoiceList(cancelledInv, true);
 
   return `
+    <details id="bStockAudit" hidden style="padding:12px 0;border-bottom:1px solid var(--ln);margin-bottom:16px">
+      <summary style="cursor:pointer;color:var(--bad)"></summary>
+      <ul style="padding-left:20px;font-size:.8rem;line-height:1.7"></ul>
+    </details>
     <!-- ── Stats cards ── -->
     <div class="g4 mb16">
       <div class="stat red" style="min-height:92px">
@@ -283,6 +288,7 @@ function billingHTML() {
    BIND
 ══════════════════════════════════════ */
 function bindBilling() {
+  loadBillingStockSafety();
 
   document.querySelectorAll('[data-billing-invoice-view]').forEach(button => {
     button.addEventListener('click', () => {
@@ -498,6 +504,7 @@ function bindBilling() {
     if (bItems.length && !confirm('ล้างบิลทั้งหมด?')) return;
     bItems = []; bKey = 0; bDisc = 0; bVat = false; bJobId = null;
     bEditInvNo = null; bEditData = null;
+    invoiceCreateAttempt = null;
     renderPanel();
   });
 
@@ -645,8 +652,39 @@ function openOrderItemModal() {
 ══════════════════════════════════════ */
 let invoiceSaveInFlight = false;
 
+async function loadBillingStockSafety() {
+  const report = sel('bStockAudit');
+  if (!report || !useSupabase || typeof getCurrentUserRole !== 'function' || getCurrentUserRole() !== 1) return;
+  try {
+    const issues = await getInvoiceStockSafetyReport();
+    if (sel('bStockAudit') !== report || !issues.length) return;
+    const invoices = new Set(issues.map(item => item.invoice_number));
+    report.querySelector('summary').textContent = `บิลที่ต้องกระทบยอดสต๊อก ${invoices.size} ใบ`;
+    const labels = {
+      deduction_metadata_mismatch: 'ยอดหักที่บันทึกไว้ไม่ตรงกับใบเบิก',
+      invoice_ledger_mismatch: 'ยอดหักไม่ตรงกับประวัติสต๊อก',
+      requisition_evidence_missing: 'หลักฐานการหักจากใบเบิกไม่ครบ',
+      stock_reference_missing: 'รายการสินค้าไม่มีรหัสสต๊อกเชื่อม'
+    };
+    for (const item of issues) {
+      const row = document.createElement('li');
+      row.textContent = `${item.invoice_number} · ${item.sku || '-'} · ${labels[item.issue] || item.issue}`;
+      report.querySelector('ul').appendChild(row);
+    }
+    report.hidden = false;
+  } catch (error) {
+    if (sel('bStockAudit') !== report) return;
+    report.querySelector('summary').textContent = 'ตรวจประวัติสต๊อกไม่สำเร็จ กรุณาโหลดข้อมูลใหม่';
+    report.hidden = false;
+    console.error('[Billing] stock safety report failed:', error);
+  }
+}
+
 function invoiceWriteErrorMessage(error) {
   const message = String(error?.message || error || '');
+  if (/STOCK_RECONCILIATION_REQUIRED/i.test(message)) return 'บิลนี้มีประวัติสต๊อกไม่ตรง กรุณากระทบยอดก่อนแก้ไขหรือยกเลิก';
+  if (/Invoice version changed/i.test(message)) return 'บิลถูกแก้ไขจากเครื่องอื่น กรุณาโหลดข้อมูลใหม่';
+  if (/Invoice request payload changed/i.test(message)) return 'คำขอเดิมอาจสำเร็จแล้ว กรุณาโหลดข้อมูลและตรวจบิลก่อนเริ่มใหม่';
   if (/reverse payments|active payment/i.test(message)) return 'ต้องย้อนรายการรับชำระก่อนแก้ไขบิล';
   if (/insufficient stock/i.test(message)) return 'สต๊อกสินค้าไม่เพียงพอ กรุณาโหลดข้อมูลใหม่แล้วตรวจจำนวน';
   if (/not permitted|only admin|permission|unauthorized/i.test(message)) return 'บัญชีนี้ไม่มีสิทธิ์แก้ไขบิล';
@@ -768,7 +806,7 @@ async function saveInvoiceOnce() {
       }
       updatedInvoice = await updateInvoiceFull(
         existing.id,
-        { sub, disc, vat, vatEnabled: bVat, grand, cust, plate, phone, model, note },
+        { sub, disc, vat, vatEnabled: bVat, grand, cust, plate, phone, model, note, version: existing.version },
         bItems.map(it => ({
           type: it.itemType || 'service',
           stockItemId: it.itemType === 'stock'
@@ -819,7 +857,13 @@ async function saveInvoiceOnce() {
   }
 
   /* ── NEW INVOICE — ออกบิลใหม่ ── */
-  const no = isBackdated ? null : nextSeqNo('inv').replace('inv-','INV-');
+  if (!invoiceCreateAttempt) {
+    invoiceCreateAttempt = {
+      requestId: crypto.randomUUID(),
+      number: isBackdated ? null : nextSeqNo('inv').replace('inv-','INV-')
+    };
+  }
+  const no = invoiceCreateAttempt.number;
 
   const billedJob = bJobId ? S.jobs.find(x => x.id === bJobId) : null;
   const billedVehicle = billedJob ? S.vehicles.find(x => x.id === billedJob.vehicleId) : null;
@@ -858,7 +902,7 @@ async function saveInvoiceOnce() {
           note: ''
         })),
         sub, disc, bVat ? 0.07 : 0, grand, note, no,
-        { cust, phone, plate, model: sv('bModel'), invoiceDate, backdateReason, autoInvoiceNumber: isBackdated }
+        { cust, phone, plate, model: sv('bModel'), invoiceDate, backdateReason, autoInvoiceNumber: isBackdated, requestId: invoiceCreateAttempt.requestId }
       );
       if (supaResult) {
         inv.id = supaResult.id;
@@ -895,6 +939,7 @@ async function saveInvoiceOnce() {
   S.invoices.push(inv);
   if (useSupabase) await syncRemoteData({ force: true });
   await saveData();
+  invoiceCreateAttempt = null;
   if (typeof addAuditLog === 'function')
     addAuditLog(isBackdated ? 'INVOICE_CREATE_BACKDATED' : 'INVOICE_CREATE', 'invoice', inv.id || null, inv.no, { grand, invoiceDate });
   if (!useSupabase)     showToast(`ออกใบเสร็จ ${inv.no} แล้ว`);
@@ -959,6 +1004,7 @@ async function saveQuote() {
 function openBillFromJob(jid) {
   const j = S.jobs.find(x => x.id === jid);
   if (!j) return;
+  invoiceCreateAttempt = null;
 
   /* Reset billing state */
   bItems = []; bKey = 0; bDisc = 0; bVat = false;
