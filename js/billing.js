@@ -343,10 +343,7 @@ function bindBilling() {
     si('sVatAmt', THB(vat));
     si('sGrand',  THB(grand));
 
-    const short = bItems.some(it =>
-      it.sid && !(bEditInvNo && it.requisitionLinked)
-      && it.qty > (S.stockItems.find(x => x.id === it.sid)?.qty || 0)
-    );
+    const short = getInvoiceStockShortages(bJobId, bItems, !!bEditInvNo).size > 0;
 
     ['bSaveInv', 'bSaveQt'].forEach(id => {
       const btn = sel(id);
@@ -365,10 +362,11 @@ function bindBilling() {
       return;
     }
 
+    const shortages = getInvoiceStockShortages(bJobId, bItems, !!bEditInvNo);
     box.innerHTML = bItems.map(it => {
       const m     = it.sid ? S.stockItems.find(x => x.id === it.sid) : null;
       const requisitionLocked = bEditInvNo && it.requisitionLinked;
-      const short = !requisitionLocked && m && it.qty > m.qty;
+      const short = !requisitionLocked && shortages.has(it.sid);
 
       /* Type badge */
       const badge =
@@ -736,6 +734,16 @@ function getInvoiceStockDeductions(jobId, items) {
     deductions.set(item.sid, (deductions.get(item.sid) || 0) + quantity - covered);
   });
   return deductions;
+}
+
+function getInvoiceStockShortages(jobId, items, editing = false) {
+  const checkedItems = editing ? items.filter(item => !item.requisitionLinked) : items;
+  const shortages = new Set();
+  getInvoiceStockDeductions(editing ? null : jobId, checkedItems).forEach((quantity, stockId) => {
+    const available = Number(S.stockItems.find(item => item.id === stockId)?.qty) || 0;
+    if (quantity > available) shortages.add(stockId);
+  });
+  return shortages;
 }
 
 async function saveInvoiceOnce() {

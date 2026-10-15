@@ -74,3 +74,70 @@ test('billing error messages handle reconciliation and stale versions', () => {
     assert.ok(context.invoiceWriteErrorMessage({ message }).length > 0);
   }
 });
+
+function billingStock(items, stockItems, requisitions = [], jobId = 'job-1', editing = null) {
+  const billing = fs.readFileSync(path.join(__dirname, '../js/billing.js'), 'utf8');
+  const nodes = {
+    bSaveInv: {}, bSaveQt: {},
+    biRows: { innerHTML: '', querySelectorAll: () => [] }
+  };
+  const context = vm.createContext({
+    S: { stockItems, requisitions }, bItems: items, bJobId: jobId, bEditInvNo: editing,
+    bCalc: () => ({ sub: 840, vat: 0, grand: 840 }),
+    sel: id => nodes[id], si() {}, THB: String, esc: String, numFmt: String, svgI: () => ''
+  });
+  vm.runInContext(billing.slice(billing.indexOf('function getInvoiceStockDeductions('), billing.indexOf('async function saveInvoiceOnce(')), context);
+  const recalcStart = billing.indexOf('  function recalc() {');
+  const renderEnd = billing.indexOf("  sel('bAddPick')", recalcStart);
+  vm.runInContext(billing.slice(recalcStart, renderEnd), context);
+  context.renderRows();
+  return { context, nodes };
+}
+
+const oilItem = { k: 1, sid: 'OIL-5W40-R', nm: 'Oil', qty: 4, price: 100, itemType: 'stock' };
+const oilRequisition = { jobId: 'job-1', items: [{ sid: oilItem.sid, qty: 4 }] };
+
+test('requisition-covered oil can be billed with zero remaining stock and no shortage warning', () => {
+  const { nodes } = billingStock([oilItem], [{ id: oilItem.sid, qty: 0 }], [oilRequisition]);
+  assert.equal(nodes.bSaveInv.disabled, false);
+  assert.equal(nodes.bSaveQt.disabled, false);
+  assert.ok(nodes.biRows.innerHTML.includes('Stock Item'));
+  assert.ok(!nodes.biRows.innerHTML.includes('color:var(--bad)'));
+});
+
+test('only stock beyond requisition coverage controls the save buttons and warning', () => {
+  for (const [available, blocked] of [[0, true], [1, false]]) {
+    const { nodes } = billingStock([{ ...oilItem, qty: 5 }], [{ id: oilItem.sid, qty: available }], [oilRequisition]);
+    assert.equal(nodes.bSaveInv.disabled, blocked);
+    assert.equal(nodes.bSaveQt.disabled, blocked);
+    assert.equal(nodes.biRows.innerHTML.includes('color:var(--bad)'), blocked);
+  }
+});
+
+test('unlinked bills and another job cannot reuse requisition coverage', () => {
+  for (const jobId of [null, 'job-2']) {
+    const { nodes } = billingStock([oilItem], [{ id: oilItem.sid, qty: 0 }], [oilRequisition], jobId);
+    assert.equal(nodes.bSaveInv.disabled, true);
+    assert.ok(nodes.biRows.innerHTML.includes('color:var(--bad)'));
+  }
+});
+
+test('duplicate SKU lines share coverage and remaining stock instead of each passing separately', () => {
+  const items = [{ ...oilItem, qty: 3 }, { ...oilItem, k: 2, qty: 3 }];
+  const { nodes } = billingStock(items, [{ id: oilItem.sid, qty: 1 }], [oilRequisition]);
+  assert.equal(nodes.bSaveInv.disabled, true);
+  assert.equal((nodes.biRows.innerHTML.match(/color:var\(--bad\)/g) || []).length, 2);
+});
+
+test('service identifiers do not trigger stock shortages', () => {
+  const { nodes } = billingStock([{ ...oilItem, itemType: 'service' }], []);
+  assert.equal(nodes.bSaveInv.disabled, false);
+});
+
+test('editing preserves requisition locks without reusing coverage for unlocked lines', () => {
+  const locked = billingStock([{ ...oilItem, requisitionLinked: true }], [{ id: oilItem.sid, qty: 0 }], [oilRequisition], 'job-1', 'INV-TEST');
+  assert.equal(locked.nodes.bSaveInv.disabled, false);
+  assert.ok(locked.nodes.biRows.innerHTML.includes('disabled'));
+  const unlocked = billingStock([oilItem], [{ id: oilItem.sid, qty: 0 }], [oilRequisition], 'job-1', 'INV-TEST');
+  assert.equal(unlocked.nodes.bSaveInv.disabled, true);
+});
